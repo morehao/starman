@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/morehao/starman/internal/version"
 	"github.com/spf13/cobra"
 )
 
 func NewRootCmd(ver string) *cobra.Command {
-	version.Set(ver, "", "")
 	root := &cobra.Command{
 		Use:     "starman",
 		Short:   "Manage your GitHub stars with AI",
