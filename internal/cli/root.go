@@ -33,6 +33,7 @@ func NewRootCmd(ver string) *cobra.Command {
 	root.AddCommand(newCompletionCmd(root))
 	root.AddCommand(newStatsCmd())
 	root.AddCommand(newInfoCmd())
+	root.AddCommand(newTagCmd())
 	return root
 }
 
