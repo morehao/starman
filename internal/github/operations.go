@@ -2,8 +2,11 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/morehao/starman/internal/store"
@@ -125,6 +128,64 @@ func convertRepo(r *gh.Repository) *Repository {
 		OwnerLogin:      r.GetOwner().GetLogin(),
 		OwnerAvatar:     r.GetOwner().GetAvatarURL(),
 	}
+}
+
+var readmeVariantRe = regexp.MustCompile(`(?i)^readme([._-]?([a-z]{2})(?:-[a-z]{2})?)?\.(md|txt|markdown|rst)$`)
+
+func (c *Client) ListReadmeVariants(ctx context.Context, owner, repo string) ([]string, error) {
+	_, contents, _, err := c.client.Repositories.GetContents(ctx, owner, repo, "", nil)
+	if err != nil {
+		return nil, fmt.Errorf("list contents %s/%s: %w", owner, repo, err)
+	}
+	var variants []string
+	for _, content := range contents {
+		name := content.GetName()
+		if isReadmeVariant(name) {
+			variants = append(variants, name)
+		}
+	}
+	return variants, nil
+}
+
+func isReadmeVariant(name string) bool {
+	lower := strings.ToLower(name)
+	if lower == "readme" {
+		return true
+	}
+	return readmeVariantRe.MatchString(lower)
+}
+
+func (c *Client) GetContentFile(ctx context.Context, owner, repo, path string) (string, error) {
+	content, _, _, err := c.client.Repositories.GetContents(ctx, owner, repo, path, nil)
+	if err != nil {
+		return "", fmt.Errorf("get content %s/%s/%s: %w", owner, repo, path, err)
+	}
+	encoded, err := content.GetContent()
+	if err != nil {
+		return "", fmt.Errorf("get encoded content %s/%s/%s: %w", owner, repo, path, err)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return encoded, nil
+	}
+	return string(decoded), nil
+}
+
+func (c *Client) SearchRepositories(ctx context.Context, query string) ([]*Repository, error) {
+	opts := &gh.SearchOptions{
+		Sort:        "stars",
+		Order:       "desc",
+		ListOptions: gh.ListOptions{PerPage: 50},
+	}
+	result, _, err := c.client.Search.Repositories(ctx, query, opts)
+	if err != nil {
+		return nil, fmt.Errorf("search repositories: %w", err)
+	}
+	var repos []*Repository
+	for _, r := range result.Repositories {
+		repos = append(repos, convertRepo(r))
+	}
+	return repos, nil
 }
 
 func convertRelease(rel *gh.RepositoryRelease, repoFullName string) *Release {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"net/url"
 	"testing"
 
@@ -87,5 +88,75 @@ func TestStarUnstar(t *testing.T) {
 	}
 	if err := c.Unstar(context.Background(), "owner", "repo"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestListReadmeVariants(t *testing.T) {
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repos/owner/repo/contents") {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]*gh.RepositoryContent{
+				{Name: gh.Ptr("README.md"), Type: gh.Ptr("file")},
+				{Name: gh.Ptr("README_zh.md"), Type: gh.Ptr("file")},
+				{Name: gh.Ptr("main.go"), Type: gh.Ptr("file")},
+				{Name: gh.Ptr("docs"), Type: gh.Ptr("dir")},
+			})
+			return
+		}
+		http.Error(w, "not found", 404)
+	})
+	defer server.Close()
+	variants, err := c.ListReadmeVariants(context.Background(), "owner", "repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(variants) != 2 {
+		t.Fatalf("expected 2 README variants, got %d: %v", len(variants), variants)
+	}
+}
+
+func TestGetContentFile(t *testing.T) {
+	content := base64.StdEncoding.EncodeToString([]byte("# Hello World"))
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(&gh.RepositoryContent{
+			Content:  gh.Ptr(content),
+			Encoding: gh.Ptr("base64"),
+		})
+	})
+	defer server.Close()
+	got, err := c.GetContentFile(context.Background(), "owner", "repo", "README_zh.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "# Hello World" {
+		t.Fatalf("expected '# Hello World', got %s", got)
+	}
+}
+
+func TestSearchRepositories(t *testing.T) {
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/search/repositories") {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(&gh.RepositoriesSearchResult{
+				Repositories: []*gh.Repository{
+					{ID: gh.Ptr(int64(1)), FullName: gh.Ptr("owner/repo1"), Name: gh.Ptr("repo1"), StargazersCount: gh.Ptr(100)},
+					{ID: gh.Ptr(int64(2)), FullName: gh.Ptr("owner/repo2"), Name: gh.Ptr("repo2"), StargazersCount: gh.Ptr(50)},
+				},
+			})
+			return
+		}
+		http.Error(w, "not found", 404)
+	})
+	defer server.Close()
+	repos, err := c.SearchRepositories(context.Background(), "stars:>1000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repos) != 2 {
+		t.Fatalf("expected 2 repos, got %d", len(repos))
+	}
+	if repos[0].FullName != "owner/repo1" {
+		t.Fatalf("expected owner/repo1, got %s", repos[0].FullName)
 	}
 }
