@@ -31,6 +31,7 @@ func NewRootCmd(ver string) *cobra.Command {
 	root.AddCommand(newBackupCmd())
 	root.AddCommand(newConfigCmd())
 	root.AddCommand(newCompletionCmd(root))
+	root.AddCommand(newStatsCmd())
 	return root
 }
 
