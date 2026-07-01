@@ -86,12 +86,13 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 	r := &Repository{}
 	var topicsJSON, tagsJSON, platJSON, customTagsJSON sql.NullString
 	var analyzedAt, lastReleaseFetch sql.NullString
+	var customDesc, customCat sql.NullString
 	var analysisFailed, categoryLocked, subscribed int
 	err := row.Scan(
 		&r.ID, &r.FullName, &r.Name, &r.Description, &r.URL, &r.Language, &r.Homepage,
 		&r.StargazersCount, &r.ForksCount, &topicsJSON, &r.OwnerLogin, &r.OwnerAvatar, &r.StarredAt,
 		&r.AISummary, &tagsJSON, &platJSON, &r.AICategory, &analyzedAt, &analysisFailed,
-		&r.CustomDescription, &customTagsJSON, &r.CustomCategory, &categoryLocked,
+		&customDesc, &customTagsJSON, &customCat, &categoryLocked,
 		&subscribed, &lastReleaseFetch,
 	)
 	if err != nil {
@@ -108,6 +109,12 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 	}
 	if customTagsJSON.Valid {
 		json.Unmarshal([]byte(customTagsJSON.String), &r.CustomTags)
+	}
+	if customDesc.Valid {
+		r.CustomDescription = customDesc.String
+	}
+	if customCat.Valid {
+		r.CustomCategory = customCat.String
 	}
 	if analyzedAt.Valid {
 		t, err := time.Parse(time.RFC3339, analyzedAt.String)
@@ -250,10 +257,10 @@ func (s *sqliteStore) UpsertReposOnSync(ctx context.Context, rs []*Repository, f
 		if err == sql.ErrNoRows {
 			tagsJSON, _ := json.Marshal(r.AITags)
 			platJSON, _ := json.Marshal(r.AIPlatforms)
-			_, err = tx.ExecContext(ctx, `INSERT INTO repositories (id, full_name, name, description, url, language, homepage, stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at, ai_tags, ai_platforms, ai_summary, ai_category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			_, err = tx.ExecContext(ctx, `INSERT INTO repositories (id, full_name, name, description, url, language, homepage, stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at, ai_tags, ai_platforms, ai_summary, ai_category, custom_description, custom_tags, custom_category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 				r.ID, r.FullName, r.Name, r.Description, r.URL, r.Language, r.Homepage,
 				r.StargazersCount, r.ForksCount, string(topicsJSON), r.OwnerLogin, r.OwnerAvatar, r.StarredAt,
-				string(tagsJSON), string(platJSON), r.AISummary, r.AICategory)
+				string(tagsJSON), string(platJSON), r.AISummary, r.AICategory, "", "[]", "")
 			if err != nil {
 				return fmt.Errorf("insert repo %s: %w", r.FullName, err)
 			}
