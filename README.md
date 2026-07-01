@@ -8,14 +8,19 @@ starman fuses [starred-go](https://github.com/juev/starred) (starred repo sync +
 
 ## Features
 
-- **Sync** — Concurrent paginated pull of GitHub starred repos into local SQLite (preserves AI analysis on re-sync)
+- **Sync** — Concurrent paginated pull of GitHub starred repos into local SQLite (preserves AI analysis on re-sync). Supports `--watch` mode for periodic auto-sync.
 - **Analyze** — Batch AI analysis (OpenAI-compatible): summaries, tags, categories with bidirectional keyword matching
-- **Search** — AI-translated keyword search with local multi-field weighted scoring
+- **Search** — AI-translated keyword search with local multi-field weighted scoring, plus `--lang`/`--category` filters, `--sort` options, and `--json` output
 - **Generate** — Markdown Awesome List in 3 modes: by language, by AI category, or flat (auto-push to GitHub repo)
 - **Release Tracking** — Subscribe to repos and pull new releases with incremental watermark
 - **Star/Unstar** — Star management with local DB sync
 - **Backup** — JSON export/import + WebDAV push/pull
 - **Config** — Interactive config with env var resolution for secrets
+- **Stats** — View distribution of synced repos by language, category, or tag
+- **Info** — Inspect repo details including AI summary, README with multi-language variant support
+- **Trending** — Browse GitHub trending repositories (RSS or search API) with interactive starring
+- **Tag & Categorize** — Batch manage custom tags and categories on local repos, with category locking
+- **Completion** — Shell auto-completion for bash, zsh, fish, and PowerShell
 
 ## Installation
 
@@ -88,10 +93,30 @@ starman generate -s language --repo awesome-stars
 ### 5. Search
 
 ```bash
+# Basic keyword search
 starman search "terminal tools"
+
+# Filter by language and sort by stars
+starman search "framework" --lang Go --sort stars --limit 10
+
+# JSON output
+starman search "machine learning" --json
 ```
 
-AI translates your query into keywords, then scores all local repos against those keywords (full_name, description, AI summary, tags, topics, language) and prints results sorted by relevance.
+AI translates your query into keywords, then scores all local repos against those keywords (full_name, description, AI summary, tags, topics, language).
+
+### 6. Discover trending repos
+
+```bash
+# Browse weekly trending repos
+starman trending
+
+# Daily trending, filtered by language
+starman trending --since daily --lang Rust
+
+# Interactively star repos from trending
+starman trending --star
+```
 
 ## Usage
 
@@ -102,15 +127,21 @@ Usage:
   starman [command]
 
 Available Commands:
-  analyze     Analyze repos with AI to generate summaries, tags, and categories
-  backup      Backup and restore data
-  config      Configuration management
-  generate    Generate Markdown awesome list from local DB
-  release     Track repository releases
-  search      Search repos by AI-translated keywords
-  star        Star a GitHub repository
-  sync        Sync starred repositories from GitHub to local DB
-  unstar      Unstar a GitHub repository
+  analyze      Analyze repos with AI to generate summaries, tags, and categories
+  backup       Backup and restore data
+  categorize   Manage custom category on repositories
+  completion   Generate shell completion script
+  config       Configuration management
+  generate     Generate Markdown awesome list from local DB
+  info         Show details of a repository
+  release      Track repository releases
+  search       Search repos by AI-translated keywords
+  star         Star a GitHub repository
+  stats        Show statistics of synced repositories
+  sync         Sync starred repositories from GitHub to local DB
+  tag          Manage custom tags on repositories
+  trending     Browse GitHub trending repositories
+  unstar       Unstar a GitHub repository
 
 Global Flags:
       --config string   config file path (default ~/.starman/config.yaml)
@@ -121,10 +152,10 @@ Global Flags:
 ### sync
 
 ```bash
-starman sync [--full]
+starman sync [--full] [--watch] [--interval 30m]
 ```
 
-Pulls starred repos from GitHub and stores them locally. AI analysis results and custom fields are preserved across syncs. Use `--full` to remove repos that are no longer starred on GitHub.
+Pulls starred repos from GitHub and stores them locally. AI analysis results and custom fields are preserved across syncs. Use `--full` to remove repos that are no longer starred on GitHub. `--watch` enables periodic auto-sync (requires `--interval`, minimum 5m).
 
 ### generate
 
@@ -161,6 +192,82 @@ starman release pull                      # Pull new releases for subscribed rep
 starman release subscribe <owner/repo>    # Subscribe and pull initial releases
 starman release unsubscribe <owner/repo>  # Unsubscribe
 ```
+
+### search
+
+```bash
+starman search <query> [flags]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+| `--limit` | Limit number of results (0 = no limit) |
+| `--lang` | Filter by language |
+| `--category` | Filter by category |
+| `--sort` | Sort by: `score` \| `stars` \| `updated` \| `name` (default: score) |
+
+### stats
+
+```bash
+starman stats [--by language|category|tag] [--top N] [--json]
+```
+
+Show distribution of synced repos by dimension. Outputs a sorted table or JSON.
+
+### info
+
+```bash
+starman info <owner/repo> [--readme] [--readme-variant <file>]
+```
+
+Display repo metadata, AI summary, tags, and custom fields. `--readme` fetches the README and lists available multi-language variants.
+
+### tag
+
+```bash
+# Single repo mode
+starman tag <owner/repo> +awesome,-old
+
+# Batch mode — add tags to all Go repos
+starman tag --lang Go --add awesome,cli
+
+# Batch mode — filter by category and remove tags
+starman tag --cat-filter "开发工具" --remove deprecated
+```
+
+Manages `custom_tags` on repositories. Tags are stored locally and never overwritten by `analyze`.
+
+### categorize
+
+```bash
+# Single repo mode
+starman categorize <owner/repo> "AI 机器学习" --lock
+
+# Batch mode — set category for all Python repos
+starman categorize --lang Python "数据分析"
+
+# Batch mode — filter by existing category
+starman categorize --cat-filter "web-app" "其他"
+```
+
+Manages `custom_category` on repositories. `--lock` prevents AI analysis from overwriting. `--unlock` releases the lock.
+
+### trending
+
+```bash
+starman trending [--since daily|weekly|monthly] [--lang L] [--top N] [--source rss|search] [--star]
+```
+
+Browse GitHub trending repositories. Default source is RSS (via GitHubTrendingRSS); use `--source search` for the GitHub Search API fallback. `--star` interactively stars selected repos.
+
+### completion
+
+```bash
+starman completion <bash|zsh|fish|powershell>
+```
+
+Generates shell auto-completion scripts. Pipe to source to enable (e.g. `source <(starman completion zsh)`).
 
 ### backup
 
@@ -221,6 +328,8 @@ Set `ai.base_url` and `ai.model` to match your provider. The `ai.concurrency` se
 - **Analyze failure isolation** — If AI analysis fails for one repo, the batch continues. Failed repos are marked with `analysis_failed` for retry.
 - **Release watermark** — Subscribed repos track the latest fetched release timestamp, so `release pull` only retrieves new releases.
 - **Generate reads from local DB** — `generate` never calls the GitHub API for data; it reads from SQLite. Run `sync` first, then `analyze` for AI categories.
+- **Stats are free** — `stats`, `info`, and `search` (without AI) only read from the local SQLite database. No API calls, no token needed.
+- **Trending dual source** — `trending` defaults to RSS via GitHubTrendingRSS. `--source search` falls back to the official GitHub Search API.
 
 ## Tech Stack
 
@@ -256,6 +365,7 @@ internal/
   store/                     # SQLite data layer (Store interface)
   github/                    # GitHub API client (go-github wrapper)
   ai/                        # OpenAI-compatible client + analysis/categorization/search
+  discovery/                 # Trending repos (RSS + search API fallback)
   generate/                  # Markdown template rendering
   release/                   # Release tracker with watermark
   backup/                    # JSON + WebDAV backup

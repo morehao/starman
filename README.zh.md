@@ -8,14 +8,19 @@ starman 融合了 [starred-go](https://github.com/juev/starred)（星标同步 +
 
 ## 功能
 
-- **同步** — 并发分页拉取 GitHub 星标仓库到本地 SQLite（再次同步时保留 AI 分析结果）
+- **同步** — 并发分页拉取 GitHub 星标仓库到本地 SQLite（再次同步时保留 AI 分析结果）。支持 `--watch` 模式定时自动同步。
 - **分析** — 批量 AI 分析（OpenAI 兼容）：生成摘要、标签、分类，基于双向关键词匹配
-- **搜索** — AI 翻译关键词 + 本地多字段加权打分
+- **搜索** — AI 翻译关键词 + 本地多字段加权打分，支持 `--lang`/`--category` 过滤、`--sort` 排序和 `--json` 输出
 - **生成** — Markdown Awesome List，三种模式：按语言、按 AI 分类、平铺列表（可自动提交到 GitHub 仓库）
 - **Release 追踪** — 订阅仓库并拉取新版本，支持增量水位
 - **Star/Unstar** — 星标管理，同步到本地 DB
 - **备份** — JSON 导出/导入 + WebDAV 上传/下载
 - **配置** — 交互式配置，敏感字段支持环境变量
+- **统计** — 按语言、分类、标签查看已同步仓库的分布
+- **详情** — 查看仓库详细信息，包括 AI 摘要、多语言 README 变体支持
+- **趋势发现** — 浏览 GitHub Trending 仓库（RSS 或 Search API），支持交互式收藏
+- **标签与分类** — 批量管理仓库的自定义标签和分类，支持分类锁定
+- **补全** — bash、zsh、fish、PowerShell Shell 自动补全
 
 ## 安装
 
@@ -88,10 +93,30 @@ starman generate -s language --repo awesome-stars
 ### 5. 搜索
 
 ```bash
+# 基础关键词搜索
 starman search "终端工具"
+
+# 按语言过滤，按星标排序
+starman search "框架" --lang Go --sort stars --limit 10
+
+# JSON 格式输出
+starman search "机器学习" --json
 ```
 
-AI 将你的查询翻译为关键词，然后对所有本地仓库进行多字段打分匹配（仓库名、描述、AI 摘要、标签、topics、语言），按相关度排序输出。
+AI 将你的查询翻译为关键词，然后对所有本地仓库进行多字段打分匹配（仓库名、描述、AI 摘要、标签、topics、语言）。
+
+### 6. 发现趋势仓库
+
+```bash
+# 浏览本周 trending
+starman trending
+
+# 按语言浏览每日 trending
+starman trending --since daily --lang Rust
+
+# 交互式收藏 trending 仓库
+starman trending --star
+```
 
 ## 命令用法
 
@@ -102,15 +127,21 @@ Usage:
   starman [command]
 
 Available Commands:
-  analyze     Analyze repos with AI to generate summaries, tags, and categories
-  backup      Backup and restore data
-  config      Configuration management
-  generate    Generate Markdown awesome list from local DB
-  release     Track repository releases
-  search      Search repos by AI-translated keywords
-  star        Star a GitHub repository
-  sync        Sync starred repositories from GitHub to local DB
-  unstar      Unstar a GitHub repository
+  analyze      Analyze repos with AI to generate summaries, tags, and categories
+  backup       Backup and restore data
+  categorize   Manage custom category on repositories
+  completion   Generate shell completion script
+  config       Configuration management
+  generate     Generate Markdown awesome list from local DB
+  info         Show details of a repository
+  release      Track repository releases
+  search       Search repos by AI-translated keywords
+  star         Star a GitHub repository
+  stats        Show statistics of synced repositories
+  sync         Sync starred repositories from GitHub to local DB
+  tag          Manage custom tags on repositories
+  trending     Browse GitHub trending repositories
+  unstar       Unstar a GitHub repository
 
 Global Flags:
       --config string   config file path (default ~/.starman/config.yaml)
@@ -121,10 +152,10 @@ Global Flags:
 ### sync
 
 ```bash
-starman sync [--full]
+starman sync [--full] [--watch] [--interval 30m]
 ```
 
-从 GitHub 拉取星标仓库并存储到本地。AI 分析结果和自定义字段在同步时保留。使用 `--full` 可删除已在 GitHub 取消星标的仓库。
+从 GitHub 拉取星标仓库并存储到本地。AI 分析结果和自定义字段在同步时保留。使用 `--full` 可删除已在 GitHub 取消星标的仓库。`--watch` 启用定时自动同步（需指定 `--interval`，最小 5 分钟）。
 
 ### generate
 
@@ -161,6 +192,82 @@ starman release pull                      # 拉取订阅仓库的新 release
 starman release subscribe <owner/repo>    # 订阅并拉取初始 release
 starman release unsubscribe <owner/repo>  # 取消订阅
 ```
+
+### search
+
+```bash
+starman search <query> [flags]
+```
+
+| Flag | 说明 |
+|------|------|
+| `--json` | JSON 格式输出 |
+| `--limit` | 限制结果数（0 = 不限） |
+| `--lang` | 按语言过滤 |
+| `--category` | 按分类过滤 |
+| `--sort` | 排序依据：`score` \| `stars` \| `updated` \| `name`（默认：score） |
+
+### stats
+
+```bash
+starman stats [--by language|category|tag] [--top N] [--json]
+```
+
+按维度查看已同步仓库的分布情况。输出排序表格或 JSON。
+
+### info
+
+```bash
+starman info <owner/repo> [--readme] [--readme-variant <file>]
+```
+
+展示仓库元数据、AI 摘要、标签和自定义字段。`--readme` 拉取 README 并列出可用的多语言变体。
+
+### tag
+
+```bash
+# 单仓库模式
+starman tag <owner/repo> +awesome,-old
+
+# 批量模式 — 为所有 Go 仓库添加标签
+starman tag --lang Go --add awesome,cli
+
+# 批量模式 — 按分类过滤并移除标签
+starman tag --cat-filter "开发工具" --remove deprecated
+```
+
+管理仓库的 `custom_tags`。标签存储在本地，不会被 `analyze` 覆盖。
+
+### categorize
+
+```bash
+# 单仓库模式
+starman categorize <owner/repo> "AI 机器学习" --lock
+
+# 批量模式 — 为所有 Python 仓库设置分类
+starman categorize --lang Python "数据分析"
+
+# 批量模式 — 按已有分类过滤
+starman categorize --cat-filter "web-app" "其他"
+```
+
+管理仓库的 `custom_category`。`--lock` 阻止 AI 分析覆盖。`--unlock` 解除锁定。
+
+### trending
+
+```bash
+starman trending [--since daily|weekly|monthly] [--lang L] [--top N] [--source rss|search] [--star]
+```
+
+浏览 GitHub 趋势仓库。默认使用 RSS 数据源（GitHubTrendingRSS）；使用 `--source search` 切换到 GitHub Search API。`--star` 交互式收藏选中的仓库。
+
+### completion
+
+```bash
+starman completion <bash|zsh|fish|powershell>
+```
+
+生成 Shell 自动补全脚本。通过管道加载启用（如 `source <(starman completion zsh)`）。
 
 ### backup
 
@@ -221,6 +328,8 @@ starman 兼容任何 OpenAI 兼容 API 端点（`/v1/chat/completions`），支�
 - **分析失败隔离** — 某个仓库 AI 分析失败时，批量继续执行。失败的仓库标记 `analysis_failed` 以供重试。
 - **Release 水位** — 订阅的仓库记录最后拉取的 release 时间戳，`release pull` 只获取新版本。
 - **生成器读取本地 DB** — `generate` 不调用 GitHub API 获取数据，而是从 SQLite 读取。请先运行 `sync`，再运行 `analyze` 获取 AI 分类。
+- **统计无成本** — `stats`、`info` 和（不使用 AI 的）`search` 仅读取本地 SQLite 数据库，不调用 API，无需 token。
+- **Trending 双数据源** — `trending` 默认使用 RSS（通过 GitHubTrendingRSS）。`--source search` 切换到官方 GitHub Search API。
 
 ## 技术栈
 
@@ -256,6 +365,7 @@ internal/
   store/                     # SQLite 数据层（Store 接口）
   github/                    # GitHub API 客户端（go-github 封装）
   ai/                        # OpenAI 兼容客户端 + 分析/分类/搜索
+  discovery/                 # 趋势仓库发现（RSS + Search API 兜底）
   generate/                  # Markdown 模板渲染
   release/                   # Release 追踪器（水位）
   backup/                    # JSON + WebDAV 备份
