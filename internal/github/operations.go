@@ -2,7 +2,6 @@ package github
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"time"
@@ -72,11 +71,10 @@ func (c *Client) UpdateReadmeFile(ctx context.Context, owner, repo, content, mes
 	if err != nil && resp != nil && resp.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("get readme contents: %w", err)
 	}
-	contentEnc := base64.StdEncoding.EncodeToString([]byte(content))
 	if fileContent == nil {
 		_, _, err = c.client.Repositories.CreateFile(ctx, owner, repo, "README.md", &gh.RepositoryContentFileOptions{
 			Message: gh.Ptr(message),
-			Content: []byte(contentEnc),
+			Content: []byte(content),
 		})
 		if err != nil {
 			return fmt.Errorf("create readme: %w", err)
@@ -84,7 +82,7 @@ func (c *Client) UpdateReadmeFile(ctx context.Context, owner, repo, content, mes
 	} else {
 		_, _, err = c.client.Repositories.UpdateFile(ctx, owner, repo, "README.md", &gh.RepositoryContentFileOptions{
 			Message: gh.Ptr(message),
-			Content: []byte(contentEnc),
+			Content: []byte(content),
 			SHA:     fileContent.SHA,
 		})
 		if err != nil {

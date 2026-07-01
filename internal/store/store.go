@@ -17,9 +17,12 @@ type Store interface {
 	ListByCategory(ctx context.Context, category string) ([]*Repository, error)
 	UpdateAIResult(ctx context.Context, repoID int64, res *AIResult) error
 	UpdateCustomFields(ctx context.Context, repoID int64, f *CustomFields) error
+	SetAnalysisFailed(ctx context.Context, repoID int64, failed bool) error
+	DeleteAllRepositories(ctx context.Context) error
 
 	UpsertRelease(ctx context.Context, r *Release) error
 	ListUnreadReleases(ctx context.Context) ([]*Release, error)
+	ListAllReleases(ctx context.Context) ([]*Release, error)
 	ListReleasesByRepo(ctx context.Context, repoFullName string) ([]*Release, error)
 	MarkReleaseRead(ctx context.Context, releaseID int64) error
 	MarkAllReleasesRead(ctx context.Context) error

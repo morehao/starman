@@ -104,7 +104,7 @@ func (b *BatchAnalyzer) analyzeOne(ctx context.Context, repo *store.Repository, 
 	}
 	result, err := b.svc.AnalyzeRepository(ctx, repo, readme, cats)
 	if err != nil {
-		_ = b.store.UpdateCustomFields(ctx, repo.ID, &store.CustomFields{})
+		_ = b.store.SetAnalysisFailed(ctx, repo.ID, true)
 		return err
 	}
 	category := ResolveCategory(repo, result.Tags, cats)

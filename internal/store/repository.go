@@ -177,7 +177,7 @@ func (s *sqliteStore) ListUnanalyzed(ctx context.Context, limit int) ([]*Reposit
 }
 
 func (s *sqliteStore) ListByCategory(ctx context.Context, category string) ([]*Repository, error) {
-	rows, err := s.db.QueryContext(ctx, repositoryColumns+` WHERE COALESCE(NULLIF(custom_category,''), NULLIF(ai_category,''), 'others') = ? ORDER BY full_name`, category)
+	rows, err := s.db.QueryContext(ctx, repositoryColumns+` WHERE COALESCE(NULLIF(custom_category,''), NULLIF(ai_category,''), '其他') = ? ORDER BY full_name`, category)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +209,20 @@ func (s *sqliteStore) UpdateCustomFields(ctx context.Context, repoID int64, f *C
 	}
 	_, err := s.db.ExecContext(ctx, `UPDATE repositories SET custom_description=?, custom_tags=?, custom_category=?, category_locked=?, updated_at=datetime('now') WHERE id=?`,
 		f.Description, string(tagsJSON), f.Category, locked, repoID)
+	return err
+}
+
+func (s *sqliteStore) SetAnalysisFailed(ctx context.Context, repoID int64, failed bool) error {
+	v := 0
+	if failed {
+		v = 1
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE repositories SET analysis_failed=?, updated_at=datetime('now') WHERE id=?`, v, repoID)
+	return err
+}
+
+func (s *sqliteStore) DeleteAllRepositories(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM repositories`)
 	return err
 }
 

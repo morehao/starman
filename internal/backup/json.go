@@ -53,8 +53,8 @@ func ImportJSON(ctx context.Context, s store.Store, data []byte, mode ImportMode
 		return fmt.Errorf("parse backup: %w", err)
 	}
 	if mode == ImportReplace {
-		if err := s.UpsertRepositories(ctx, nil); err != nil {
-			return err
+		if err := s.DeleteAllRepositories(ctx); err != nil {
+			return fmt.Errorf("clear repositories for replace import: %w", err)
 		}
 	}
 	for _, c := range b.Categories {

@@ -9,8 +9,9 @@ import (
 )
 
 type mockStore struct {
-	repos []*store.Repository
-	cats  []*store.Category
+	repos   []*store.Repository
+	cats    []*store.Category
+	deleted bool
 	store.Store
 }
 
@@ -31,6 +32,11 @@ func (m *mockStore) UpsertRepository(ctx context.Context, r *store.Repository) e
 }
 
 func (m *mockStore) UpsertCategory(ctx context.Context, c *store.Category) error {
+	return nil
+}
+
+func (m *mockStore) DeleteAllRepositories(ctx context.Context) error {
+	m.deleted = true
 	return nil
 }
 
@@ -63,5 +69,19 @@ func TestImportJSONMerge(t *testing.T) {
 	data := []byte(`{"version":1,"exported_at":"2026-01-01T00:00:00Z","repositories":[{"id":1,"full_name":"owner/repo1"}],"releases":[],"categories":[{"id":"web-app","name":"Web"}]}`)
 	if err := ImportJSON(context.Background(), s, data, ImportMerge); err != nil {
 		t.Fatal(err)
+	}
+	if s.deleted {
+		t.Fatal("merge mode should not delete repositories")
+	}
+}
+
+func TestImportJSONReplace(t *testing.T) {
+	s := &mockStore{}
+	data := []byte(`{"version":1,"exported_at":"2026-01-01T00:00:00Z","repositories":[{"id":1,"full_name":"owner/repo1"}],"releases":[],"categories":[{"id":"web-app","name":"Web"}]}`)
+	if err := ImportJSON(context.Background(), s, data, ImportReplace); err != nil {
+		t.Fatal(err)
+	}
+	if !s.deleted {
+		t.Fatal("replace mode should clear repositories before import")
 	}
 }

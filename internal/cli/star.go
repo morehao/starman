@@ -28,10 +28,17 @@ func newStarCmd() *cobra.Command {
 			if len(parts) != 2 {
 				return fmt.Errorf("invalid full name: %s (expected owner/repo)", args[0])
 			}
-			if err := gh.Star(context.Background(), parts[0], parts[1]); err != nil {
+			ctx := context.Background()
+			if err := gh.Star(ctx, parts[0], parts[1]); err != nil {
 				return err
 			}
 			fmt.Printf("Starred %s\n", args[0])
+			if repo, err := gh.GetRepository(ctx, parts[0], parts[1]); err == nil {
+				if s, err := openStore(); err == nil {
+					_ = s.UpsertRepository(ctx, repo)
+					s.Close()
+				}
+			}
 			return nil
 		},
 	}
@@ -57,10 +64,22 @@ func newUnstarCmd() *cobra.Command {
 			if len(parts) != 2 {
 				return fmt.Errorf("invalid full name: %s (expected owner/repo)", args[0])
 			}
-			if err := gh.Unstar(context.Background(), parts[0], parts[1]); err != nil {
+			ctx := context.Background()
+			if err := gh.Unstar(ctx, parts[0], parts[1]); err != nil {
 				return err
 			}
 			fmt.Printf("Unstarred %s\n", args[0])
+			s, err := openStore()
+			if err != nil {
+				return nil
+			}
+			defer s.Close()
+			existing, err := s.GetRepository(ctx, args[0])
+			if err != nil {
+				return nil
+			}
+			existing.StarredAt = ""
+			_ = s.UpsertRepository(ctx, existing)
 			return nil
 		},
 	}

@@ -14,8 +14,13 @@ func ResolveCategory(repo *store.Repository, aiTags []string, cats []*store.Cate
 	if matched := matchTags(aiTags, cats, false); matched != "" {
 		return matched
 	}
-	if repo.CategoryLocked && repo.CustomCategory != "" {
-		return repo.CustomCategory
+	if repo.CategoryLocked {
+		if repo.AICategory != "" {
+			return repo.AICategory
+		}
+		if repo.CustomCategory != "" {
+			return repo.CustomCategory
+		}
 	}
 	return "others"
 }

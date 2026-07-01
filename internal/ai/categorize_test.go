@@ -48,3 +48,25 @@ func TestResolveCategoryNoMatch(t *testing.T) {
 		t.Fatalf("expected others, got %s", got)
 	}
 }
+
+func TestResolveCategoryLockedNoMatchPreservesAICategory(t *testing.T) {
+	repo := &store.Repository{CategoryLocked: true, AICategory: "dev-tools"}
+	cats := []*store.Category{
+		{Name: "开发工具", Keywords: []string{"cli"}, IsCustom: false},
+	}
+	got := ResolveCategory(repo, []string{"cooking"}, cats)
+	if got != "dev-tools" {
+		t.Fatalf("expected locked repo to preserve AICategory, got %s", got)
+	}
+}
+
+func TestResolveCategoryLockedNoMatchFallbackToOthers(t *testing.T) {
+	repo := &store.Repository{CategoryLocked: true}
+	cats := []*store.Category{
+		{Name: "开发工具", Keywords: []string{"cli"}, IsCustom: false},
+	}
+	got := ResolveCategory(repo, []string{"cooking"}, cats)
+	if got != "others" {
+		t.Fatalf("expected others when no category set on locked repo, got %s", got)
+	}
+}

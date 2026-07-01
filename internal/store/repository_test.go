@@ -182,3 +182,63 @@ func TestListByCategory(t *testing.T) {
 		t.Fatalf("expected owner/repo1 in dev-tools, got %v", devTools)
 	}
 }
+
+func TestSetAnalysisFailed(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if err := s.UpsertRepository(ctx, sampleRepo(1, "owner/repo1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAnalysisFailed(ctx, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.GetRepository(ctx, "owner/repo1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.AnalysisFailed {
+		t.Fatal("expected analysis_failed = true")
+	}
+	if r.AISummary != "" {
+		t.Fatalf("analysis failure should not wipe AI fields, got summary %q", r.AISummary)
+	}
+	if err := s.SetAnalysisFailed(ctx, 1, false); err != nil {
+		t.Fatal(err)
+	}
+	r, err = s.GetRepository(ctx, "owner/repo1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.AnalysisFailed {
+		t.Fatal("expected analysis_failed = false")
+	}
+}
+
+func TestDeleteAllRepositories(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if err := s.UpsertRepository(ctx, sampleRepo(1, "owner/repo1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertRepository(ctx, sampleRepo(2, "owner/repo2")); err != nil {
+		t.Fatal(err)
+	}
+	s.UpsertRelease(ctx, &Release{ID: 100, RepoID: 1, RepoFullName: "owner/repo1", TagName: "v1.0.0", PublishedAt: "2026-01-01T00:00:00Z"})
+	if err := s.DeleteAllRepositories(ctx); err != nil {
+		t.Fatal(err)
+	}
+	repos, err := s.ListRepositories(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repos) != 0 {
+		t.Fatalf("expected 0 repos after delete all, got %d", len(repos))
+	}
+	rels, err := s.ListAllReleases(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rels) != 0 {
+		t.Fatalf("expected 0 releases after cascade delete, got %d", len(rels))
+	}
+}

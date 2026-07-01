@@ -70,6 +70,23 @@ func (s *sqliteStore) ListUnreadReleases(ctx context.Context) ([]*Release, error
 	return rels, rows.Err()
 }
 
+func (s *sqliteStore) ListAllReleases(ctx context.Context) ([]*Release, error) {
+	rows, err := s.db.QueryContext(ctx, releaseColumns+` ORDER BY published_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var rels []*Release
+	for rows.Next() {
+		r, err := scanRelease(rows)
+		if err != nil {
+			return nil, err
+		}
+		rels = append(rels, r)
+	}
+	return rels, rows.Err()
+}
+
 func (s *sqliteStore) ListReleasesByRepo(ctx context.Context, repoFullName string) ([]*Release, error) {
 	rows, err := s.db.QueryContext(ctx, releaseColumns+` WHERE repo_full_name = ? ORDER BY published_at DESC`, repoFullName)
 	if err != nil {

@@ -3,9 +3,11 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/morehao/starman/internal/github"
 	"github.com/morehao/starman/internal/release"
+	"github.com/morehao/starman/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -33,16 +35,18 @@ func newReleaseListCmd() *cobra.Command {
 			}
 			defer s.Close()
 			ctx := context.Background()
+			var rels []*store.Release
 			if all {
-				_ = ctx
+				rels, err = s.ListAllReleases(ctx)
+			} else {
+				rels, err = s.ListUnreadReleases(ctx)
 			}
-			rels, err := s.ListUnreadReleases(ctx)
 			if err != nil {
 				return err
 			}
 			fmt.Printf("%-30s %-15s %-12s %s\n", "REPO", "TAG", "PUBLISHED", "ASSETS")
 			for _, r := range rels {
-				fmt.Printf("%-30s %-15s %-12s %d\n", r.RepoFullName, r.TagName, r.PublishedAt[:10], len(r.Assets))
+				fmt.Printf("%-30s %-15s %-12s %d\n", r.RepoFullName, r.TagName, formatDate(r.PublishedAt), len(r.Assets))
 			}
 			return nil
 		},
@@ -90,14 +94,39 @@ func newReleaseSubscribeCmd() *cobra.Command {
 				return err
 			}
 			defer s.Close()
-			if err := s.SetReleaseSubscription(context.Background(), args[0], true); err != nil {
+			ctx := context.Background()
+			if err := s.SetReleaseSubscription(ctx, args[0], true); err != nil {
 				return err
 			}
 			fmt.Printf("Subscribed to %s\n", args[0])
+			cfg, _, err := loadConfig(cmd)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Initial pull skipped: %v\n", err)
+				return nil
+			}
+			token := resolveGitHubToken(cmd, cfg)
+			gh := github.New(token)
+			tracker := release.NewTracker(s, gh)
+			stats, err := tracker.PullReleases(ctx)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Initial pull failed: %v\n", err)
+				return nil
+			}
+			fmt.Printf("Pulled %d releases\n", stats.NewReleases)
 			return nil
 		},
 	}
 	return cmd
+}
+
+func formatDate(s string) string {
+	if len(s) >= 10 {
+		return s[:10]
+	}
+	if s == "" {
+		return "N/A"
+	}
+	return s
 }
 
 func newReleaseUnsubscribeCmd() *cobra.Command {

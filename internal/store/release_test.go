@@ -113,3 +113,27 @@ func TestMarkAllReleasesRead(t *testing.T) {
 		t.Fatalf("expected 0 unread after mark all, got %d", len(unread))
 	}
 }
+
+func TestListAllReleases(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if err := s.UpsertRepository(ctx, sampleRepo(1, "owner/repo1")); err != nil {
+		t.Fatal(err)
+	}
+	s.UpsertRelease(ctx, &Release{ID: 1, RepoID: 1, RepoFullName: "owner/repo1", TagName: "v1", PublishedAt: "2026-01-01T00:00:00Z"})
+	s.UpsertRelease(ctx, &Release{ID: 2, RepoID: 1, RepoFullName: "owner/repo1", TagName: "v2", PublishedAt: "2026-02-01T00:00:00Z"})
+	if err := s.MarkReleaseRead(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	unread, _ := s.ListUnreadReleases(ctx)
+	if len(unread) != 1 {
+		t.Fatalf("expected 1 unread after marking one read, got %d", len(unread))
+	}
+	all, err := s.ListAllReleases(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 total releases (read + unread), got %d", len(all))
+	}
+}
