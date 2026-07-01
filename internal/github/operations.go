@@ -1,0 +1,156 @@
+package github
+
+import (
+	"context"
+	"encoding/base64"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/morehao/starman/internal/store"
+	gh "github.com/google/go-github/v71/github"
+)
+
+type Release = store.Release
+type ReleaseAsset = store.ReleaseAsset
+
+func (c *Client) Star(ctx context.Context, owner, repo string) error {
+	_, err := c.client.Activity.Star(ctx, owner, repo)
+	return err
+}
+
+func (c *Client) Unstar(ctx context.Context, owner, repo string) error {
+	_, err := c.client.Activity.Unstar(ctx, owner, repo)
+	return err
+}
+
+func (c *Client) GetRepository(ctx context.Context, owner, repo string) (*Repository, error) {
+	r, _, err := c.client.Repositories.Get(ctx, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	return convertRepo(r), nil
+}
+
+func (c *Client) ListReleases(ctx context.Context, owner, repo string) ([]*Release, error) {
+	opts := &gh.ListOptions{PerPage: 100}
+	var all []*Release
+	for {
+		releases, resp, err := c.client.Repositories.ListReleases(ctx, owner, repo, opts)
+		if err != nil {
+			return nil, fmt.Errorf("list releases %s/%s: %w", owner, repo, err)
+		}
+		for _, rel := range releases {
+			all = append(all, convertRelease(rel, owner+"/"+repo))
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	return all, nil
+}
+
+func (c *Client) GetReadme(ctx context.Context, owner, repo string) (string, error) {
+	readme, _, err := c.client.Repositories.GetReadme(ctx, owner, repo, nil)
+	if err != nil {
+		return "", fmt.Errorf("get readme %s/%s: %w", owner, repo, err)
+	}
+	content, err := readme.GetContent()
+	if err != nil {
+		return "", fmt.Errorf("decode readme: %w", err)
+	}
+	return content, nil
+}
+
+func (c *Client) UpdateReadmeFile(ctx context.Context, owner, repo, content, message string) error {
+	_, _, err := c.client.Repositories.Get(ctx, owner, repo)
+	if err != nil {
+		return fmt.Errorf("repo %s/%s not accessible: %w", owner, repo, err)
+	}
+	fileContent, _, resp, err := c.client.Repositories.GetContents(ctx, owner, repo, "README.md", nil)
+	if err != nil && resp != nil && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("get readme contents: %w", err)
+	}
+	contentEnc := base64.StdEncoding.EncodeToString([]byte(content))
+	if fileContent == nil {
+		_, _, err = c.client.Repositories.CreateFile(ctx, owner, repo, "README.md", &gh.RepositoryContentFileOptions{
+			Message: gh.Ptr(message),
+			Content: []byte(contentEnc),
+		})
+		if err != nil {
+			return fmt.Errorf("create readme: %w", err)
+		}
+	} else {
+		_, _, err = c.client.Repositories.UpdateFile(ctx, owner, repo, "README.md", &gh.RepositoryContentFileOptions{
+			Message: gh.Ptr(message),
+			Content: []byte(contentEnc),
+			SHA:     fileContent.SHA,
+		})
+		if err != nil {
+			return fmt.Errorf("update readme: %w", err)
+		}
+	}
+	return nil
+}
+
+type Rate struct {
+	Remaining int
+	Reset     time.Time
+	Limit     int
+}
+
+func (c *Client) RateLimit(ctx context.Context) (*Rate, error) {
+	rl, _, err := c.client.RateLimit.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &Rate{Remaining: rl.Core.Remaining, Reset: rl.Core.Reset.Time, Limit: rl.Core.Limit}, nil
+}
+
+func convertRepo(r *gh.Repository) *Repository {
+	var topics []string
+	if r.Topics != nil {
+		topics = r.Topics
+	}
+	return &Repository{
+		ID:              r.GetID(),
+		FullName:        r.GetFullName(),
+		Name:            r.GetName(),
+		Description:     r.GetDescription(),
+		URL:             r.GetHTMLURL(),
+		Language:        r.GetLanguage(),
+		Homepage:        r.GetHomepage(),
+		StargazersCount: r.GetStargazersCount(),
+		ForksCount:      r.GetForksCount(),
+		Topics:          topics,
+		OwnerLogin:      r.GetOwner().GetLogin(),
+		OwnerAvatar:     r.GetOwner().GetAvatarURL(),
+	}
+}
+
+func convertRelease(rel *gh.RepositoryRelease, repoFullName string) *Release {
+	var assets []ReleaseAsset
+	for _, a := range rel.Assets {
+		assets = append(assets, ReleaseAsset{
+			Name:        a.GetName(),
+			URL:         a.GetBrowserDownloadURL(),
+			Size:        int64(a.GetSize()),
+			ContentType: a.GetContentType(),
+		})
+	}
+	repoID := int64(0)
+	return &Release{
+		ID:           rel.GetID(),
+		RepoID:       repoID,
+		RepoFullName: repoFullName,
+		TagName:      rel.GetTagName(),
+		Name:         rel.GetName(),
+		Body:         rel.GetBody(),
+		HTMLURL:      rel.GetHTMLURL(),
+		PublishedAt:  rel.GetPublishedAt().Format(time.RFC3339),
+		IsPrerelease: rel.GetPrerelease(),
+		IsDraft:      rel.GetDraft(),
+		Assets:       assets,
+	}
+}
