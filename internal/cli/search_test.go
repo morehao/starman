@@ -7,14 +7,14 @@ import (
 	"github.com/morehao/starman/internal/store"
 )
 
-func TestFilterAndSortHitsByLang(t *testing.T) {
+func TestFilterByCLIOptsByLang(t *testing.T) {
 	hits := []*ai.SearchHit{
 		{Repo: &store.Repository{FullName: "a/b", Language: "Go", StargazersCount: 10}, Score: 5},
 		{Repo: &store.Repository{FullName: "c/d", Language: "Python", StargazersCount: 20}, Score: 8},
 		{Repo: &store.Repository{FullName: "e/f", Language: "Go", StargazersCount: 30}, Score: 3},
 	}
 	opts := searchOpts{Lang: "Go"}
-	filtered := filterAndSortHits(hits, opts)
+	filtered := filterByCLIOpts(hits, opts)
 	if len(filtered) != 2 {
 		t.Fatalf("expected 2 Go repos, got %d", len(filtered))
 	}
@@ -25,27 +25,27 @@ func TestFilterAndSortHitsByLang(t *testing.T) {
 	}
 }
 
-func TestFilterAndSortHitsByCategory(t *testing.T) {
+func TestFilterByCLIOptsByCategory(t *testing.T) {
 	hits := []*ai.SearchHit{
 		{Repo: &store.Repository{FullName: "a/b", AICategory: "dev-tools"}, Score: 5},
 		{Repo: &store.Repository{FullName: "c/d", CustomCategory: "dev-tools"}, Score: 8},
 		{Repo: &store.Repository{FullName: "e/f", AICategory: "web-app"}, Score: 3},
 	}
 	opts := searchOpts{Category: "dev-tools"}
-	filtered := filterAndSortHits(hits, opts)
+	filtered := filterByCLIOpts(hits, opts)
 	if len(filtered) != 2 {
 		t.Fatalf("expected 2 dev-tools repos, got %d", len(filtered))
 	}
 }
 
-func TestFilterAndSortHitsByStars(t *testing.T) {
+func TestFilterByCLIOptsByStars(t *testing.T) {
 	hits := []*ai.SearchHit{
 		{Repo: &store.Repository{FullName: "a/b", StargazersCount: 10}, Score: 5},
 		{Repo: &store.Repository{FullName: "c/d", StargazersCount: 50}, Score: 3},
 		{Repo: &store.Repository{FullName: "e/f", StargazersCount: 30}, Score: 8},
 	}
 	opts := searchOpts{Sort: "stars"}
-	sorted := filterAndSortHits(hits, opts)
+	sorted := filterByCLIOpts(hits, opts)
 	if len(sorted) != 3 {
 		t.Fatalf("expected 3 repos, got %d", len(sorted))
 	}
@@ -57,14 +57,14 @@ func TestFilterAndSortHitsByStars(t *testing.T) {
 	}
 }
 
-func TestFilterAndSortHitsLimit(t *testing.T) {
+func TestFilterByCLIOptsLimit(t *testing.T) {
 	hits := []*ai.SearchHit{
 		{Repo: &store.Repository{FullName: "a/b"}, Score: 5},
 		{Repo: &store.Repository{FullName: "c/d"}, Score: 3},
 		{Repo: &store.Repository{FullName: "e/f"}, Score: 8},
 	}
 	opts := searchOpts{Limit: 2}
-	limited := filterAndSortHits(hits, opts)
+	limited := filterByCLIOpts(hits, opts)
 	if len(limited) != 2 {
 		t.Fatalf("expected 2 repos after limit, got %d", len(limited))
 	}

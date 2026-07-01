@@ -109,10 +109,11 @@ func (b *BatchAnalyzer) analyzeOne(ctx context.Context, repo *store.Repository, 
 	}
 	category := ResolveCategory(repo, result.Tags, cats)
 	aiResult := &store.AIResult{
-		Summary:   result.Summary,
-		Tags:      result.Tags,
-		Platforms: result.Platforms,
-		Category:  category,
+		Summary:    result.Summary,
+		Tags:       result.Tags,
+		Platforms:  result.Platforms,
+		Category:   category,
+		SearchText: result.SearchText,
 	}
 	return b.store.UpdateAIResult(ctx, repo.ID, aiResult)
 }

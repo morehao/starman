@@ -11,9 +11,10 @@ import (
 )
 
 type AnalysisResult struct {
-	Summary   string   `json:"summary"`
-	Tags      []string `json:"tags"`
-	Platforms []string `json:"platforms"`
+	Summary    string   `json:"summary"`
+	Tags       []string `json:"tags"`
+	Platforms  []string `json:"platforms"`
+	SearchText string   `json:"search_text"`
 }
 
 type Service struct {
@@ -56,7 +57,9 @@ func buildAnalyzeMessages(repo *store.Repository, readme string, cats []*store.C
 		}
 	}
 	system := fmt.Sprintf(`你是一个 GitHub 仓库分析助手。根据仓库信息和 README，输出 JSON：
-{"summary": "一句话摘要(中文,≤80字)", "tags": ["3-5个标签"], "platforms": ["web|desktop|mobile|cli|library|service"]}
+{"summary": "一句话摘要(中文,≤80字)", "tags": ["3-5个标签"], "platforms": ["web|desktop|mobile|cli|library|service"], "search_text": "扩展检索描述"}
+
+search_text 用中文描述仓库的核心功能、适用场景、技术栈，50-150字，用于全文搜索匹配。
 
 可选分类（tags 尽量从中选取，也可补充）：%s`, strings.Join(catNames, "、"))
 

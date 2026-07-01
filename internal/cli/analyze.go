@@ -75,6 +75,12 @@ func newAnalyzeCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(os.Stderr, "\nDone: %d success, %d failed, %d total\n", result.Success, result.Failed, result.Total)
+			if result.Success > 0 {
+				fmt.Fprintf(os.Stderr, "Rebuilding FTS index...\n")
+				if err := s.RebuildFTSIndex(ctx); err != nil {
+					return fmt.Errorf("rebuild fts index: %w", err)
+				}
+			}
 			return nil
 		},
 	}

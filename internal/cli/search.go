@@ -18,6 +18,7 @@ type searchOpts struct {
 	Category string
 	Sort     string
 	Limit    int
+	Rerank   bool
 }
 
 func newSearchCmd() *cobra.Command {
@@ -26,9 +27,10 @@ func newSearchCmd() *cobra.Command {
 	var lang string
 	var category string
 	var sortBy string
+	var rerank bool
 	cmd := &cobra.Command{
 		Use:   "search <query>",
-		Short: "Search repos by AI-translated keywords",
+		Short: "AI-powered semantic search with FTS5 full-text index",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, _, err := loadConfig(cmd)
@@ -45,18 +47,25 @@ func newSearchCmd() *cobra.Command {
 			}
 			defer s.Close()
 			ctx := context.Background()
-			repos, err := s.ListRepositories(ctx)
-			if err != nil {
-				return err
-			}
 			aiClient := ai.NewClient(cfg.AI.BaseURL, aiKey, cfg.AI.Model)
 			svc := ai.NewService(aiClient, nil)
-			hits, err := svc.Search(ctx, args[0], repos)
+
+			opts := ai.SearchOpts{
+				Language: lang,
+				Category: category,
+				Rerank:   rerank,
+				Sort:     sortBy,
+				Limit:    limit,
+			}
+
+			hits, err := svc.Search(ctx, args[0], s, opts)
 			if err != nil {
 				return err
 			}
-			opts := searchOpts{Lang: lang, Category: category, Sort: sortBy, Limit: limit}
-			hits = filterAndSortHits(hits, opts)
+
+			cliOpts := searchOpts{Lang: lang, Category: category, Sort: sortBy, Limit: limit, Rerank: rerank}
+			hits = filterByCLIOpts(hits, cliOpts)
+
 			if jsonOut {
 				return outputSearchJSON(hits)
 			}
@@ -68,11 +77,12 @@ func newSearchCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 0, "limit number of results (0=no limit)")
 	cmd.Flags().StringVar(&lang, "lang", "", "filter by language")
 	cmd.Flags().StringVar(&category, "category", "", "filter by category")
-	cmd.Flags().StringVar(&sortBy, "sort", "score", "sort by: score|stars|updated|name")
+	cmd.Flags().StringVar(&sortBy, "sort", "score", "sort by: score|stars|name")
+	cmd.Flags().BoolVar(&rerank, "rerank", false, "use LLM to rerank top candidates")
 	return cmd
 }
 
-func filterAndSortHits(hits []*ai.SearchHit, opts searchOpts) []*ai.SearchHit {
+func filterByCLIOpts(hits []*ai.SearchHit, opts searchOpts) []*ai.SearchHit {
 	var filtered []*ai.SearchHit
 	for _, h := range hits {
 		if opts.Lang != "" && !strings.EqualFold(h.Repo.Language, opts.Lang) {
@@ -98,10 +108,6 @@ func filterAndSortHits(hits []*ai.SearchHit, opts searchOpts) []*ai.SearchHit {
 		sort.Slice(filtered, func(i, j int) bool {
 			return filtered[i].Repo.FullName < filtered[j].Repo.FullName
 		})
-	case "updated":
-		sort.Slice(filtered, func(i, j int) bool {
-			return filtered[i].Repo.StarredAt > filtered[j].Repo.StarredAt
-		})
 	default:
 		sort.Slice(filtered, func(i, j int) bool {
 			return filtered[i].Score > filtered[j].Score
@@ -120,7 +126,7 @@ func outputSearchTable(hits []*ai.SearchHit) {
 		if len(desc) > 50 {
 			desc = desc[:50] + "..."
 		}
-		fmt.Fprintf(os.Stdout, "%-6.0f %-40s %s\n", h.Score, h.Repo.FullName, desc)
+		fmt.Fprintf(os.Stdout, "%-6.1f %-40s %s\n", h.Score, h.Repo.FullName, desc)
 	}
 }
 

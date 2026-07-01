@@ -50,6 +50,7 @@ func (s *sqliteStore) migrate(ctx context.Context) error {
 			ai_tags             TEXT,
 			ai_platforms        TEXT,
 			ai_category         TEXT,
+			ai_search_text      TEXT DEFAULT '',
 			analyzed_at         TEXT,
 			analysis_failed     INTEGER DEFAULT 0,
 			custom_description  TEXT DEFAULT '',
@@ -95,7 +96,53 @@ func (s *sqliteStore) migrate(ctx context.Context) error {
 			return fmt.Errorf("migrate: %w", err)
 		}
 	}
+	if err := s.migrateAddColumn(ctx, "repositories", "ai_search_text", "TEXT DEFAULT ''"); err != nil {
+		return fmt.Errorf("migrate ai_search_text: %w", err)
+	}
+	if err := s.createFTSIndex(ctx); err != nil {
+		return fmt.Errorf("create fts index: %w", err)
+	}
 	return s.seedCategories(ctx)
+}
+
+func (s *sqliteStore) migrateAddColumn(ctx context.Context, table, column, columnDef string) error {
+	var count int
+	if err := s.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM pragma_table_info('%s') WHERE name='%s'", table, column)).Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, columnDef))
+	return err
+}
+
+func (s *sqliteStore) createFTSIndex(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS repositories_fts USING fts5(
+		full_name,
+		description,
+		ai_summary,
+		ai_tags,
+		ai_search_text,
+		language,
+		topics,
+		content='repositories',
+		content_rowid='id',
+		tokenize='unicode61 remove_diacritics 2'
+	)`)
+	if err != nil {
+		return err
+	}
+	var count int
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM repositories_fts").Scan(&count); err != nil {
+		return fmt.Errorf("check fts index: %w", err)
+	}
+	if count == 0 {
+		if _, err := s.db.ExecContext(ctx, `INSERT INTO repositories_fts(repositories_fts) VALUES('rebuild')`); err != nil {
+			return fmt.Errorf("rebuild fts index: %w", err)
+		}
+	}
+	return nil
 }
 
 var defaultCategories = []Category{

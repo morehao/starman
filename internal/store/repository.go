@@ -54,10 +54,10 @@ func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO repositories (
 		id, full_name, name, description, url, language, homepage,
 		stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at,
-		ai_summary, ai_tags, ai_platforms, ai_category, analyzed_at, analysis_failed,
+		ai_summary, ai_tags, ai_platforms, ai_category, ai_search_text, analyzed_at, analysis_failed,
 		custom_description, custom_tags, custom_category, category_locked,
 		subscribed_releases, last_release_fetch
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 	ON CONFLICT(id) DO UPDATE SET
 		full_name=excluded.full_name, name=excluded.name, description=excluded.description,
 		url=excluded.url, language=excluded.language, homepage=excluded.homepage,
@@ -65,14 +65,15 @@ func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 		topics=excluded.topics, owner_login=excluded.owner_login, owner_avatar=excluded.owner_avatar,
 		starred_at=excluded.starred_at,
 		ai_summary=excluded.ai_summary, ai_tags=excluded.ai_tags, ai_platforms=excluded.ai_platforms,
-		ai_category=excluded.ai_category, analyzed_at=excluded.analyzed_at, analysis_failed=excluded.analysis_failed,
+		ai_category=excluded.ai_category, ai_search_text=excluded.ai_search_text,
+		analyzed_at=excluded.analyzed_at, analysis_failed=excluded.analysis_failed,
 		custom_description=excluded.custom_description, custom_tags=excluded.custom_tags,
 		custom_category=excluded.custom_category, category_locked=excluded.category_locked,
 		subscribed_releases=excluded.subscribed_releases, last_release_fetch=excluded.last_release_fetch,
 		updated_at=datetime('now')`,
 		r.ID, r.FullName, r.Name, r.Description, r.URL, r.Language, r.Homepage,
 		r.StargazersCount, r.ForksCount, string(topicsJSON), r.OwnerLogin, r.OwnerAvatar, r.StarredAt,
-		r.AISummary, string(tagsJSON), string(platJSON), r.AICategory, analyzedAt, analysisFailed,
+		r.AISummary, string(tagsJSON), string(platJSON), r.AICategory, r.AISearchText, analyzedAt, analysisFailed,
 		r.CustomDescription, string(customTagsJSON), r.CustomCategory, categoryLocked,
 		subscribed, lastReleaseFetch,
 	)
@@ -88,10 +89,11 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 	var analyzedAt, lastReleaseFetch sql.NullString
 	var customDesc, customCat sql.NullString
 	var analysisFailed, categoryLocked, subscribed int
+	var searchText sql.NullString
 	err := row.Scan(
 		&r.ID, &r.FullName, &r.Name, &r.Description, &r.URL, &r.Language, &r.Homepage,
 		&r.StargazersCount, &r.ForksCount, &topicsJSON, &r.OwnerLogin, &r.OwnerAvatar, &r.StarredAt,
-		&r.AISummary, &tagsJSON, &platJSON, &r.AICategory, &analyzedAt, &analysisFailed,
+		&r.AISummary, &tagsJSON, &platJSON, &r.AICategory, &searchText, &analyzedAt, &analysisFailed,
 		&customDesc, &customTagsJSON, &customCat, &categoryLocked,
 		&subscribed, &lastReleaseFetch,
 	)
@@ -115,6 +117,9 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 	}
 	if customCat.Valid {
 		r.CustomCategory = customCat.String
+	}
+	if searchText.Valid {
+		r.AISearchText = searchText.String
 	}
 	if analyzedAt.Valid {
 		t, err := time.Parse(time.RFC3339, analyzedAt.String)
@@ -145,7 +150,7 @@ func (s *sqliteStore) GetRepository(ctx context.Context, fullName string) (*Repo
 
 const repositoryColumns = `SELECT id, full_name, name, description, url, language, homepage,
 	stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at,
-	ai_summary, ai_tags, ai_platforms, ai_category, analyzed_at, analysis_failed,
+	ai_summary, ai_tags, ai_platforms, ai_category, ai_search_text, analyzed_at, analysis_failed,
 	custom_description, custom_tags, custom_category, category_locked,
 	subscribed_releases, last_release_fetch FROM repositories`
 
@@ -210,8 +215,8 @@ func (s *sqliteStore) ListByCategory(ctx context.Context, category string) ([]*R
 func (s *sqliteStore) UpdateAIResult(ctx context.Context, repoID int64, res *AIResult) error {
 	tagsJSON, _ := json.Marshal(res.Tags)
 	platJSON, _ := json.Marshal(res.Platforms)
-	_, err := s.db.ExecContext(ctx, `UPDATE repositories SET ai_summary=?, ai_tags=?, ai_platforms=?, ai_category=?, analyzed_at=strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), analysis_failed=0, updated_at=datetime('now') WHERE id=?`,
-		res.Summary, string(tagsJSON), string(platJSON), res.Category, repoID)
+	_, err := s.db.ExecContext(ctx, `UPDATE repositories SET ai_summary=?, ai_tags=?, ai_platforms=?, ai_category=?, ai_search_text=?, analyzed_at=strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), analysis_failed=0, updated_at=datetime('now') WHERE id=?`,
+		res.Summary, string(tagsJSON), string(platJSON), res.Category, res.SearchText, repoID)
 	return err
 }
 
@@ -303,4 +308,113 @@ func (s *sqliteStore) UpsertReposOnSync(ctx context.Context, rs []*Repository, f
 		}
 	}
 	return tx.Commit()
+}
+
+func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *SearchFilters) ([]*FTSResult, error) {
+	where := "repositories_fts MATCH ?"
+	args := []interface{}{query}
+	if filters != nil {
+		if filters.Language != "" {
+			where += " AND r.language = ?"
+			args = append(args, filters.Language)
+		}
+		if filters.Category != "" {
+			where += " AND COALESCE(NULLIF(r.custom_category,''), NULLIF(r.ai_category,''), '其他') = ?"
+			args = append(args, filters.Category)
+		}
+		if filters.MinStars > 0 {
+			where += " AND r.stargazers_count >= ?"
+			args = append(args, filters.MinStars)
+		}
+		if filters.MaxStars > 0 {
+			where += " AND r.stargazers_count <= ?"
+			args = append(args, filters.MaxStars)
+		}
+	}
+	limit := 50
+	if filters != nil && filters.Limit > 0 {
+		limit = filters.Limit
+	}
+	sqlStr := fmt.Sprintf(`SELECT r.id, r.full_name, r.name, r.description, r.url, r.language, r.homepage,
+		r.stargazers_count, r.forks_count, r.topics, r.owner_login, r.owner_avatar, r.starred_at,
+		r.ai_summary, r.ai_tags, r.ai_platforms, r.ai_category, r.ai_search_text,
+		r.analyzed_at, r.analysis_failed,
+		r.custom_description, r.custom_tags, r.custom_category, r.category_locked,
+		r.subscribed_releases, r.last_release_fetch,
+		rank as bm25_score
+		FROM repositories_fts
+		JOIN repositories r ON repositories_fts.rowid = r.id
+		WHERE %s
+		ORDER BY rank
+		LIMIT ?`, where)
+	args = append(args, limit)
+	rows, err := s.db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("search fts: %w", err)
+	}
+	defer rows.Close()
+	var results []*FTSResult
+	for rows.Next() {
+		r := &Repository{}
+		var topicsJSON, tagsJSON, platJSON, customTagsJSON sql.NullString
+		var analyzedAt, lastReleaseFetch sql.NullString
+		var customDesc, customCat sql.NullString
+		var searchText sql.NullString
+		var analysisFailed, categoryLocked, subscribed int
+		var bm25 float64
+		err := rows.Scan(
+			&r.ID, &r.FullName, &r.Name, &r.Description, &r.URL, &r.Language, &r.Homepage,
+			&r.StargazersCount, &r.ForksCount, &topicsJSON, &r.OwnerLogin, &r.OwnerAvatar, &r.StarredAt,
+			&r.AISummary, &tagsJSON, &platJSON, &r.AICategory, &searchText, &analyzedAt, &analysisFailed,
+			&customDesc, &customTagsJSON, &customCat, &categoryLocked,
+			&subscribed, &lastReleaseFetch,
+			&bm25,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan fts result: %w", err)
+		}
+		if topicsJSON.Valid {
+			json.Unmarshal([]byte(topicsJSON.String), &r.Topics)
+		}
+		if tagsJSON.Valid {
+			json.Unmarshal([]byte(tagsJSON.String), &r.AITags)
+		}
+		if platJSON.Valid {
+			json.Unmarshal([]byte(platJSON.String), &r.AIPlatforms)
+		}
+		if customTagsJSON.Valid {
+			json.Unmarshal([]byte(customTagsJSON.String), &r.CustomTags)
+		}
+		if customDesc.Valid {
+			r.CustomDescription = customDesc.String
+		}
+		if customCat.Valid {
+			r.CustomCategory = customCat.String
+		}
+		if searchText.Valid {
+			r.AISearchText = searchText.String
+		}
+		if analyzedAt.Valid {
+			t, err := time.Parse(time.RFC3339, analyzedAt.String)
+			if err == nil {
+				r.AnalyzedAt = &t
+			}
+		}
+		r.AnalysisFailed = analysisFailed != 0
+		r.CategoryLocked = categoryLocked != 0
+		r.SubscribedReleases = subscribed != 0
+		if lastReleaseFetch.Valid {
+			t, err := time.Parse(time.RFC3339, lastReleaseFetch.String)
+			if err == nil {
+				r.LastReleaseFetch = &t
+			}
+		}
+		results = append(results, &FTSResult{Repo: r, BM25Score: bm25})
+	}
+	return results, rows.Err()
+}
+
+func (s *sqliteStore) RebuildFTSIndex(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO repositories_fts(repositories_fts) VALUES('rebuild')`)
+	return err
 }

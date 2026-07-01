@@ -20,6 +20,9 @@ type Store interface {
 	SetAnalysisFailed(ctx context.Context, repoID int64, failed bool) error
 	DeleteAllRepositories(ctx context.Context) error
 
+	SearchFTS(ctx context.Context, query string, filters *SearchFilters) ([]*FTSResult, error)
+	RebuildFTSIndex(ctx context.Context) error
+
 	UpsertRelease(ctx context.Context, r *Release) error
 	ListUnreadReleases(ctx context.Context) ([]*Release, error)
 	ListAllReleases(ctx context.Context) ([]*Release, error)

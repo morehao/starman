@@ -20,6 +20,7 @@ type Repository struct {
 	AITags             []string
 	AIPlatforms        []string
 	AICategory         string
+	AISearchText       string
 	AnalyzedAt         *time.Time
 	AnalysisFailed     bool
 	CustomDescription  string
@@ -28,6 +29,20 @@ type Repository struct {
 	CategoryLocked     bool
 	SubscribedReleases bool
 	LastReleaseFetch   *time.Time
+}
+
+type FTSResult struct {
+	Repo       *Repository
+	BM25Score  float64
+}
+
+type SearchFilters struct {
+	Language string
+	Category string
+	MinStars int
+	MaxStars int
+	Platform string
+	Limit    int
 }
 
 type Release struct {
@@ -62,10 +77,11 @@ type Category struct {
 }
 
 type AIResult struct {
-	Summary   string
-	Tags      []string
-	Platforms []string
-	Category  string
+	Summary    string
+	Tags       []string
+	Platforms  []string
+	Category   string
+	SearchText string
 }
 
 type CustomFields struct {
