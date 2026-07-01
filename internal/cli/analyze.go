@@ -35,20 +35,22 @@ func newAnalyzeCmd() *cobra.Command {
 			}
 			defer s.Close()
 			ctx := context.Background()
+			effectiveLimit := limit
+			if all {
+				effectiveLimit = 0
+			}
 			var repos []*store.Repository
-			if all || len(repoNames) == 0 {
-				if force {
-					repos, err = s.ListRepositories(ctx)
-				} else {
-					repos, err = s.ListUnanalyzed(ctx, limit)
-				}
-			} else {
+			if len(repoNames) > 0 {
 				for _, name := range repoNames {
 					r, err := s.GetRepository(ctx, name)
 					if err == nil {
 						repos = append(repos, r)
 					}
 				}
+			} else if force {
+				repos, err = s.ListRepositories(ctx)
+			} else {
+				repos, err = s.ListUnanalyzed(ctx, effectiveLimit)
 			}
 			if err != nil {
 				return err
@@ -64,7 +66,7 @@ func newAnalyzeCmd() *cobra.Command {
 			fmt.Fprintf(os.Stderr, "Analyzing %d repos...\n", len(repos))
 			result, err := batch.Run(ctx, repos, ai.BatchOpts{
 				Force: force,
-				Limit: limit,
+				Limit: effectiveLimit,
 				OnProgress: func(done, total int, name string) {
 					fmt.Fprintf(os.Stderr, "\r[%d/%d] %s", done, total, name)
 				},
@@ -76,9 +78,9 @@ func newAnalyzeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&all, "all", false, "analyze all repos (not just unanalyzed)")
+	cmd.Flags().BoolVar(&all, "all", false, "analyze all unanalyzed repos")
 	cmd.Flags().StringSliceVar(&repoNames, "repo", nil, "specific repo full names to analyze")
 	cmd.Flags().BoolVar(&force, "force", false, "force re-analyze even if already analyzed")
-	cmd.Flags().IntVar(&limit, "limit", 0, "max repos to analyze (0 = no limit)")
+	cmd.Flags().IntVar(&limit, "limit", 20, "max repos to analyze (0 = no limit)")
 	return cmd
 }

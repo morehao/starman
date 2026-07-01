@@ -160,7 +160,14 @@ func (s *sqliteStore) ListRepositories(ctx context.Context) ([]*Repository, erro
 }
 
 func (s *sqliteStore) ListUnanalyzed(ctx context.Context, limit int) ([]*Repository, error) {
-	rows, err := s.db.QueryContext(ctx, repositoryColumns+` WHERE analyzed_at IS NULL ORDER BY full_name LIMIT ?`, limit)
+	query := repositoryColumns + ` WHERE analyzed_at IS NULL ORDER BY full_name`
+	var rows *sql.Rows
+	var err error
+	if limit > 0 {
+		rows, err = s.db.QueryContext(ctx, query+` LIMIT ?`, limit)
+	} else {
+		rows, err = s.db.QueryContext(ctx, query)
+	}
 	if err != nil {
 		return nil, err
 	}

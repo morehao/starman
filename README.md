@@ -69,10 +69,10 @@ Pulls all your starred repos from GitHub into the local SQLite database at `~/.s
 ### 3. Analyze with AI
 
 ```bash
-starman analyze --all
+starman analyze
 ```
 
-Analyzes all unanalyzed repos: fetches README, calls AI for summary/tags/platforms, and resolves a category via keyword matching. Results are cached in the DB — re-running only processes new repos (use `--force` to re-analyze existing ones).
+Analyzes up to 20 unanalyzed repos by default: fetches README, calls AI for summary/tags/platforms, and resolves a category via keyword matching. Results are cached in the DB — re-running only processes new repos. Use `--all` to analyze all unanalyzed repos, or `--force` to re-analyze existing ones.
 
 ### 4. Generate awesome list
 
@@ -179,10 +179,10 @@ starman analyze [flags]
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Analyze all repos, not just unanalyzed ones |
+| `--all` | Analyze all unanalyzed repos |
 | `--repo` | Specific repo full names to analyze (repeatable) |
 | `--force` | Force re-analyze even if already analyzed |
-| `--limit` | Max repos to analyze (0 = no limit) |
+| `--limit` | Max repos to analyze (default: 20, 0 = no limit) |
 
 ### release
 
