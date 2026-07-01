@@ -34,6 +34,7 @@ func NewRootCmd(ver string) *cobra.Command {
 	root.AddCommand(newStatsCmd())
 	root.AddCommand(newInfoCmd())
 	root.AddCommand(newTagCmd())
+	root.AddCommand(newTrendingCmd())
 	return root
 }
 
