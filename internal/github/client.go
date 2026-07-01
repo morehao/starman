@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bartventer/httpcache"
+
+	_ "github.com/bartventer/httpcache/store/memcache"
+
 	gh "github.com/google/go-github/v71/github"
-	"github.com/gregjones/httpcache"
 	"github.com/morehao/starman/internal/store"
-	"github.com/sourcegraph/conc/pool"
+	"golang.org/x/sync/errgroup"
 )
 
 type Repository = store.Repository
@@ -18,7 +21,7 @@ type Client struct {
 }
 
 func New(token string) *Client {
-	c := gh.NewClient(httpcache.NewMemoryCacheTransport().Client())
+	c := gh.NewClient(httpcache.NewClient("memcache://"))
 	if token != "" {
 		c = c.WithAuthToken(token)
 	}
@@ -54,28 +57,21 @@ func (c *Client) ListStarred(ctx context.Context, username string) ([]*Repositor
 	pages[0] = firstPage
 
 	if totalPages > 1 {
-		p := pool.NewWithResults[*pageResult]().
-			WithContext(ctx).
-			WithCancelOnError().
-			WithMaxGoroutines(concurrentMax)
+		eg, ctx := errgroup.WithContext(ctx)
+		eg.SetLimit(concurrentMax)
 		for page := 2; page <= totalPages; page++ {
 			page := page
-			p.Go(func(ctx context.Context) (*pageResult, error) {
+			eg.Go(func() error {
 				repos, err := c.fetchStarredPage(ctx, username, page)
 				if err != nil {
-					return nil, err
+					return err
 				}
-				return &pageResult{page: page, repos: repos}, nil
+				pages[page-1] = repos
+				return nil
 			})
 		}
-		results, err := p.Wait()
-		if err != nil {
+		if err := eg.Wait(); err != nil {
 			return nil, err
-		}
-		for _, pr := range results {
-			if pr != nil {
-				pages[pr.page-1] = pr.repos
-			}
 		}
 	}
 
@@ -86,11 +82,6 @@ func (c *Client) ListStarred(ctx context.Context, username string) ([]*Repositor
 		}
 	}
 	return repos, nil
-}
-
-type pageResult struct {
-	page  int
-	repos []*gh.StarredRepository
 }
 
 func (c *Client) fetchStarredPage(ctx context.Context, username string, page int) ([]*gh.StarredRepository, error) {
