@@ -35,5 +35,6 @@ go.work.sum
 # .vscode/
 
 # cli
+starman
 docs/superpowers
 .superpowers
