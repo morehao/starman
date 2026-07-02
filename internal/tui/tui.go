@@ -38,6 +38,7 @@ func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 	}
 	m.pages = map[PageID]tea.Model{
 		PageDashboard: pages.NewDashboard(s, theme),
+		PageRepoList:  pages.NewRepoList(s, theme),
 	}
 	return m
 }
