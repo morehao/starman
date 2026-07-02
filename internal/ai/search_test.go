@@ -36,10 +36,11 @@ func TestSearch(t *testing.T) {
 	svc := NewService(c, nil)
 
 	var st mockStore
-	hits, err := svc.Search(context.Background(), "终端工具", &st, SearchOpts{Rerank: true})
+	result, err := svc.Search(context.Background(), "终端工具", &st, SearchOpts{EnableRerank: true})
 	if err != nil {
 		t.Fatal(err)
 	}
+	hits := result.Hits
 	if len(hits) != 1 {
 		t.Fatalf("expected 1 hit, got %d", len(hits))
 	}
@@ -102,3 +103,11 @@ func (m *mockStore) SearchFTS(ctx context.Context, query string, filters *store.
 	}, nil
 }
 func (m *mockStore) RebuildFTSIndex(ctx context.Context) error { return nil }
+func (m *mockStore) InsertVector(ctx context.Context, repoID int64, embedding []float64) error { return nil }
+func (m *mockStore) SearchVectors(ctx context.Context, queryVec []float64, topK int, threshold float64) ([]store.VectorMatch, error) {
+	return nil, nil
+}
+func (m *mockStore) DeleteVector(ctx context.Context, repoID int64) error { return nil }
+func (m *mockStore) SetVectorIndexedAt(ctx context.Context, repoID int64, t time.Time) error { return nil }
+func (m *mockStore) GetRepositoryByID(ctx context.Context, id int64) (*store.Repository, error) { return nil, nil }
+func (m *mockStore) ListVectorUnindexed(ctx context.Context, limit int) ([]*store.Repository, error) { return nil, nil }

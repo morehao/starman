@@ -18,12 +18,17 @@ type AnalysisResult struct {
 }
 
 type Service struct {
-	client *Client
-	gh     *github.Client
+	client          *Client
+	embeddingClient *EmbeddingClient
+	gh              *github.Client
 }
 
 func NewService(client *Client, gh *github.Client) *Service {
 	return &Service{client: client, gh: gh}
+}
+
+func NewServiceWithEmbedding(client *Client, gh *github.Client, embeddingClient *EmbeddingClient) *Service {
+	return &Service{client: client, embeddingClient: embeddingClient, gh: gh}
 }
 
 const readmeMaxChars = 8000

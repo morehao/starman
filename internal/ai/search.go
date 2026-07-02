@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"strings"
@@ -14,6 +15,19 @@ import (
 type SearchHit struct {
 	Repo  *store.Repository
 	Score float64
+}
+
+type SearchMode string
+
+const (
+	SearchModeVector    SearchMode = "vector"
+	SearchModeAI        SearchMode = "ai"
+	SearchModeBasicText SearchMode = "basic_text"
+)
+
+type SearchResult struct {
+	Hits []*SearchHit
+	Mode SearchMode
 }
 
 type QueryIntent struct {
@@ -27,27 +41,73 @@ type QueryIntent struct {
 }
 
 type SearchOpts struct {
-	Language string
-	Category string
-	Rerank   bool
-	Sort     string
-	Limit    int
+	Language       string
+	Category       string
+	Platform       string
+	Tags           []string
+	MinStars       int
+	MaxStars       int
+	Sort           string
+	Limit          int
+	Analyzed       *bool
+	AnalysisFailed *bool
+	EnableHyDE     bool
+	EnableRerank   bool
+	RerankTopK     int
 }
 
-func (s *Service) Search(ctx context.Context, query string, st store.Store, opts SearchOpts) ([]*SearchHit, error) {
-	intent, err := s.understandQuery(ctx, query)
+func (s *Service) Search(ctx context.Context, query string, st store.Store, opts SearchOpts) (*SearchResult, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return &SearchResult{Mode: SearchModeBasicText, Hits: nil}, nil
+	}
+
+	if s.hasEmbeddingConfig() {
+		result, err := s.vectorSearch(ctx, query, st, opts)
+		if err == nil && len(result.Hits) > 0 {
+			result.Mode = SearchModeVector
+			return result, nil
+		}
+		log.Printf("vector search: %v (%d hits), falling back", err, len(result.Hits))
+	}
+
+	if s.hasAIConfig() {
+		result, err := s.aiSearch(ctx, query, st, opts)
+		if err == nil {
+			result.Mode = SearchModeAI
+			return result, nil
+		}
+		log.Printf("AI search failed: %v, falling back", err)
+	}
+
+	result, err := s.basicTextSearch(ctx, query, st, opts)
+	if err != nil {
+		return nil, fmt.Errorf("basic text search: %w", err)
+	}
+	result.Mode = SearchModeBasicText
+	return result, nil
+}
+
+func (s *Service) hasEmbeddingConfig() bool {
+	return s.embeddingClient != nil
+}
+
+func (s *Service) hasAIConfig() bool {
+	return s.client != nil
+}
+
+func (s *Service) aiSearch(
+	ctx context.Context, query string, st store.Store, opts SearchOpts,
+) (*SearchResult, error) {
+
+	searchText := hydeEnhance(ctx, s, query, opts.EnableHyDE)
+
+	intent, err := s.understandQuery(ctx, searchText)
 	if err != nil {
 		return nil, fmt.Errorf("understand query: %w", err)
 	}
 
-	filters := &store.SearchFilters{
-		Language: coalesce(opts.Language, intent.Language),
-		Category: coalesce(opts.Category, intent.Category),
-		MinStars: intent.MinStars,
-		MaxStars: intent.MaxStars,
-		Limit:    50,
-	}
-
+	filters := buildSearchFilters(opts, intent)
 	ftsResults, err := st.SearchFTS(ctx, intent.FTSQuery, filters)
 	if err != nil {
 		return nil, fmt.Errorf("fts search: %w", err)
@@ -60,27 +120,27 @@ func (s *Service) Search(ctx context.Context, query string, st store.Store, opts
 	}
 
 	if len(hits) == 0 {
-		return hits, nil
+		return &SearchResult{Hits: []*SearchHit{}}, nil
 	}
 
-	if opts.Rerank && len(hits) > 0 {
-		topK := 15
-		if topK > len(hits) {
-			topK = len(hits)
+	if opts.EnableRerank {
+		topK := opts.RerankTopK
+		if topK <= 0 {
+			topK = 30
 		}
-		hits, err = s.rerank(ctx, query, hits[:topK])
-		if err != nil {
-			return hits, nil
+		topK = min(topK, len(hits))
+		reranked, err := s.rerank(ctx, query, hits[:topK])
+		if err == nil {
+			hits = reranked
 		}
 	}
 
 	sortHits(hits, opts.Sort)
-
 	if opts.Limit > 0 && opts.Limit < len(hits) {
 		hits = hits[:opts.Limit]
 	}
 
-	return hits, nil
+	return &SearchResult{Hits: hits}, nil
 }
 
 func (s *Service) understandQuery(ctx context.Context, query string) (*QueryIntent, error) {
@@ -149,39 +209,78 @@ type rerankResult struct {
 }
 
 func (s *Service) rerank(ctx context.Context, query string, hits []*SearchHit) ([]*SearchHit, error) {
-	candidates := make([]rerankCandidate, len(hits))
-	for i, h := range hits {
-		candidates[i] = rerankCandidate{
-			Index:      i,
+	if len(hits) == 0 {
+		return hits, nil
+	}
+	topK := min(len(hits), 50)
+	candidates := hits[:topK]
+
+	batchSize := 10
+	allScores := make(map[int]float64, len(candidates))
+
+	for i := 0; i < len(candidates); i += batchSize {
+		end := min(i+batchSize, len(candidates))
+		scores, err := s.rerankBatch(ctx, query, candidates[i:end], i)
+		if err != nil {
+			return nil, err
+		}
+		for idx, score := range scores {
+			allScores[idx] = score
+		}
+	}
+
+	reranked := make([]*SearchHit, len(hits))
+	copy(reranked, hits)
+	sort.SliceStable(reranked[:len(candidates)], func(i, j int) bool {
+		return allScores[i] > allScores[j]
+	})
+
+	return reranked, nil
+}
+
+func (s *Service) rerankBatch(ctx context.Context, query string, candidates []*SearchHit, offset int) (map[int]float64, error) {
+	type candidateInfo struct {
+		Index      int    `json:"index"`
+		FullName   string `json:"full_name"`
+		Summary    string `json:"summary"`
+		SearchText string `json:"search_text"`
+	}
+	infos := make([]candidateInfo, len(candidates))
+	for i, h := range candidates {
+		infos[i] = candidateInfo{
+			Index:      offset + i,
 			FullName:   h.Repo.FullName,
 			Summary:    h.Repo.AISummary,
 			SearchText: h.Repo.AISearchText,
 		}
 	}
-	candJSON, _ := json.Marshal(candidates)
+	candJSON, _ := json.Marshal(infos)
+
 	msgs := []Message{
-		{Role: "system", Content: fmt.Sprintf(`对候选仓库按查询相关性评分(0-10)，输出 JSON。
+		{Role: "system", Content: fmt.Sprintf(
+			`对候选仓库按查询相关性评分(0-10)，输出 JSON。
 查询："%s"
 候选仓库列表：
 %s
-输出格式：{"rankings":[{"index":0,"score":8.5}]}`, query, string(candJSON))},
+输出格式：{"rankings":[{"index":%d,"score":8.5}]}`,
+			query, string(candJSON), offset)},
 	}
+
 	resp, err := s.client.Complete(ctx, msgs)
 	if err != nil {
 		return nil, err
 	}
+
 	var result rerankResult
 	if err := json.Unmarshal([]byte(resp), &result); err != nil {
 		return nil, fmt.Errorf("parse rerank: %w", err)
 	}
-	reranked := make([]*SearchHit, len(result.Rankings))
-	for i, r := range result.Rankings {
-		if r.Index < len(hits) {
-			reranked[i] = hits[r.Index]
-			reranked[i].Score = r.Score
-		}
+
+	scores := make(map[int]float64, len(result.Rankings))
+	for _, r := range result.Rankings {
+		scores[r.Index] = r.Score
 	}
-	return reranked, nil
+	return scores, nil
 }
 
 func sortHits(hits []*SearchHit, sortBy string) {

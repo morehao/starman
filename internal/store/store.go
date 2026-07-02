@@ -23,6 +23,13 @@ type Store interface {
 	SearchFTS(ctx context.Context, query string, filters *SearchFilters) ([]*FTSResult, error)
 	RebuildFTSIndex(ctx context.Context) error
 
+	InsertVector(ctx context.Context, repoID int64, embedding []float64) error
+	SearchVectors(ctx context.Context, queryVec []float64, topK int, threshold float64) ([]VectorMatch, error)
+	DeleteVector(ctx context.Context, repoID int64) error
+	SetVectorIndexedAt(ctx context.Context, repoID int64, t time.Time) error
+	GetRepositoryByID(ctx context.Context, id int64) (*Repository, error)
+	ListVectorUnindexed(ctx context.Context, limit int) ([]*Repository, error)
+
 	UpsertRelease(ctx context.Context, r *Release) error
 	ListUnreadReleases(ctx context.Context) ([]*Release, error)
 	ListAllReleases(ctx context.Context) ([]*Release, error)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite/vec"
 )
 
 type sqliteStore struct {
@@ -99,8 +100,14 @@ func (s *sqliteStore) migrate(ctx context.Context) error {
 	if err := s.migrateAddColumn(ctx, "repositories", "ai_search_text", "TEXT DEFAULT ''"); err != nil {
 		return fmt.Errorf("migrate ai_search_text: %w", err)
 	}
+	if err := s.migrateAddColumn(ctx, "repositories", "vector_indexed_at", "TEXT"); err != nil {
+		return fmt.Errorf("migrate vector_indexed_at: %w", err)
+	}
 	if err := s.createFTSIndex(ctx); err != nil {
 		return fmt.Errorf("create fts index: %w", err)
+	}
+	if err := s.createVec0Index(ctx); err != nil {
+		return fmt.Errorf("create vec0 index: %w", err)
 	}
 	return s.seedCategories(ctx)
 }
@@ -143,6 +150,13 @@ func (s *sqliteStore) createFTSIndex(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (s *sqliteStore) createVec0Index(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS repo_vectors USING vec0(
+		embedding float[1536]
+	)`)
+	return err
 }
 
 var defaultCategories = []Category{

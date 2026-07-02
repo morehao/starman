@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -51,13 +52,17 @@ func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 	if r.LastReleaseFetch != nil {
 		lastReleaseFetch = r.LastReleaseFetch.Format(time.RFC3339)
 	}
+	var vectorIndexedAt interface{}
+	if r.VectorIndexedAt != nil {
+		vectorIndexedAt = r.VectorIndexedAt.Format(time.RFC3339)
+	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO repositories (
 		id, full_name, name, description, url, language, homepage,
 		stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at,
 		ai_summary, ai_tags, ai_platforms, ai_category, ai_search_text, analyzed_at, analysis_failed,
 		custom_description, custom_tags, custom_category, category_locked,
-		subscribed_releases, last_release_fetch
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		subscribed_releases, last_release_fetch, vector_indexed_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 	ON CONFLICT(id) DO UPDATE SET
 		full_name=excluded.full_name, name=excluded.name, description=excluded.description,
 		url=excluded.url, language=excluded.language, homepage=excluded.homepage,
@@ -70,12 +75,13 @@ func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 		custom_description=excluded.custom_description, custom_tags=excluded.custom_tags,
 		custom_category=excluded.custom_category, category_locked=excluded.category_locked,
 		subscribed_releases=excluded.subscribed_releases, last_release_fetch=excluded.last_release_fetch,
+		vector_indexed_at=excluded.vector_indexed_at,
 		updated_at=datetime('now')`,
 		r.ID, r.FullName, r.Name, r.Description, r.URL, r.Language, r.Homepage,
 		r.StargazersCount, r.ForksCount, string(topicsJSON), r.OwnerLogin, r.OwnerAvatar, r.StarredAt,
 		r.AISummary, string(tagsJSON), string(platJSON), r.AICategory, r.AISearchText, analyzedAt, analysisFailed,
 		r.CustomDescription, string(customTagsJSON), r.CustomCategory, categoryLocked,
-		subscribed, lastReleaseFetch,
+		subscribed, lastReleaseFetch, vectorIndexedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert repo %s: %w", r.FullName, err)
@@ -86,7 +92,7 @@ func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, error) {
 	r := &Repository{}
 	var topicsJSON, tagsJSON, platJSON, customTagsJSON sql.NullString
-	var analyzedAt, lastReleaseFetch sql.NullString
+	var analyzedAt, lastReleaseFetch, vectorIndexedAt sql.NullString
 	var customDesc, customCat sql.NullString
 	var analysisFailed, categoryLocked, subscribed int
 	var searchText sql.NullString
@@ -95,7 +101,7 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 		&r.StargazersCount, &r.ForksCount, &topicsJSON, &r.OwnerLogin, &r.OwnerAvatar, &r.StarredAt,
 		&r.AISummary, &tagsJSON, &platJSON, &r.AICategory, &searchText, &analyzedAt, &analysisFailed,
 		&customDesc, &customTagsJSON, &customCat, &categoryLocked,
-		&subscribed, &lastReleaseFetch,
+		&subscribed, &lastReleaseFetch, &vectorIndexedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -136,6 +142,12 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 			r.LastReleaseFetch = &t
 		}
 	}
+	if vectorIndexedAt.Valid {
+		t, err := time.Parse(time.RFC3339, vectorIndexedAt.String)
+		if err == nil {
+			r.VectorIndexedAt = &t
+		}
+	}
 	return r, nil
 }
 
@@ -152,7 +164,7 @@ const repositoryColumns = `SELECT id, full_name, name, description, url, languag
 	stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at,
 	ai_summary, ai_tags, ai_platforms, ai_category, ai_search_text, analyzed_at, analysis_failed,
 	custom_description, custom_tags, custom_category, category_locked,
-	subscribed_releases, last_release_fetch FROM repositories`
+	subscribed_releases, last_release_fetch, vector_indexed_at FROM repositories`
 
 func (s *sqliteStore) ListRepositories(ctx context.Context) ([]*Repository, error) {
 	rows, err := s.db.QueryContext(ctx, repositoryColumns+` ORDER BY full_name`)
@@ -338,6 +350,28 @@ func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *Sear
 			where += " AND r.stargazers_count <= ?"
 			args = append(args, filters.MaxStars)
 		}
+		if filters.Platform != "" {
+			where += " AND r.ai_platforms LIKE ?"
+			args = append(args, "%"+filters.Platform+"%")
+		}
+		if len(filters.Tags) > 0 {
+			parts := make([]string, 0, len(filters.Tags))
+			for _, tag := range filters.Tags {
+				parts = append(parts, `(r.ai_tags LIKE ? OR r.topics LIKE ? OR r.custom_tags LIKE ?)`)
+				args = append(args, "%"+tag+"%", "%"+tag+"%", "%"+tag+"%")
+			}
+			where += " AND (" + strings.Join(parts, " OR ") + ")"
+		}
+		if filters.Analyzed != nil {
+			if *filters.Analyzed {
+				where += " AND r.analyzed_at IS NOT NULL AND r.analysis_failed = 0"
+			} else {
+				where += " AND r.analyzed_at IS NULL"
+			}
+		}
+		if filters.AnalysisFailed != nil && *filters.AnalysisFailed {
+			where += " AND r.analyzed_at IS NOT NULL AND r.analysis_failed = 1"
+		}
 	}
 	limit := 50
 	if filters != nil && filters.Limit > 0 {
@@ -348,7 +382,7 @@ func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *Sear
 		r.ai_summary, r.ai_tags, r.ai_platforms, r.ai_category, r.ai_search_text,
 		r.analyzed_at, r.analysis_failed,
 		r.custom_description, r.custom_tags, r.custom_category, r.category_locked,
-		r.subscribed_releases, r.last_release_fetch,
+		r.subscribed_releases, r.last_release_fetch, r.vector_indexed_at,
 		rank as bm25_score
 		FROM repositories_fts
 		JOIN repositories r ON repositories_fts.rowid = r.id
@@ -365,7 +399,7 @@ func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *Sear
 	for rows.Next() {
 		r := &Repository{}
 		var topicsJSON, tagsJSON, platJSON, customTagsJSON sql.NullString
-		var analyzedAt, lastReleaseFetch sql.NullString
+		var analyzedAt, lastReleaseFetch, vectorIndexedAt sql.NullString
 		var customDesc, customCat sql.NullString
 		var searchText sql.NullString
 		var analysisFailed, categoryLocked, subscribed int
@@ -375,7 +409,7 @@ func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *Sear
 			&r.StargazersCount, &r.ForksCount, &topicsJSON, &r.OwnerLogin, &r.OwnerAvatar, &r.StarredAt,
 			&r.AISummary, &tagsJSON, &platJSON, &r.AICategory, &searchText, &analyzedAt, &analysisFailed,
 			&customDesc, &customTagsJSON, &customCat, &categoryLocked,
-			&subscribed, &lastReleaseFetch,
+			&subscribed, &lastReleaseFetch, &vectorIndexedAt,
 			&bm25,
 		)
 		if err != nil {
@@ -415,6 +449,12 @@ func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *Sear
 			t, err := time.Parse(time.RFC3339, lastReleaseFetch.String)
 			if err == nil {
 				r.LastReleaseFetch = &t
+			}
+		}
+		if vectorIndexedAt.Valid {
+			t, err := time.Parse(time.RFC3339, vectorIndexedAt.String)
+			if err == nil {
+				r.VectorIndexedAt = &t
 			}
 		}
 		results = append(results, &FTSResult{Repo: r, BM25Score: bm25})

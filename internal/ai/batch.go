@@ -3,7 +3,9 @@ package ai
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
+	"time"
 
 	"github.com/morehao/starman/internal/github"
 	"github.com/morehao/starman/internal/store"
@@ -115,7 +117,29 @@ func (b *BatchAnalyzer) analyzeOne(ctx context.Context, repo *store.Repository, 
 		Category:   category,
 		SearchText: result.SearchText,
 	}
-	return b.store.UpdateAIResult(ctx, repo.ID, aiResult)
+	if err := b.store.UpdateAIResult(ctx, repo.ID, aiResult); err != nil {
+		return err
+	}
+
+	if b.svc.embeddingClient != nil {
+		text := buildEmbeddingText(repo, readme, 6000)
+		vectors, err := b.svc.embeddingClient.Embed(ctx, []string{text})
+		if err != nil {
+			log.Printf("WARN: vectorization failed for %s: %v", repo.FullName, err)
+			return nil
+		}
+		if len(vectors) > 0 {
+			if err := b.store.InsertVector(ctx, repo.ID, vectors[0]); err != nil {
+				log.Printf("WARN: insert vector failed for %s: %v", repo.FullName, err)
+				return nil
+			}
+			if err := b.store.SetVectorIndexedAt(ctx, repo.ID, time.Now()); err != nil {
+				log.Printf("WARN: set vector_indexed_at failed for %s: %v", repo.FullName, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func splitFullName(fullName string) []string {
