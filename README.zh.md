@@ -7,7 +7,7 @@
 ## 功能
 
 - **交互式 TUI** — Dashboard 风格的终端界面，左侧导航栏 + 右侧内容面板。可浏览仓库、搜索、查看详情、管理标签分类 — 全部键盘操作。
-- **同步** — 并发分页拉取 GitHub 星标仓库到本地 SQLite（再次同步时保留 AI 分析结果）。支持 `--watch` 模式定时自动同步。
+- **同步** — 并发分页拉取 GitHub 星标仓库到本地 SQLite（再次同步时保留 AI 分析结果）。支持定时自动同步模式。
 - **分析** — 批量 AI 分析（OpenAI 兼容）：生成摘要、标签、分类（双向关键词匹配），同时生成 `search_text` 用于 FTS5 全文索引
 - **搜索** — LLM 查询理解 + FTS5 全文检索，BM25 加权打分，支持结构化过滤和 LLM 精排
 - **生成** — Markdown Awesome List，三种模式：按语言、按 AI 分类、平铺列表（可自动提交到 GitHub 仓库）
@@ -142,7 +142,7 @@ starman 兼容任何 OpenAI 兼容 API 端点（`/v1/chat/completions`），支�
 - **分类锁定** — 通过 `category_locked` 锁定仓库分类，防止 AI 覆盖手动设置的分类。
 - **FTS5 全文索引** — 搜索使用 SQLite FTS5 + BM25 评分。分析时 LLM 生成的 `ai_search_text` 字段丰富了搜索索引，提升召回率。
 - **分析失败隔离** — 某个仓库 AI 分析失败时，批量继续执行。失败的仓库标记 `analysis_failed` 以供重试。
-- **Release 水位** — 订阅的仓库记录最后拉取的 release 时间戳，`release pull` 只获取新版本。
+- **Release 水位** — 订阅的仓库记录最后拉取的 release 时间戳，每次只获取新版本。
 - **Trending 双数据源** — Trending 默认使用 RSS（通过 GitHubTrendingRSS），Search API 作为备选。
 
 ## 技术栈
