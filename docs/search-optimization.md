@@ -1,8 +1,8 @@
-# Starman 检索方案（复刻 GithubStarsManager 三层降级）
+# Starman 检索方案（三层降级）
 
 ## 概述
 
-本文档描述将 GithubStarsManager 的三层检索降级方案复刻到 starman（Go CLI）的完整技术方案。
+本文档描述 starman（Go CLI）的三层检索降级方案完整技术方案。
 
 **核心设计**：三层降级搜索 = 向量语义搜索 → LLM 语义搜索 → FTS5/纯文本搜索。
 
@@ -320,7 +320,7 @@ func (ec *EmbeddingClient) embedBatch(ctx context.Context, texts []string) ([][]
 }
 ```
 
-**错误处理策略**（参考 GithubStarsManager）：
+**错误处理策略**：
 - 网络错误 → 重试（由调用方的 `retryWithBackoff` 处理）
 - 返回长度超限错误（常见于 `text-embedding-3-small` 的 8191 token 限制）→ 自动截断文本后重试
 - API key 无效（401）→ 日志警告，降级到第二层
@@ -480,7 +480,7 @@ type VectorMatch struct {
 
 ### 6.1 buildEmbeddingText
 
-参考 GithubStarsManager，构建用于 embedding 的结构化文本。
+构建用于 embedding 的结构化文本。
 
 ```go
 // file: internal/ai/search_vector.go（新增）
