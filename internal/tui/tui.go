@@ -47,6 +47,10 @@ func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 		PageTag:        pages.NewTag(s, theme),
 		PageCategorize: pages.NewCategorize(s, theme),
 		PageStats:      pages.NewStats(s, theme),
+		PageRelease:    pages.NewRelease(s, theme),
+		PageGenerate:   pages.NewGenerate(s, theme),
+		PageBackup:     pages.NewBackup(s, theme),
+		PageConfig:     pages.NewConfig(cfg, theme),
 	}
 	return m
 }
