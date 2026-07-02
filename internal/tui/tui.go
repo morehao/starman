@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"path/filepath"
 	"time"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/morehao/starman/internal/config"
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/components"
+	"github.com/morehao/starman/internal/tui/pages"
 	"github.com/morehao/starman/internal/tui/styles"
 )
 
@@ -22,12 +22,13 @@ type TuiModel struct {
 	currentPage PageID
 	sidebar     *components.SidebarModel
 	statusbar   *components.StatusBarModel
+	pages       map[PageID]tea.Model
 	ready       bool
 }
 
 func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 	theme := styles.DefaultTheme()
-	return &TuiModel{
+	m := &TuiModel{
 		config:      cfg,
 		store:       s,
 		theme:       theme,
@@ -35,14 +36,22 @@ func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 		sidebar:     components.NewSidebar(theme),
 		statusbar:   components.NewStatusBar(theme),
 	}
+	m.pages = map[PageID]tea.Model{
+		PageDashboard: pages.NewDashboard(s, theme),
+	}
+	return m
 }
 
 func (m *TuiModel) Init() tea.Cmd {
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		m.sidebar.Init(),
 		m.statusbar.Init(),
 		tickCmd(),
-	)
+	}
+	for _, p := range m.pages {
+		cmds = append(cmds, p.Init())
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -52,6 +61,9 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
+		for _, p := range m.pages {
+			_, _ = p.Update(msg)
+		}
 		return m, nil
 
 	case NavigatedMsg:
@@ -69,6 +81,12 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	_, cmd = m.sidebar.Update(msg)
 	_, _ = m.statusbar.Update(msg)
+
+	if p, ok := m.pages[m.currentPage]; ok {
+		var pageCmd tea.Cmd
+		_, pageCmd = p.Update(msg)
+		cmd = tea.Batch(cmd, pageCmd)
+	}
 	return m, cmd
 }
 
@@ -85,12 +103,11 @@ func (m *TuiModel) View() string {
 }
 
 func (m *TuiModel) renderContent() string {
-	w := m.width - m.theme.Sidebar.GetWidth()
-	return lipgloss.NewStyle().
-		Width(w).
-		Height(m.height - 1).
-		Padding(1).
-		Render(fmt.Sprintf("Page: %d\n\nPress / to search, q to quit", m.currentPage))
+	p, ok := m.pages[m.currentPage]
+	if !ok {
+		return "page not found"
+	}
+	return p.View()
 }
 
 func tickCmd() tea.Cmd {
