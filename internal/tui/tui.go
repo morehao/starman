@@ -41,6 +41,7 @@ func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 		PageSearch:     pages.NewSearch(s, theme),
 		PageRepoList:   pages.NewRepoList(s, theme),
 		PageRepoDetail: pages.NewRepoDetail(s, theme),
+		PageTrending:   pages.NewTrending(s, theme),
 	}
 	return m
 }
