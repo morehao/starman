@@ -60,8 +60,10 @@ func newAnalyzeCmd() *cobra.Command {
 				return nil
 			}
 			aiClient := ai.NewClient(cfg.AI.BaseURL, aiKey, cfg.AI.Model)
+			embeddingKey := config.ResolveEmbeddingKey(cfg, "")
 			gh := github.New(token)
-			svc := ai.NewService(aiClient, gh)
+			embeddingClient := ai.NewEmbeddingClient(cfg.Embedding.BaseURL, embeddingKey, cfg.Embedding.Model)
+			svc := ai.NewServiceWithEmbedding(aiClient, gh, embeddingClient)
 			batch := ai.NewBatchAnalyzer(svc, s, gh, cfg.AI.Concurrency)
 			fmt.Fprintf(os.Stderr, "Analyzing %d repos...\n", len(repos))
 			result, err := batch.Run(ctx, repos, ai.BatchOpts{

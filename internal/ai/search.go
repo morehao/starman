@@ -8,6 +8,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/morehao/starman/internal/store"
 )
@@ -104,10 +105,26 @@ func (s *Service) aiSearch(
 	ctx context.Context, query string, st store.Store, opts SearchOpts,
 ) (*SearchResult, error) {
 
-	searchText := hydeEnhance(ctx, s, query, opts.EnableHyDE)
+	searchText := query
+	var intent *QueryIntent
+	var intentErr error
 
-	intent, err := s.understandQuery(ctx, searchText)
-	if err != nil {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		searchText = hydeEnhance(ctx, s, query, opts.EnableHyDE)
+	}()
+
+	go func() {
+		defer wg.Done()
+		intent, intentErr = s.understandQuery(ctx, query)
+	}()
+
+	wg.Wait()
+
+	if intentErr != nil {
 		intent = &QueryIntent{}
 	}
 	if intent.FTSQuery == "" {
@@ -228,16 +245,32 @@ func (s *Service) rerank(ctx context.Context, query string, hits []*SearchHit) (
 
 	batchSize := 10
 	allScores := make(map[int]float64, len(candidates))
+	var mu sync.Mutex
+	var firstErr error
 
+	var wg sync.WaitGroup
 	for i := 0; i < len(candidates); i += batchSize {
 		end := min(i+batchSize, len(candidates))
-		scores, err := s.rerankBatch(ctx, query, candidates[i:end], i)
-		if err != nil {
-			return nil, err
-		}
-		for idx, score := range scores {
-			allScores[idx] = score
-		}
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
+			scores, err := s.rerankBatch(ctx, query, candidates[start:end], start)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil && firstErr == nil {
+				firstErr = err
+			}
+			if firstErr == nil {
+				for idx, score := range scores {
+					allScores[idx] = score
+				}
+			}
+		}(i, end)
+	}
+
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
 	}
 
 	reranked := make([]*SearchHit, len(hits))
