@@ -36,7 +36,7 @@ func newSearchCmd() *cobra.Command {
 	var hyde, noHyde, noRerank bool
 	cmd := &cobra.Command{
 		Use:   "search <query>",
-		Short: "AI-powered three-tier degraded search (vector → LLM semantic → FTS5)",
+		Short: "AI-powered three-tier degraded search (vector → LLM semantic → text)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, _, err := loadConfig(cmd)
@@ -61,6 +61,12 @@ func newSearchCmd() *cobra.Command {
 
 			embeddingClient := ai.NewEmbeddingClient(cfg.Embedding.BaseURL, embeddingKey, cfg.Embedding.Model)
 			svc := ai.NewServiceWithEmbedding(aiClient, nil, embeddingClient)
+
+			searchIndex := ai.NewSearchIndex()
+			if err := searchIndex.Load(ctx, s); err != nil {
+				return fmt.Errorf("load search index: %w", err)
+			}
+			svc.SetSearchIndex(searchIndex)
 
 			var analyzedPtr *bool
 			if analyzed || noAnalyzed {

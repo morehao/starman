@@ -108,26 +108,24 @@ func (s *Service) aiSearch(
 
 	intent, err := s.understandQuery(ctx, searchText)
 	if err != nil {
-		return nil, fmt.Errorf("understand query: %w", err)
+		intent = &QueryIntent{}
+	}
+	if intent.FTSQuery == "" {
+		intent.FTSQuery = searchText
+	}
+
+	if err := s.searchIndex.ensureLoaded(ctx, st); err != nil {
+		return nil, fmt.Errorf("load search index: %w", err)
 	}
 
 	filters := buildSearchFilters(opts, intent)
-	ftsResults, err := st.SearchFTS(ctx, intent.FTSQuery, filters)
-	if err != nil {
-		return nil, fmt.Errorf("fts search: %w", err)
-	}
-
-	hits := make([]*SearchHit, 0, len(ftsResults))
-	for _, fr := range ftsResults {
-		score := calcWeightedScore(fr.BM25Score, fr.Repo.StargazersCount, fr.Repo, intent.Keywords)
-		hits = append(hits, &SearchHit{Repo: fr.Repo, Score: score})
-	}
+	hits := s.searchIndex.Search(intent.FTSQuery, intent.Keywords, filters, 50)
 
 	if len(hits) == 0 {
 		return &SearchResult{Hits: []*SearchHit{}}, nil
 	}
 
-	if opts.EnableRerank {
+	if opts.EnableRerank && s.hasAIConfig() {
 		topK := opts.RerankTopK
 		if topK <= 0 {
 			topK = 30
@@ -149,16 +147,21 @@ func (s *Service) aiSearch(
 
 func (s *Service) understandQuery(ctx context.Context, query string) (*QueryIntent, error) {
 	msgs := []Message{
-		{Role: "system", Content: `分析用户的搜索意图，输出 JSON。
+		{Role: "system", Content: `你是一个搜索查询分析器，分析用户的搜索意图后输出 JSON。
 {
-  "fts_query": "适合 FTS5 全文搜索的查询词，同义词展开，去除停用词",
-  "keywords": ["精确匹配关键词"],
+  "fts_query": "中英文混合搜索词，保留中文原词并添加英文同义词，用空格分隔",
+  "keywords": ["中文关键词", "英文关键词", "同义词"],
   "language": "编程语言（如 Go/Python/JavaScript，如果用户指定了），否则为空",
   "category": "分类名（如 开发工具/AI 机器学习），否则为空",
   "platform": "平台类型（web/desktop/mobile/cli/library/service），否则为空",
   "min_stars": 最低 star 数（整数，默认 0），
   "max_stars": 最高 star 数（整数，默认 0 表示不限）
-}`},
+}
+
+示例：用户输入"好看的终端工具"
+输出：{"fts_query": "好看的 终端 工具 terminal cli command-line", "keywords": ["终端", "工具", "terminal", "cli", "command-line"], "language": "", "category": "", "platform": "cli", "min_stars": 0, "max_stars": 0}
+
+fts_query 和 keywords 都需要同时包含中文原文和英文翻译，提高搜索召回率。`},
 		{Role: "user", Content: query},
 	}
 	resp, err := s.client.Complete(ctx, msgs)
@@ -175,12 +178,16 @@ func (s *Service) understandQuery(ctx context.Context, query string) (*QueryInte
 	return &intent, nil
 }
 
+// Deprecated: calcWeightedScore was used for FTS5 BM25-based search scoring.
+// Scoring is now handled by SearchIndex.scoreRepo in search_index.go.
 func calcWeightedScore(bm25 float64, stars int, repo *store.Repository, keywords []string) float64 {
 	starNorm := math.Log1p(float64(stars)) / math.Log1p(100000)
 	kwScore := keywordMatchScore(repo, keywords)
 	return bm25*0.6 + starNorm*0.2 + kwScore*0.2
 }
 
+// Deprecated: keywordMatchScore was used for FTS5 BM25-based search scoring.
+// Keyword matching is now handled by SearchIndex.scoreRepo in search_index.go.
 func keywordMatchScore(repo *store.Repository, keywords []string) float64 {
 	var score float64
 	for _, kw := range keywords {

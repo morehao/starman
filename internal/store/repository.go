@@ -330,6 +330,8 @@ func (s *sqliteStore) listReposByFullName(ctx context.Context, tx *sql.Tx) (map[
 	return result, rows.Err()
 }
 
+// Deprecated: SearchFTS used FTS5 for full-text search. Replaced by in-memory search.
+// This implementation is retained for backward compatibility and may be removed.
 func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *SearchFilters) ([]*FTSResult, error) {
 	where := "repositories_fts MATCH ?"
 	args := []interface{}{query}
@@ -462,6 +464,8 @@ func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *Sear
 	return results, rows.Err()
 }
 
+// Deprecated: RebuildFTSIndex was used to refresh the FTS5 full-text index. Replaced by in-memory search.
+// This implementation is retained for backward compatibility and may be removed.
 func (s *sqliteStore) RebuildFTSIndex(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO repositories_fts(repositories_fts) VALUES('rebuild')`)
 	return err

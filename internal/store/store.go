@@ -20,7 +20,12 @@ type Store interface {
 	SetAnalysisFailed(ctx context.Context, repoID int64, failed bool) error
 	DeleteAllRepositories(ctx context.Context) error
 
+	// Deprecated: SearchFTS used FTS5 for full-text search.
+	// Search is now handled by in-memory matching in the ai package (SearchIndex).
+	// This method remains for backward compatibility and may be removed in a future version.
 	SearchFTS(ctx context.Context, query string, filters *SearchFilters) ([]*FTSResult, error)
+	// Deprecated: RebuildFTSIndex was used to refresh the FTS5 full-text index.
+	// This method remains for backward compatibility and may be removed in a future version.
 	RebuildFTSIndex(ctx context.Context) error
 
 	InsertVector(ctx context.Context, repoID int64, embedding []float64) error
