@@ -6,7 +6,7 @@
 
 **核心设计**：三层降级搜索 = 向量语义搜索 → LLM 语义搜索 → FTS5/纯文本搜索。
 
-> **架构变更**：引入向量搜索需要 sqlite-vec，需将 SQLite 驱动从 `modernc.org/sqlite`（纯 Go）切换到 `mattn/go-sqlite3`（需 CGO 编译），并通过 `github.com/asg017/sqlite-vec-go-bindings/cgo` 加载扩展。
+> **架构说明**：引入向量搜索需要 sqlite-vec。`modernc.org/sqlite` v1.53.0 已将 `sqlite-vec` 扩展内置为纯 Go 实现（`vec/` 子包），无需切换驱动或依赖 CGO。
 
 ---
 
@@ -141,21 +141,23 @@ func (s *Service) hasAIConfig() bool {
 
 ## 三、配置设计
 
-### 3.1 Embedding 配置
+### 3.1 config.yaml 配置
 
-在 `config.yaml` 中新增 embedding 区块，仅支持 OpenAI 兼容协议：
+在 `~/.starman/config.yaml` 中新增 `embedding` 区块，与 `ai` 同级：
 
 ```yaml
 ai:
   base_url: "https://api.openai.com/v1"
-  api_key: "sk-xxx"
+  api_key: "${AI_API_KEY}"
   model: "gpt-4o-mini"
 
 embedding:
   base_url: "https://api.openai.com/v1"   # OpenAI 兼容 API 地址
-  api_key: "${EMBEDDING_API_KEY}"          # 支持环境变量引用
+  api_key: "${EMBEDDING_API_KEY}"          # 为空则不启用向量搜索
   model: "text-embedding-3-small"          # 默认 1536 维
 ```
+
+### 3.2 Config 结构体
 
 ```go
 // file: internal/config/config.go（改造）
@@ -175,7 +177,7 @@ type EmbeddingConfig struct {
 }
 ```
 
-### 3.2 配置解析优先级
+### 3.3 配置解析优先级
 
 ```go
 // file: internal/config/config.go（新增）
@@ -332,25 +334,16 @@ func (ec *EmbeddingClient) embedBatch(ctx context.Context, texts []string) ([][]
 ```go
 // file: internal/store/sqlite.go（改造）
 
-// 数据库打开时加载 sqlite-vec 扩展
+// 数据库驱动不变，继续使用 modernc.org/sqlite（纯 Go，无 CGO）
+// sqlite-vec 已内置在 modernc.org/sqlite v1.53.0 的 vec/ 子包中
+// vec0 虚拟表可以直接创建，无需手动加载扩展
 func Open(path string) (Store, error) {
-    // 切换到 mattn/go-sqlite3
-    db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
+    db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
     if err != nil {
         return nil, fmt.Errorf("open db: %w", err)
     }
 
-    // 加载 sqlite-vec 扩展
-    extension := sqlite_vec.Auto()
-    if err := db.QueryRow("SELECT sqlite_vec_version()").Scan(&version); err != nil {
-        // 首次加载
-        if _, err := db.Exec("SELECT load_extension(?)", extension); err != nil {
-            // 若无法加载扩展则不阻断，向量功能标记为不可用
-            log.Printf("WARN: sqlite-vec extension not available (%v), vector search disabled", err)
-        }
-    }
-
-    // ... 原有 WAL、迁移逻辑
+    // ... 原有 WAL、迁移逻辑（在 migrate 中新增 vec0 虚拟表创建）
 }
 ```
 
@@ -1153,14 +1146,14 @@ fmt.Fprintf(os.Stderr, "Search mode: %s (%d results)\n", result.Mode, len(result
 | `internal/ai/analyze.go` | 改造 | 分析完成后自动触发向量化 |
 | `internal/ai/batch.go` | 改造 | 批量分析时传入 embeddingClient |
 | `internal/store/vector.go` | 新增（完整实现） | sqlite-vec VectorStore 实现 |
-| `internal/store/sqlite.go` | 改造 | 数据库驱动切换（mattn/go-sqlite3）、加载 sqlite-vec 扩展、vec0 建表、vector_indexed_at 列迁移、FTS5 增加 ai_platforms |
+| `internal/store/sqlite.go` | 改造 | vec0 向量虚拟表建表、vector_indexed_at 列迁移、FTS5 增加 ai_platforms（驱动不变，sqlite-vec 已内置） |
 | `internal/store/models.go` | 改造 | Repository 增加 VectorIndexedAt；SearchFilters 扩展 |
 | `internal/store/repository.go` | 改造 | 新增 GetRepositoryByID/SetVectorIndexedAt/ListVectorUnindexed；SearchFTS 增强过滤 |
 | `internal/store/store.go` | 改造 | Store 接口扩展（InsertVector/SearchVectors/DeleteVector/SetVectorIndexedAt） |
 | `internal/config/config.go` | 改造 | 新增 EmbeddingConfig |
 | `internal/cli/search.go` | 改造 | 新增 flag，调用三层降级搜索，输出增强 |
 | `internal/cli/vectorize.go` | 新增 | `starman vectorize` 命令 |
-| `go.mod` | 改造 | 替换 modernc.org/sqlite 为 mattn/go-sqlite3；新增 sqlite-vec go binding |
+| `go.mod` | 无需修改 | sqlite-vec 已内置在 modernc.org/sqlite v1.53.0 中 |
 
 ---
 

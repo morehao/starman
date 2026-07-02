@@ -9,10 +9,11 @@ import (
 )
 
 type Config struct {
-	GitHub   GitHubConfig   `yaml:"github"`
-	AI       AIConfig       `yaml:"ai"`
-	WebDAV   WebDAVConfig   `yaml:"webdav"`
-	Generate GenerateConfig `yaml:"generate"`
+	GitHub    GitHubConfig    `yaml:"github"`
+	AI        AIConfig        `yaml:"ai"`
+	Embedding EmbeddingConfig `yaml:"embedding"`
+	WebDAV    WebDAVConfig    `yaml:"webdav"`
+	Generate  GenerateConfig  `yaml:"generate"`
 }
 
 type GitHubConfig struct {
@@ -35,6 +36,12 @@ type WebDAVConfig struct {
 	Path     string `yaml:"path"`
 }
 
+type EmbeddingConfig struct {
+	BaseURL string `yaml:"base_url"`
+	APIKey  string `yaml:"api_key"`
+	Model   string `yaml:"model"`
+}
+
 type GenerateConfig struct {
 	Sort string `yaml:"sort"`
 }
@@ -45,6 +52,10 @@ func Default() *Config {
 			BaseURL:     "https://api.openai.com/v1",
 			Model:       "gpt-4o-mini",
 			Concurrency: 3,
+		},
+		Embedding: EmbeddingConfig{
+			BaseURL: "https://api.openai.com/v1",
+			Model:   "text-embedding-3-small",
 		},
 		Generate: GenerateConfig{Sort: "language"},
 		WebDAV:   WebDAVConfig{Path: "/starman"},
@@ -107,4 +118,14 @@ func ResolveWebDAVPassword(cfg *Config) string {
 		return v
 	}
 	return cfg.WebDAV.Password
+}
+
+func ResolveEmbeddingKey(cfg *Config, flagKey string) string {
+	if flagKey != "" {
+		return flagKey
+	}
+	if v := os.Getenv("STARMAN_EMBEDDING_API_KEY"); v != "" {
+		return v
+	}
+	return cfg.Embedding.APIKey
 }
