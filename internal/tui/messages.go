@@ -1,10 +1,6 @@
 package tui
 
-import (
-	"time"
-
-	_ "github.com/charmbracelet/bubbles"
-)
+import "time"
 
 type PageID int
 
