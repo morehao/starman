@@ -70,19 +70,13 @@ This opens the interactive terminal UI. From here you can sync your stars, analy
 ## Usage
 
 ```
-starman syncs your GitHub stars, analyzes them with AI, and generates awesome lists.
+starman                    Launch the interactive TUI (default)
 
-Usage:
-  starman [command]
-
-Available Commands:
-  completion   Generate shell completion script
-  config       Configuration management
-
-Global Flags:
-      --config string   config file path (default ~/.starman/config.yaml)
-      --token string    GitHub token (overrides config/env)
-      --verbose         verbose output
+starman config init        Create config file interactively
+starman config show        Show current config (sensitive fields masked)
+starman completion <shell> Generate shell completion (bash|zsh|fish|powershell)
+starman --help             Show help
+starman --version          Show version
 ```
 
 ### config

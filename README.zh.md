@@ -70,19 +70,13 @@ starman
 ## 命令用法
 
 ```
-starman syncs your GitHub stars, analyzes them with AI, and generates awesome lists.
+starman                    启动交互式 TUI（默认）
 
-Usage:
-  starman [command]
-
-Available Commands:
-  completion   Generate shell completion script
-  config       Configuration management
-
-Global Flags:
-      --config string   config file path (default ~/.starman/config.yaml)
-      --token string    GitHub token (overrides config/env)
-      --verbose         verbose output
+starman config init        交互式创建配置文件
+starman config show        显示当前配置（敏感字段脱敏）
+starman completion <shell> 生成 Shell 补全（bash|zsh|fish|powershell）
+starman --help             显示帮助
+starman --version          显示版本
 ```
 
 ### config
