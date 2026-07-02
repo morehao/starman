@@ -68,7 +68,11 @@ func (s *Service) Search(ctx context.Context, query string, st store.Store, opts
 			result.Mode = SearchModeVector
 			return result, nil
 		}
-		log.Printf("vector search: %v (%d hits), falling back", err, len(result.Hits))
+		if err != nil {
+			log.Printf("vector search failed: %v, falling back", err)
+		} else {
+			log.Printf("vector search: 0 hits, falling back")
+		}
 	}
 
 	if s.hasAIConfig() {

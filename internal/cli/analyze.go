@@ -68,7 +68,9 @@ func newAnalyzeCmd() *cobra.Command {
 				Force: force,
 				Limit: effectiveLimit,
 				OnProgress: func(done, total int, name string) {
-					fmt.Fprintf(os.Stderr, "\r[%d/%d] %s", done, total, name)
+					line := fmt.Sprintf("\r[%d/%d] %s", done, total, name)
+					line += "\033[K"
+					fmt.Fprint(os.Stderr, line)
 				},
 			})
 			if err != nil {
