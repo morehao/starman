@@ -21,6 +21,7 @@ type Service struct {
 	client          *Client
 	embeddingClient *EmbeddingClient
 	gh              *github.Client
+	searchIndex     *SearchIndex
 }
 
 func NewService(client *Client, gh *github.Client) *Service {
@@ -29,6 +30,10 @@ func NewService(client *Client, gh *github.Client) *Service {
 
 func NewServiceWithEmbedding(client *Client, gh *github.Client, embeddingClient *EmbeddingClient) *Service {
 	return &Service{client: client, embeddingClient: embeddingClient, gh: gh}
+}
+
+func (s *Service) SetSearchIndex(idx *SearchIndex) {
+	s.searchIndex = idx
 }
 
 const readmeMaxChars = 8000

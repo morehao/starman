@@ -20,7 +20,7 @@ func TestSearch(t *testing.T) {
 			json.NewEncoder(w).Encode(completionResponse{
 				Choices: []struct {
 					Message Message `json:"message"`
-				}{{Message: Message{Content: `{"fts_query":"terminal cli","keywords":["terminal","cli"],"language":"","category":"","platform":"","min_stars":0,"max_stars":0}`}}},
+				}{{Message: Message{Content: `{"fts_query":"终端 工具 terminal cli","keywords":["终端","工具","terminal","cli"],"language":"","category":"","platform":"cli","min_stars":0,"max_stars":0}`}}},
 			})
 		} else {
 			json.NewEncoder(w).Encode(completionResponse{
@@ -36,6 +36,12 @@ func TestSearch(t *testing.T) {
 	svc := NewService(c, nil)
 
 	var st mockStore
+	searchIndex := NewSearchIndex()
+	if err := searchIndex.Load(context.Background(), &st); err != nil {
+		t.Fatal(err)
+	}
+	svc.SetSearchIndex(searchIndex)
+
 	result, err := svc.Search(context.Background(), "终端工具", &st, SearchOpts{EnableRerank: true})
 	if err != nil {
 		t.Fatal(err)
@@ -52,11 +58,28 @@ func TestSearch(t *testing.T) {
 	}
 }
 
+func TestScoreRepo(t *testing.T) {
+	entry := &repoEntry{
+		repo: &store.Repository{
+			FullName:        "owner/awesome-cli",
+			Description:     "A CLI tool for development automation",
+			AISearchText:    "一个强大的命令行工具，用于自动化开发流程",
+			StargazersCount: 1000,
+		},
+		searchText: "owner/awesome-cli a cli tool for development automation 一个强大的命令行工具，用于自动化开发流程 go cli",
+	}
+	score := scoreRepo(entry, "终端 工具 terminal cli", []string{"cli", "terminal"})
+	if score <= 0 {
+		t.Fatalf("expected positive score, got %f", score)
+	}
+}
+
+// Deprecated: TestCalcWeightedScore tests the deprecated FTS5 scoring function.
 func TestCalcWeightedScore(t *testing.T) {
 	r := &store.Repository{
-		FullName:     "owner/awesome-cli",
-		Description:  "A CLI tool",
-		AISearchText: "一个强大的命令行工具，用于自动化开发流程",
+		FullName:        "owner/awesome-cli",
+		Description:     "A CLI tool",
+		AISearchText:    "一个强大的命令行工具，用于自动化开发流程",
 		StargazersCount: 1000,
 	}
 	score := calcWeightedScore(10.0, r.StargazersCount, r, []string{"cli"})
@@ -73,7 +96,12 @@ func (m *mockStore) UpsertRepository(ctx context.Context, r *store.Repository) e
 func (m *mockStore) UpsertRepositories(ctx context.Context, rs []*store.Repository) error { return nil }
 func (m *mockStore) UpsertReposOnSync(ctx context.Context, rs []*store.Repository, fullSync bool) error { return nil }
 func (m *mockStore) GetRepository(ctx context.Context, fullName string) (*store.Repository, error) { return nil, nil }
-func (m *mockStore) ListRepositories(ctx context.Context) ([]*store.Repository, error) { return nil, nil }
+func (m *mockStore) ListRepositories(ctx context.Context) ([]*store.Repository, error) {
+	now := time.Now()
+	return []*store.Repository{
+		{ID: 1, FullName: "owner/cli-tool", Description: "A terminal tool", AITags: []string{"cli"}, Topics: []string{"go"}, AISearchText: "一个命令行工具", AIPlatforms: []string{"cli"}, AnalyzedAt: &now, StargazersCount: 500},
+	}, nil
+}
 func (m *mockStore) ListUnanalyzed(ctx context.Context, limit int) ([]*store.Repository, error) { return nil, nil }
 func (m *mockStore) ListByCategory(ctx context.Context, category string) ([]*store.Repository, error) { return nil, nil }
 func (m *mockStore) UpdateAIResult(ctx context.Context, repoID int64, res *store.AIResult) error { return nil }
@@ -97,10 +125,7 @@ func (m *mockStore) SaveSyncStats(ctx context.Context, stats *store.SyncStats) e
 func (m *mockStore) GetSyncStats(ctx context.Context) (*store.SyncStats, error) { return &store.SyncStats{}, nil }
 func (m *mockStore) IncrementSyncCount(ctx context.Context) error { return nil }
 func (m *mockStore) SearchFTS(ctx context.Context, query string, filters *store.SearchFilters) ([]*store.FTSResult, error) {
-	now := time.Now()
-	return []*store.FTSResult{
-		{Repo: &store.Repository{ID: 1, FullName: "owner/cli-tool", Description: "A terminal tool", AITags: []string{"cli"}, Topics: []string{"go"}, AISearchText: "一个命令行工具", AnalyzedAt: &now}, BM25Score: 8.5},
-	}, nil
+	return nil, nil
 }
 func (m *mockStore) RebuildFTSIndex(ctx context.Context) error { return nil }
 func (m *mockStore) InsertVector(ctx context.Context, repoID int64, embedding []float64) error { return nil }

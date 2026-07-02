@@ -32,6 +32,9 @@ type Repository struct {
 	VectorIndexedAt    *time.Time
 }
 
+// Deprecated: FTSResult was used for FTS5 full-text search results.
+// In-memory search now uses ai.SearchHit directly.
+// This type is retained for backward compatibility and may be removed.
 type FTSResult struct {
 	Repo       *Repository
 	BM25Score  float64

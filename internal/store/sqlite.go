@@ -127,6 +127,9 @@ func (s *sqliteStore) migrateAddColumn(ctx context.Context, table, column, colum
 	return err
 }
 
+// Deprecated: createFTSIndex builds the FTS5 index table.
+// FTS5 search has been replaced by in-memory search (ai.SearchIndex).
+// This is retained for backward compatibility and may be removed.
 func (s *sqliteStore) createFTSIndex(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS repositories_fts USING fts5(
 		full_name,

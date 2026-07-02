@@ -10,18 +10,12 @@ import (
 func (s *Service) basicTextSearch(
 	ctx context.Context, query string, st store.Store, opts SearchOpts,
 ) (*SearchResult, error) {
+	if err := s.searchIndex.ensureLoaded(ctx, st); err != nil {
+		return nil, fmt.Errorf("load search index: %w", err)
+	}
+
 	filters := buildSearchFilters(opts, nil)
-	filters.Limit = 50
-
-	ftsResults, err := st.SearchFTS(ctx, query, filters)
-	if err != nil {
-		return nil, fmt.Errorf("fts search: %w", err)
-	}
-
-	hits := make([]*SearchHit, 0, len(ftsResults))
-	for _, fr := range ftsResults {
-		hits = append(hits, &SearchHit{Repo: fr.Repo, Score: fr.BM25Score})
-	}
+	hits := s.searchIndex.Search(query, nil, filters, 50)
 
 	sortHits(hits, opts.Sort)
 	if opts.Limit > 0 && opts.Limit < len(hits) {
