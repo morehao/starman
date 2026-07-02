@@ -4,7 +4,7 @@
 
 A CLI tool to manage your GitHub stars with AI — sync, analyze, categorize, search, and generate awesome lists.
 
-starman fuses [starred-go](https://github.com/juev/starred) (starred repo sync + Markdown generation) with CLI-friendly features from [GithubStarsManager](https://github.com/oovm/GithubStarsManager) (AI analysis, release tracking, backup), with AI as the core differentiator.
+starman syncs your GitHub stars, analyzes them with AI, generates awesome lists, tracks releases, and backs up your data — all from the CLI.
 
 ## Features
 
@@ -77,7 +77,7 @@ Analyzes up to 20 unanalyzed repos by default: fetches README, calls AI for summ
 ### 4. Generate awesome list
 
 ```bash
-# By programming language (starred-go compatible)
+# By programming language
 starman generate -s language > README.md
 
 # By AI category (shows AI summaries and tags)

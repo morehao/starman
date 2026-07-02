@@ -4,7 +4,7 @@
 
 一个用 AI 管理 GitHub 星标仓库的 CLI 工具 —— 同步、分析、分类、搜索，并生成 Awesome List。
 
-starman 融合了 [starred-go](https://github.com/juev/starred)（星标同步 + Markdown 生成）与 [GithubStarsManager](https://github.com/oovm/GithubStarsManager) 中适合 CLI 的功能（AI 分析、Release 追踪、备份），以 AI 能力作为核心增值。
+starman 支持星标同步、AI 分析、Awesome List 生成、Release 追踪、数据备份——全部在 CLI 中完成。
 
 ## 功能
 
@@ -77,7 +77,7 @@ starman analyze
 ### 4. 生成 Awesome List
 
 ```bash
-# 按编程语言（兼容 starred-go）
+# 按编程语言
 starman generate -s language > README.md
 
 # 按 AI 分类（展示 AI 摘要和标签）

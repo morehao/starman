@@ -1,8 +1,8 @@
-# Starman 拉取同步方案（复刻 GithubStarsManager）
+# Starman 拉取同步方案
 
 ## 概述
 
-本文档描述将 GithubStarsManager 的拉取同步优化复刻到 starman（Go CLI）的完整技术方案。
+本文档描述 starman（Go CLI）的拉取同步优化完整技术方案。
 
 starman 当前已有良好的基础：并发分页拉取（90 并发）、Upsert 增量写入、本地字段保护、`--full` 全量清理、`--watch` 定时同步。以下优化在此基础上做精细化增强。
 
@@ -16,7 +16,7 @@ starman 当前已有良好的基础：并发分页拉取（90 并发）、Upsert
 
 ### 优化方案
 
-参考 GithubStarsManager 的持续追踪 + 主动预判策略，在并发拉取场景下用 `atomic.Int64` 维护全局 rate limit 计数器。
+采用持续追踪 + 主动预判策略，在并发拉取场景下用 `atomic.Int64` 维护全局 rate limit 计数器。
 
 ```go
 // file: internal/github/client.go（改造 ListStarred）
@@ -104,7 +104,7 @@ func waitForRateReset(ctx context.Context, resetTime time.Time) error {
 
 **要点**：
 - `atomic.Int64` 保证并发场景下计数准确
-- 阈值设为 20（比 GithubStarsManager 的 100 宽松，适配 CLI 无 UI 阻塞问题）
+- 阈值设为 20（适配 CLI 无 UI 阻塞问题）
 - 等待期间响应 `ctx.Done()`，支持 Ctrl+C 取消
 - 首请求的 rate limit 信息直接作为全局基准，后续不再读响应头（减少复杂性）
 
@@ -225,7 +225,7 @@ func (c *Client) fetchStarredPage(ctx context.Context, username string, page int
 
 ### 优化方案
 
-参考 GithubStarsManager 的时间水位增量策略，用 `LastReleaseFetch` 做拉取终止条件。
+采用时间水位增量策略，用 `LastReleaseFetch` 做拉取终止条件。
 
 ```go
 // file: internal/github/operations.go（新方法）
