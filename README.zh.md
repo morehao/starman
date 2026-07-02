@@ -20,6 +20,7 @@ starman 支持星标同步、AI 分析、Awesome List 生成、Release 追踪、
 - **详情** — 查看仓库详细信息，包括 AI 摘要、多语言 README 变体支持
 - **趋势发现** — 浏览 GitHub Trending 仓库（RSS 或 Search API），支持交互式收藏
 - **标签与分类** — 批量管理仓库的自定义标签和分类，支持分类锁定
+- **TUI** — 交互式终端界面（`starman tui`）：浏览、搜索、查看详情、管理标签分类等，全部键盘操作
 - **补全** — bash、zsh、fish、PowerShell Shell 自动补全
 
 ## 安装
@@ -121,6 +122,18 @@ starman trending --since daily --lang Rust
 starman trending --star
 ```
 
+### 7. 启动交互式 TUI
+
+```bash
+starman tui
+```
+
+Dashboard 风格的终端界面，左侧导航栏 + 右侧内容面板。可浏览仓库、搜索、查看详情、管理标签分类、查看统计 — 全部键盘操作。
+
+**TUI 页面：** 仪表盘 · 搜索 · 仓库列表 · 仓库详情 · 趋势 · 同步 · 分析 · 标签 · 分类 · 统计 · Release · 生成 · 备份 · 配置
+
+**快捷键：** `q` 退出，`/` 搜索，`?` 帮助，`↑↓` 导航，`Enter` 确认，`Esc` 返回
+
 ## 命令用法
 
 ```
@@ -144,6 +157,7 @@ Available Commands:
   sync         Sync starred repositories from GitHub to local DB
   tag          Manage custom tags on repositories
   trending     Browse GitHub trending repositories
+  tui          Launch the interactive terminal UI
   unstar       Unstar a GitHub repository
 
 Global Flags:

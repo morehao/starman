@@ -20,6 +20,7 @@ starman syncs your GitHub stars, analyzes them with AI, generates awesome lists,
 - **Info** — Inspect repo details including AI summary, README with multi-language variant support
 - **Trending** — Browse GitHub trending repositories (RSS or search API) with interactive starring
 - **Tag & Categorize** — Batch manage custom tags and categories on local repos, with category locking
+- **TUI** — Interactive terminal UI (`starman tui`): browse, search, view details, manage tags/categories, and more — all from a keyboard-driven dashboard
 - **Completion** — Shell auto-completion for bash, zsh, fish, and PowerShell
 
 ## Installation
@@ -121,6 +122,18 @@ starman trending --since daily --lang Rust
 starman trending --star
 ```
 
+### 7. Launch interactive TUI
+
+```bash
+starman tui
+```
+
+A dashboard-style terminal UI with sidebar navigation. Browse repos, search, view details, manage tags and categories, check stats — all keyboard-driven.
+
+**TUI pages:** Dashboard · Search · Repo List · Repo Detail · Trending · Sync · Analyze · Tag · Categorize · Stats · Releases · Generate · Backup · Config
+
+**Key shortcuts:** `q` quit, `/` search, `?` help, `↑↓` navigate, `Enter` select, `Esc` back
+
 ## Usage
 
 ```
@@ -144,6 +157,7 @@ Available Commands:
   sync         Sync starred repositories from GitHub to local DB
   tag          Manage custom tags on repositories
   trending     Browse GitHub trending repositories
+  tui          Launch the interactive terminal UI
   unstar       Unstar a GitHub repository
 
 Global Flags:
