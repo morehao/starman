@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/morehao/starman/internal/github"
+	"github.com/morehao/starman/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -56,24 +57,48 @@ func runSync(cmd *cobra.Command, fullSync bool) error {
 
 	ctx := context.Background()
 	gh := github.New(token)
+
+	fmt.Fprintf(os.Stderr, "Fetching starred repos...\n")
+	start := time.Now()
+
 	repos, err := gh.ListStarred(ctx, cfg.GitHub.Username)
 	if err != nil {
 		return fmt.Errorf("list starred: %w", err)
 	}
+
+	prevStats, _ := s.GetSyncStats(ctx)
+	prevCount := prevStats.LastRepoCount
+	newCount := 0
+	if len(repos) > prevCount {
+		newCount = len(repos) - prevCount
+	}
+
 	if err := s.UpsertReposOnSync(ctx, repos, fullSync); err != nil {
 		return fmt.Errorf("sync to db: %w", err)
 	}
-	s.SetSyncState(ctx, "last_sync", time.Now().UTC().Format(time.RFC3339))
-	fmt.Fprintf(os.Stderr, "Synced %d repositories (fullSync=%v)\n", len(repos), fullSync)
+
+	duration := time.Since(start).Round(time.Millisecond * 100)
+	_ = s.IncrementSyncCount(ctx)
+
+	stats := &store.SyncStats{}
+	if s, err := s.GetSyncStats(ctx); err == nil {
+		stats = s
+	}
+	stats.LastSync = time.Now().UTC()
+	stats.LastDuration = duration.String()
+	stats.LastRepoCount = len(repos)
+	stats.LastNewCount = newCount
+	_ = s.SaveSyncStats(ctx, stats)
+
+	_ = s.SetSyncState(ctx, "last_sync", time.Now().UTC().Format(time.RFC3339))
+	fmt.Fprintf(os.Stderr, "  %d repos fetched (%d new) in %v\n", len(repos), newCount, duration)
+	fmt.Fprintf(os.Stderr, "  Sync complete.\n")
 	return nil
 }
 
 func runWatch(cmd *cobra.Command, fullSync bool, interval time.Duration) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
 
 	fmt.Fprintf(os.Stderr, "Watching with interval %v (Ctrl+C to stop)\n", interval)
 
@@ -82,7 +107,7 @@ func runWatch(cmd *cobra.Command, fullSync bool, interval time.Duration) error {
 		case <-ctx.Done():
 			fmt.Fprintf(os.Stderr, "Stopping watch...\n")
 			return nil
-		case <-ticker.C:
+		case <-time.After(interval):
 			now := time.Now().UTC().Format(time.RFC3339)
 			fmt.Fprintf(os.Stderr, "[%s] ", now)
 			if err := runSync(cmd, fullSync); err != nil {

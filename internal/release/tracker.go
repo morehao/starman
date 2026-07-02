@@ -74,24 +74,27 @@ func (t *Tracker) pullOne(ctx context.Context, repo *store.Repository) (int, err
 	if len(parts) != 2 {
 		return 0, fmt.Errorf("invalid full name: %s", repo.FullName)
 	}
-	releases, err := t.gh.ListReleases(ctx, parts[0], parts[1])
+
+	var releases []*store.Release
+	var err error
+	if repo.LastReleaseFetch == nil {
+		releases, err = t.gh.ListReleases(ctx, parts[0], parts[1])
+	} else {
+		releases, err = t.gh.ListReleasesIncremental(ctx, parts[0], parts[1], repo.LastReleaseFetch)
+	}
 	if err != nil {
 		return 0, err
 	}
+
 	newCount := 0
 	for _, rel := range releases {
-		if repo.LastReleaseFetch != nil {
-			pubTime, err := time.Parse(time.RFC3339, rel.PublishedAt)
-			if err == nil && !pubTime.After(*repo.LastReleaseFetch) {
-				continue
-			}
-		}
 		rel.RepoID = repo.ID
 		if err := t.store.UpsertRelease(ctx, rel); err != nil {
 			return newCount, err
 		}
 		newCount++
 	}
+
 	if len(releases) > 0 {
 		latest := releases[0].PublishedAt
 		pubTime, err := time.Parse(time.RFC3339, latest)

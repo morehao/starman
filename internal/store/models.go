@@ -29,6 +29,7 @@ type Repository struct {
 	CategoryLocked     bool
 	SubscribedReleases bool
 	LastReleaseFetch   *time.Time
+	VectorIndexedAt    *time.Time
 }
 
 type FTSResult struct {
@@ -37,12 +38,15 @@ type FTSResult struct {
 }
 
 type SearchFilters struct {
-	Language string
-	Category string
-	MinStars int
-	MaxStars int
-	Platform string
-	Limit    int
+	Language       string
+	Category       string
+	MinStars       int
+	MaxStars       int
+	Platform       string
+	Tags           []string
+	Limit          int
+	Analyzed       *bool
+	AnalysisFailed *bool
 }
 
 type Release struct {
@@ -89,4 +93,10 @@ type CustomFields struct {
 	Tags           []string
 	Category       string
 	CategoryLocked bool
+}
+
+type VectorMatch struct {
+	RepoID     int64
+	Distance   float64
+	Similarity float64
 }

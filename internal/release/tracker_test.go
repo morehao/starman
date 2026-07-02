@@ -42,8 +42,8 @@ func TestPullReleasesIncremental(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-RateLimit-Remaining", "5000")
 		rels := []*gh.RepositoryRelease{
-			{ID: gh.Ptr(int64(1)), TagName: gh.Ptr("v1.0.0"), PublishedAt: &gh.Timestamp{Time: time.Now().Add(-48 * time.Hour)}},
 			{ID: gh.Ptr(int64(2)), TagName: gh.Ptr("v2.0.0"), PublishedAt: &gh.Timestamp{Time: time.Now()}},
+			{ID: gh.Ptr(int64(1)), TagName: gh.Ptr("v1.0.0"), PublishedAt: &gh.Timestamp{Time: time.Now().Add(-48 * time.Hour)}},
 		}
 		json.NewEncoder(w).Encode(rels)
 	}))
