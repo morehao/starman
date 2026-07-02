@@ -37,8 +37,10 @@ func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 		statusbar:   components.NewStatusBar(theme),
 	}
 	m.pages = map[PageID]tea.Model{
-		PageDashboard: pages.NewDashboard(s, theme),
-		PageRepoList:  pages.NewRepoList(s, theme),
+		PageDashboard:  pages.NewDashboard(s, theme),
+		PageSearch:     pages.NewSearch(s, theme),
+		PageRepoList:   pages.NewRepoList(s, theme),
+		PageRepoDetail: pages.NewRepoDetail(s, theme),
 	}
 	return m
 }
@@ -70,6 +72,10 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case NavigatedMsg:
 		m.currentPage = msg.Page
 		return m, nil
+
+	case RepoSelectedMsg:
+		m.currentPage = PageRepoDetail
+		return m, func() tea.Msg { return msg }
 
 	case tea.KeyMsg:
 		switch msg.String() {
