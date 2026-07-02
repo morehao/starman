@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -15,6 +16,7 @@ type EmbeddingClient struct {
 	apiKey  string
 	model   string
 	client  *http.Client
+	dim     atomic.Int32
 }
 
 func NewEmbeddingClient(baseURL, apiKey, model string) *EmbeddingClient {
@@ -79,5 +81,15 @@ func (ec *EmbeddingClient) Embed(ctx context.Context, texts []string) ([][]float
 	for _, d := range result.Data {
 		vectors[d.Index] = d.Embedding
 	}
+	if len(vectors) > 0 && len(vectors[0]) > 0 && ec.dim.Load() == 0 {
+		ec.dim.Store(int32(len(vectors[0])))
+	}
 	return vectors, nil
+}
+
+func (ec *EmbeddingClient) Dimension() int {
+	if ec == nil {
+		return 0
+	}
+	return int(ec.dim.Load())
 }

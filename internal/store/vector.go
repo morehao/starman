@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -20,6 +21,37 @@ func (s *sqliteStore) InsertVector(ctx context.Context, repoID int64, embedding 
 	_, err = s.db.ExecContext(ctx, `INSERT INTO repo_vectors (rowid, embedding) VALUES (?, ?)`, repoID, string(vecJSON))
 	if err != nil {
 		return fmt.Errorf("insert vector: %w", err)
+	}
+	return nil
+}
+
+func (s *sqliteStore) EnsureVec0Dimension(ctx context.Context, dim int) error {
+	if dim <= 0 {
+		return nil
+	}
+	current := s.readVec0Dimension(ctx)
+	if current == dim {
+		return nil
+	}
+	s.vecDimMu.Lock()
+	defer s.vecDimMu.Unlock()
+	current = s.readVec0Dimension(ctx)
+	if current == dim {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `DROP TABLE IF EXISTS repo_vectors`); err != nil {
+		return fmt.Errorf("drop repo_vectors for dimension migration: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`CREATE VIRTUAL TABLE repo_vectors USING vec0(
+		embedding float[%d]
+	)`, dim)); err != nil {
+		return fmt.Errorf("recreate repo_vectors with dimension %d: %w", dim, err)
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE repositories SET vector_indexed_at = NULL`); err != nil {
+		return fmt.Errorf("clear vector_indexed_at after migration: %w", err)
+	}
+	if err := s.SetSyncState(ctx, vec0DimensionKey, strconv.Itoa(dim)); err != nil {
+		return fmt.Errorf("persist vec0_dimension: %w", err)
 	}
 	return nil
 }

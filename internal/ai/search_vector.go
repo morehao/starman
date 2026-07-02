@@ -27,6 +27,12 @@ func (s *Service) vectorSearch(
 		return nil, fmt.Errorf("empty query vector")
 	}
 
+	if dim := s.embeddingClient.Dimension(); dim > 0 {
+		if err := st.EnsureVec0Dimension(ctx, dim); err != nil {
+			return nil, fmt.Errorf("ensure vec0 dimension: %w", err)
+		}
+	}
+
 	matches, err := st.SearchVectors(ctx, queryVectors[0], 30, 0.35)
 	if err != nil {
 		return nil, fmt.Errorf("vector search: %w", err)

@@ -129,6 +129,12 @@ func (b *BatchAnalyzer) analyzeOne(ctx context.Context, repo *store.Repository, 
 			return nil
 		}
 		if len(vectors) > 0 {
+			if dim := b.svc.embeddingClient.Dimension(); dim > 0 {
+				if err := b.store.EnsureVec0Dimension(ctx, dim); err != nil {
+					log.Printf("WARN: ensure vec0 dimension for %s: %v", repo.FullName, err)
+					return nil
+				}
+			}
 			if err := b.store.InsertVector(ctx, repo.ID, vectors[0]); err != nil {
 				log.Printf("WARN: insert vector failed for %s: %v", repo.FullName, err)
 				return nil

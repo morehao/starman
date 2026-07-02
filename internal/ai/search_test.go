@@ -111,3 +111,4 @@ func (m *mockStore) DeleteVector(ctx context.Context, repoID int64) error { retu
 func (m *mockStore) SetVectorIndexedAt(ctx context.Context, repoID int64, t time.Time) error { return nil }
 func (m *mockStore) GetRepositoryByID(ctx context.Context, id int64) (*store.Repository, error) { return nil, nil }
 func (m *mockStore) ListVectorUnindexed(ctx context.Context, limit int) ([]*store.Repository, error) { return nil, nil }
+func (m *mockStore) EnsureVec0Dimension(ctx context.Context, dim int) error { return nil }

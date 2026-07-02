@@ -29,6 +29,7 @@ type Store interface {
 	SetVectorIndexedAt(ctx context.Context, repoID int64, t time.Time) error
 	GetRepositoryByID(ctx context.Context, id int64) (*Repository, error)
 	ListVectorUnindexed(ctx context.Context, limit int) ([]*Repository, error)
+	EnsureVec0Dimension(ctx context.Context, dim int) error
 
 	UpsertRelease(ctx context.Context, r *Release) error
 	ListUnreadReleases(ctx context.Context) ([]*Release, error)
