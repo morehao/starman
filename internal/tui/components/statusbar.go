@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
-	"github.com/morehao/starman/internal/tui"
 	"github.com/morehao/starman/internal/tui/styles"
+	"github.com/morehao/starman/internal/tui/types"
 )
 
 type StatusBarModel struct {
@@ -15,7 +15,7 @@ type StatusBarModel struct {
 	lastSync  string
 	aiQuota   string
 	message   string
-	msgLevel  tui.StatusLevel
+	msgLevel  types.StatusLevel
 	msgExpiry time.Time
 	width     int
 }
@@ -36,11 +36,11 @@ func (m *StatusBarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
-	case tui.TickMsg:
+	case types.TickMsg:
 		if time.Now().After(m.msgExpiry) && m.message != "" {
 			m.message = ""
 		}
-	case tui.StatusMsg:
+	case types.StatusMsg:
 		m.message = msg.Text
 		m.msgLevel = msg.Level
 		m.msgExpiry = time.Now().Add(msg.Timeout)
@@ -53,9 +53,9 @@ func (m *StatusBarModel) View() string {
 	var mid string
 	if m.message != "" {
 		switch m.msgLevel {
-		case tui.LevelError:
+		case types.LevelError:
 			mid = m.theme.CardTitle.Foreground(m.theme.Error).Render(m.message)
-		case tui.LevelSuccess:
+		case types.LevelSuccess:
 			mid = m.theme.CardTitle.Foreground(m.theme.Success).Render(m.message)
 		default:
 			mid = m.message

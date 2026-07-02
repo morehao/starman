@@ -1,47 +1,45 @@
 package tui
 
-import "time"
-
-type PageID int
-
-const (
-	PageDashboard PageID = iota
-	PageSearch
-	PageRepoList
-	PageTrending
-	PageSync
-	PageAnalyze
-	PageTag
-	PageCategorize
-	PageStats
-	PageRelease
-	PageGenerate
-	PageBackup
-	PageConfig
-	PageRepoDetail
+import (
+	"github.com/morehao/starman/internal/tui/types"
 )
 
-type NavigatedMsg struct{ Page PageID }
-
-type StatusLevel int
+type PageID = types.PageID
 
 const (
-	LevelInfo StatusLevel = iota
-	LevelSuccess
-	LevelWarning
-	LevelError
+	PageDashboard  = types.PageDashboard
+	PageSearch     = types.PageSearch
+	PageRepoList   = types.PageRepoList
+	PageTrending   = types.PageTrending
+	PageSync       = types.PageSync
+	PageAnalyze    = types.PageAnalyze
+	PageTag        = types.PageTag
+	PageCategorize = types.PageCategorize
+	PageStats      = types.PageStats
+	PageRelease    = types.PageRelease
+	PageGenerate   = types.PageGenerate
+	PageBackup     = types.PageBackup
+	PageConfig     = types.PageConfig
+	PageRepoDetail = types.PageRepoDetail
 )
 
-type StatusMsg struct {
-	Text    string
-	Level   StatusLevel
-	Timeout time.Duration
-}
+type NavigatedMsg = types.NavigatedMsg
 
-type TaskStartedMsg  struct{ ID, Label string }
-type TaskProgressMsg struct{ ID string; Current, Total int }
-type TaskDoneMsg     struct{ ID string; Err error }
+type StatusLevel = types.StatusLevel
 
-type RepoSelectedMsg struct{ FullName string }
+const (
+	LevelInfo    = types.LevelInfo
+	LevelSuccess = types.LevelSuccess
+	LevelWarning = types.LevelWarning
+	LevelError   = types.LevelError
+)
 
-type TickMsg time.Time
+type StatusMsg = types.StatusMsg
+
+type TaskStartedMsg = types.TaskStartedMsg
+type TaskProgressMsg = types.TaskProgressMsg
+type TaskDoneMsg = types.TaskDoneMsg
+
+type RepoSelectedMsg = types.RepoSelectedMsg
+
+type TickMsg = types.TickMsg

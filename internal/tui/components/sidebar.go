@@ -4,36 +4,36 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/bubbletea"
-	"github.com/morehao/starman/internal/tui"
 	"github.com/morehao/starman/internal/tui/styles"
+	"github.com/morehao/starman/internal/tui/types"
 )
 
 type menuItem struct {
 	label    string
 	shortcut string
-	page     tui.PageID
+	page     types.PageID
 }
 
 var menuItems = []menuItem{
-	{"Dashboard", "1", tui.PageDashboard},
-	{"Search", "/", tui.PageSearch},
-	{"Repo List", "r", tui.PageRepoList},
-	{"Trending", "t", tui.PageTrending},
+	{"Dashboard", "1", types.PageDashboard},
+	{"Search", "/", types.PageSearch},
+	{"Repo List", "r", types.PageRepoList},
+	{"Trending", "t", types.PageTrending},
 	{"—", "", -1},
-	{"Sync", "s", tui.PageSync},
-	{"Analyze", "a", tui.PageAnalyze},
+	{"Sync", "s", types.PageSync},
+	{"Analyze", "a", types.PageAnalyze},
 	{"—", "", -1},
-	{"Tag", "g", tui.PageTag},
-	{"Categorize", "c", tui.PageCategorize},
-	{"Stats", "S", tui.PageStats},
+	{"Tag", "g", types.PageTag},
+	{"Categorize", "c", types.PageCategorize},
+	{"Stats", "S", types.PageStats},
 	{"—", "", -1},
-	{"Release", "R", tui.PageRelease},
-	{"Generate", "G", tui.PageGenerate},
-	{"Backup", "b", tui.PageBackup},
-	{"Config", "C", tui.PageConfig},
+	{"Release", "R", types.PageRelease},
+	{"Generate", "G", types.PageGenerate},
+	{"Backup", "b", types.PageBackup},
+	{"Config", "C", types.PageConfig},
 	{"—", "", -1},
-	{"Help", "?", tui.PageDashboard},
-	{"Quit", "q", tui.PageDashboard},
+	{"Help", "?", types.PageDashboard},
+	{"Quit", "q", types.PageDashboard},
 }
 
 type SidebarModel struct {
@@ -71,7 +71,7 @@ func (m *SidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if item := menuItems[m.cursor]; item.page >= 0 && item.label != "Quit" {
-				return m, func() tea.Msg { return tui.NavigatedMsg{Page: item.page} }
+				return m, func() tea.Msg { return types.NavigatedMsg{Page: item.page} }
 			}
 		}
 	}
