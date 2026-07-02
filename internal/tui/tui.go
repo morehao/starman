@@ -44,6 +44,9 @@ func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 		PageTrending:   pages.NewTrending(s, theme),
 		PageSync:       pages.NewSync(s, theme),
 		PageAnalyze:    pages.NewAnalyze(s, theme),
+		PageTag:        pages.NewTag(s, theme),
+		PageCategorize: pages.NewCategorize(s, theme),
+		PageStats:      pages.NewStats(s, theme),
 	}
 	return m
 }
