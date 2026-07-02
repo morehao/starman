@@ -5,13 +5,16 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"strconv"
 
 	_ "modernc.org/sqlite"
 	_ "modernc.org/sqlite/vec"
 )
 
 type sqliteStore struct {
-	db *sql.DB
+	db       *sql.DB
+	vecDimMu sync.Mutex
 }
 
 func Open(dbPath string) (Store, error) {
@@ -152,11 +155,28 @@ func (s *sqliteStore) createFTSIndex(ctx context.Context) error {
 	return nil
 }
 
+const vec0DimensionKey = "vec0_dimension"
+const defaultVec0Dimension = 1536
+
 func (s *sqliteStore) createVec0Index(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS repo_vectors USING vec0(
-		embedding float[1536]
-	)`)
+	dim := s.readVec0Dimension(ctx)
+	_, err := s.db.ExecContext(ctx, fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS repo_vectors USING vec0(
+		embedding float[%d]
+	)`, dim))
 	return err
+}
+
+func (s *sqliteStore) readVec0Dimension(ctx context.Context) int {
+	var val string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM sync_state WHERE key = ?`, vec0DimensionKey).Scan(&val)
+	if err != nil || val == "" {
+		return defaultVec0Dimension
+	}
+	dim, err := strconv.Atoi(val)
+	if err != nil || dim <= 0 {
+		return defaultVec0Dimension
+	}
+	return dim
 }
 
 var defaultCategories = []Category{
