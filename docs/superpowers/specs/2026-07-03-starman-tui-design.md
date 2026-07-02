@@ -8,30 +8,30 @@
 
 判断标准：**核心动作是"浏览/选择/查看"则 TUI 化，"单次执行/批处理/管道输出"则保留 CLI**。
 
-### 保留纯 CLI（7 个命令）
+### 命令全集一览
 
-| 命令 | 原因 |
-|------|------|
-| `sync` | 长时间批处理，`--watch` daemon 模式，stdout 保持干净 |
-| `analyze` | 批量后台任务，CI 可调用 |
-| `generate` | 输出 Markdown 到 stdout/文件，`--repo` 自动提交，纯脚本化 |
-| `backup` | 导入导出/WebDAW 定时同步 |
-| `star` / `unstar` | 单次操作，一行命令最快 |
-| `config` | 问答式交互已够用，且 TUI 启动依赖已存在的配置 |
-| `completion` | 生成 shell 脚本，纯管道用途 |
+| 命令 | 子命令 | 归属 | 说明 |
+|------|--------|------|------|
+| `sync` | — | **CLI** | 批处理，`--watch` daemon，stdout 干净 |
+| `analyze` | — | **CLI** | 批量后台任务，CI 可调用 |
+| `generate` | — | **CLI** | 输出 Markdown 到 stdout/文件，`--repo` 自动推送 |
+| `backup` | `json`, `webdav` | **CLI** | 导入导出/WebDAV 定时同步 |
+| `star` | — | **CLI** | 单次操作，一行命令最快 |
+| `unstar` | — | **CLI** | 同上 |
+| `config` | `init`, `show` | **CLI** | 问答式交互已够用；TUI 启动依赖已存在的配置 |
+| `completion` | — | **CLI** | 生成 shell 脚本，纯管道用途 |
+| `release` | `pull`, `subscribe`, `unsubscribe` | **CLI** | 单次/批处理操作 |
+| `release` | `list` | **TUI** | 浏览未读 release，标记已读 |
+| `trending` | — | **TUI** | 浏览列表 + 多选收藏；砍掉原 CLI（体验差） |
+| `search` | — | **TUI** | 结果列表 + 实时过滤 + 详情跳转；脚本场景用 `--json` 逃生舱 |
+| `info` | — | **TUI** | 详情展示 + README 滚动 + 变体切换 |
+| `stats` | — | **TUI** | 多维度切换仪表盘 |
+| `tag` | 单仓库模式 | **CLI** | `starman tag owner/repo +tag1,-tag2` 单次操作 |
+| `tag` | 批量模式 | **TUI** | 勾选仓库再批量编辑 |
+| `categorize` | 单仓库模式 | **CLI** | `starman categorize owner/repo frontend --lock` 单次操作 |
+| `categorize` | 批量模式 | **TUI** | 勾选仓库再批量设置分类/锁定 |
 
-### TUI 化（6 个命令，保留 `--json`/`--plain` 作为脚本逃生舱）
-
-| 命令 | TUI 页面 | 原因 |
-|------|----------|------|
-| `trending` | `trending.go` | 浏览列表 + 多选收藏，原 CLI 体验差，可砍掉 CLI |
-| `search` | `search.go` | 结果列表 + 实时过滤 + 详情跳转 |
-| `release list` | `release.go` | 浏览未读 release，标记已读 |
-| `info` | `repo_detail.go` | 详情展示 + README 滚动 + 变体切换 |
-| `stats` | `stats.go` | 多维度切换仪表盘 |
-| `tag` / `categorize` 批量模式 | `tag.go`, `categorize.go` | 勾选仓库再批量操作，比纯 flag 过滤更安全直观 |
-
-> 注：`release pull/subscribe/unsubscribe` 保留为 CLI 子命令；`tag`/`categorize` 单仓库操作（`starman tag owner/repo +tag1`）保留 CLI。
+> 注：`categorize` 命令代码已实现（`internal/cli/categorize.go`），需在 `root.go` 中补注册 `root.AddCommand(newCategorizeCmd())`。
 
 ## 3. 技术选型
 
