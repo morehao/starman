@@ -38,4 +38,7 @@ type Store interface {
 
 	GetSyncState(ctx context.Context, key string) (string, error)
 	SetSyncState(ctx context.Context, key, value string) error
+	SaveSyncStats(ctx context.Context, stats *SyncStats) error
+	GetSyncStats(ctx context.Context) (*SyncStats, error)
+	IncrementSyncCount(ctx context.Context) error
 }

@@ -92,6 +92,9 @@ func (m *mockStore) UpsertCategory(ctx context.Context, c *store.Category) error
 func (m *mockStore) DeleteCategory(ctx context.Context, id string) error { return nil }
 func (m *mockStore) GetSyncState(ctx context.Context, key string) (string, error) { return "", nil }
 func (m *mockStore) SetSyncState(ctx context.Context, key, value string) error { return nil }
+func (m *mockStore) SaveSyncStats(ctx context.Context, stats *store.SyncStats) error { return nil }
+func (m *mockStore) GetSyncStats(ctx context.Context) (*store.SyncStats, error) { return &store.SyncStats{}, nil }
+func (m *mockStore) IncrementSyncCount(ctx context.Context) error { return nil }
 func (m *mockStore) SearchFTS(ctx context.Context, query string, filters *store.SearchFilters) ([]*store.FTSResult, error) {
 	now := time.Now()
 	return []*store.FTSResult{

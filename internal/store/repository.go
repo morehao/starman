@@ -252,39 +252,24 @@ func (s *sqliteStore) UpsertReposOnSync(ctx context.Context, rs []*Repository, f
 	}
 	defer tx.Rollback()
 
-	incomingNames := make(map[string]bool, len(rs))
-	for _, r := range rs {
-		incomingNames[r.FullName] = true
-		topicsJSON, _ := json.Marshal(r.Topics)
-		var existingID int64
-		var analyzedAt sql.NullString
-		err := tx.QueryRowContext(ctx, `SELECT id, analyzed_at FROM repositories WHERE full_name = ?`, r.FullName).Scan(&existingID, &analyzedAt)
-		if err == sql.ErrNoRows {
-			tagsJSON, _ := json.Marshal(r.AITags)
-			platJSON, _ := json.Marshal(r.AIPlatforms)
-			_, err = tx.ExecContext(ctx, `INSERT INTO repositories (id, full_name, name, description, url, language, homepage, stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at, ai_tags, ai_platforms, ai_summary, ai_category, custom_description, custom_tags, custom_category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-				r.ID, r.FullName, r.Name, r.Description, r.URL, r.Language, r.Homepage,
-				r.StargazersCount, r.ForksCount, string(topicsJSON), r.OwnerLogin, r.OwnerAvatar, r.StarredAt,
-				string(tagsJSON), string(platJSON), r.AISummary, r.AICategory, "", "[]", "")
-			if err != nil {
-				return fmt.Errorf("insert repo %s: %w", r.FullName, err)
-			}
-		} else if err != nil {
-			return fmt.Errorf("query existing %s: %w", r.FullName, err)
-		} else {
-			r.ID = existingID
-			_, err = tx.ExecContext(ctx, `UPDATE repositories SET name=?, description=?, url=?, language=?, homepage=?, stargazers_count=?, forks_count=?, topics=?, owner_login=?, owner_avatar=?, starred_at=?, updated_at=datetime('now') WHERE id=?`,
-				r.Name, r.Description, r.URL, r.Language, r.Homepage,
-				r.StargazersCount, r.ForksCount, string(topicsJSON), r.OwnerLogin, r.OwnerAvatar, r.StarredAt,
-				existingID)
-			if err != nil {
-				return fmt.Errorf("update repo %s: %w", r.FullName, err)
-			}
+	existing, err := s.listReposByFullName(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("list existing repos: %w", err)
+	}
+
+	merged := MergeReposOnSync(rs, existing)
+
+	for _, r := range merged {
+		if err := upsertRepoTx(ctx, tx, r); err != nil {
+			return err
 		}
-		_ = analyzedAt
 	}
 
 	if fullSync {
+		incomingNames := make(map[string]bool, len(rs))
+		for _, r := range rs {
+			incomingNames[r.FullName] = true
+		}
 		rows, err := tx.QueryContext(ctx, `SELECT full_name FROM repositories`)
 		if err != nil {
 			return fmt.Errorf("query all repos for full sync: %w", err)
@@ -307,7 +292,30 @@ func (s *sqliteStore) UpsertReposOnSync(ctx context.Context, rs []*Repository, f
 			}
 		}
 	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sync_state WHERE key LIKE 'search_cache:%'`); err != nil {
+		return fmt.Errorf("clear search cache: %w", err)
+	}
+
 	return tx.Commit()
+}
+
+func (s *sqliteStore) listReposByFullName(ctx context.Context, tx *sql.Tx) (map[string]*Repository, error) {
+	rows, err := tx.QueryContext(ctx, repositoryColumns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]*Repository)
+	for rows.Next() {
+		r, err := scanRepository(rows)
+		if err != nil {
+			return nil, err
+		}
+		result[r.FullName] = r
+	}
+	return result, rows.Err()
 }
 
 func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *SearchFilters) ([]*FTSResult, error) {

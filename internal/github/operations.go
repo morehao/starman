@@ -53,6 +53,37 @@ func (c *Client) ListReleases(ctx context.Context, owner, repo string) ([]*Relea
 	return all, nil
 }
 
+func (c *Client) ListReleasesIncremental(ctx context.Context, owner, repo string, watermark *time.Time) ([]*Release, error) {
+	opts := &gh.ListOptions{PerPage: perPage}
+	var allReleases []*Release
+
+	for {
+		ghReleases, resp, err := c.client.Repositories.ListReleases(ctx, owner, repo, &gh.ListOptions{
+			Page:    opts.Page,
+			PerPage: opts.PerPage,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("list releases page %d: %w", opts.Page, err)
+		}
+
+		for _, ghRel := range ghReleases {
+			rel := convertRelease(ghRel, owner+"/"+repo)
+			pubTime, err := time.Parse(time.RFC3339, rel.PublishedAt)
+			if err == nil && watermark != nil && !pubTime.After(*watermark) {
+				return allReleases, nil
+			}
+			allReleases = append(allReleases, rel)
+		}
+
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+
+	return allReleases, nil
+}
+
 func (c *Client) GetReadme(ctx context.Context, owner, repo string) (string, error) {
 	readme, _, err := c.client.Repositories.GetReadme(ctx, owner, repo, nil)
 	if err != nil {
