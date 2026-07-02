@@ -1,194 +1,808 @@
-# Starman 检索优化思路
+# Starman 检索方案（复刻 GithubStarsManager 三层降级）
 
-## 背景
+## 概述
 
-Starman 当前检索方案为单一路径：**LLM 查询理解 → SQLite FTS5 全文检索（BM25）→ 加权评分 → 可选 LLM 精排**。核心设计是用 LLM 将自然语言转化为 FTS5 查询表达式，再用全文索引做关键词匹配。
+本文档描述将 GithubStarsManager 的三层检索降级方案复刻到 starman（Go CLI）的完整技术方案。
 
-GithubStarsManager 采用三层检索降级：**向量语义搜索 → LLM 语义搜索 → 纯文本搜索**，在召回率、排序质量和用户体验上表现更好。
-
-本文从 starman 的 CLI 场景出发，提出两条优化路径。
+**核心设计**：三层降级搜索 = 向量语义搜索（接口保留，暂不实现）→ LLM 语义搜索 → FTS5/纯文本搜索。
 
 ---
 
-## 方案 A：不引入向量化，增强 FTS5 方案
-
-适用场景：不想增加新依赖，希望通过工程优化提升现有 FTS5 检索的召回和排序质量。
-
-### 1. HyDE 查询增强
-
-**现状**：`understandQuery()` 将自然语言直接转为 FTS5 查询词，如 `"好看的终端工具"` → `ftsQuery: "terminal OR cli"`，转换过程丢失了语义信息。
-
-**优化**：搜索前先调用 LLM 生成"理想仓库描述"（HyDE：Hypothetical Document Embedding），然后用该描述做 FTS5 全文匹配。
+## 一、三层降级搜索总流程
 
 ```
 用户输入: "好看的终端工具"
-     ↓
-LLM 生成 HyDE: "一个基于 Rust 的现代化终端模拟器，支持 GPU 加速渲染、
-           分屏、标签页管理、主题定制，提供流畅的渲染性能和丰富的插件生态"
-     ↓
-提取关键词 → FTS5 MATCH: "terminal OR emulator OR cli OR tui"
+     │
+     ├─ 第一层：向量语义搜索（暂保留接口，不实现）
+     │   条件：配置了 embedding API + 向量存储
+     │   失败/未配置 → 降级到第二层
+     │
+     ├─ 第二层：LLM 语义搜索
+     │   条件：配置了 AI API
+     │   流程：HyDE 查询增强 → FTS5 全文检索 → LLM 语义重排序
+     │   失败/未配置 → 降级到第三层
+     │
+     └─ 第三层：纯文本/FTS5 搜索
+         条件：无条件（兜底）
+         流程：FTS5 全文检索 + 用户自定义 filter 过滤 + 默认排序
+
+内部流程：
+  HyDE（可选，LLM 生成理想仓库描述）→ FTS5 候选召回（top 50）→ 
+  加权评分（BM25 + 关键词 + 星标归一化）→ LLM 语义重排序（top 30）→ 
+  filter 叠加（语言/标签/平台/状态/Star范围/排序）
 ```
 
 **关键设计**：
-- HyDE 生成独立于 `understandQuery`，作为一个可选预处理步骤
-- 用 `--hyde` flag 控制开关，默认开启
-- LLM 调用 5 秒超时降级：失败则退回原始 query
-- HyDE 结果可缓存（同一 query 不重复生成）
-
-### 2. LLM 语义重排序增强
-
-**现状**：`--rerank` 可选，取 FTS5 前 15 条调 LLM 打分 0-10。
-
-**优化**：
-- **扩大候选集**：FTS5 取 top 30 而非 15 条送重排序，提升召回
-- **默认可开**：`--rerank` 改为默认开启，`--no-rerank` 关闭
-- **并行重排序**：30 条候选按 5 条一批并发调 LLM，减少延迟
-- **分值融合**：`final = bm25 * 0.3 + rerankScore * 0.5 + starNorm * 0.2`（增加 LLM 精排权重）
-
-### 3. 多维度过滤增强
-
-**现状**：仅支持 `--lang`、`--category`、`--stars` 过滤。
-
-**优化**：参考 GithubStarsManager 的过滤体系，增加：
-
-| 过滤维度 | flag | 说明 |
-|----------|------|------|
-| 平台过滤 | `--platform` | 按 AI 分析的 `ai_platforms` 过滤（CLI/GUI/Web/Library 等） |
-| 状态过滤 | `--analyzed` / `--no-analyzed` | 只显示已分析/未分析的仓库 |
-| 标签过滤 | `--tag` | 按 AI 标签 + 自定义标签过滤，支持多值 |
-| 排序方式 | `--sort` | 扩展 `relevance/stars/name/updated` 排序选项 |
-
-### 4. 搜索历史与缓存
-
-**优化**：
-- 搜索历史持久化到 SQLite（`search_history` 表），支持 `starman search --history`
-- FTS5 查询结果缓存：同一 query + filters 组合不重复查 DB
-- LLM 查询理解结果缓存：相同自然语言查询不重复调 LLM
-
-### 5. 实时搜索增强（CLI 场景适配）
-
-CLI 天然不适合实时搜索，但可通过以下方式提升交互体验：
-
-- `starman search --live`：进入交互模式，输入即搜（用 bubbletea 做 TUI）
-- `starman search` 无参数时显示搜索历史 + 热门标签快速导航
+- 每层失败自动降级，不阻断搜索流程
+- 无 AI API 时搜索依然可用（FTS5 兜底）
+- HyDE 和 LLM 重排序有超时保护（5 秒），失败回退
 
 ---
 
-## 方案 B：引入向量化，增加语义搜索
+## 二、全新搜索入口：`Search` 方法
 
-适用场景：追求最佳召回率和语义理解能力，愿意引入向量存储依赖。
+### 2.1 入口函数签名
 
-### 整体架构
+```go
+// file: internal/ai/search.go
 
-```
-用户输入: "好看的终端工具"
-     ↓
-HyDE 查询增强（LLM 生成理想仓库描述）
-     ↓
-Embedding API（生成查询向量 768/1536 维）
-     ↓
-本地向量搜索（sqlite-vec kNN，topK=30）
-     ↓
-FTS5 关键词加分（名称/描述/标签匹配加权）
-     ↓
-LLM 语义重排序（精排 top 15）
-     ↓
-返回结果
-```
+// SearchResult 三层降级搜索的完整结果
+type SearchResult struct {
+    Hits      []*SearchHit       // 最终排序结果
+    Mode      SearchMode         // 实际使用的搜索模式
+    VectorHit bool               // 第一层向量搜索是否命中
+}
 
-### 1. Embedding 方案选型
+type SearchMode string
+const (
+    SearchModeVector     SearchMode = "vector"     // 第一层：向量语义搜索
+    SearchModeAI         SearchMode = "ai"         // 第二层：LLM 语义搜索
+    SearchModeBasicText  SearchMode = "basic_text" // 第三层：纯文本/FTS5
+)
 
-| 方案 | 优点 | 缺点 | 推荐 |
-|------|------|------|------|
-| **sqlite-vec**（`asg017/sqlite-vec`） | 纯本地、零外部依赖、与现有 SQLite 集成 | 需要 CGO 或 WASM（Go 绑定不成熟，需 CGO） | **推荐** |
-| 本地文件（gob/bolt） | 无额外依赖 | 暴力搜索 O(n)、无索引加速 | 小规模可接受 |
-| 外部 Vectorize 服务 | 免维护 | CLI 工具需联网、增加延迟 | 不推荐 CLI 场景 |
-
-**sqlite-vec 说明**：sqlite-vec 是 SQLite 的向量搜索扩展，支持 IVFFlat 索引、kNN 查询。Go 端需用 CGO 编译（`modernc.org/sqlite` 不支持扩展加载），对于 starman 当前纯 Go 构建方式是个破坏性变更。替代方案：
-- 用 `mattn/go-sqlite3`（支持 CGO + 扩展加载）替换 `modernc.org/sqlite`
-- 或使用纯 Go 的向量搜索库（如 `viterbi/faiss` 的 Go binding）
-
-### 2. 向量存储设计
-
-```
-starred_repositories_vector 表
-├── id            INTEGER PRIMARY KEY
-├── repo_id       INTEGER UNIQUE (FK → starred_repositories.id)
-├── embedding     BLOB        (向量，最多 1536 维 × 4 字节 = 6KB)
-├── dim           INTEGER     (向量维度)
-├── model         TEXT        (使用的 embedding 模型名)
-├── text_hash    TEXT        (入参文本 hash，用于增量判断)
-├── indexed_at    TEXT        (索引时间)
+// Search 三层降级搜索入口（替代当前的单路径 Search）
+// query: 用户自然语言查询
+// st: Store 实例
+// searchOpts: 搜索参数（CLI flag 传入）
+// aiOpts: AI 搜索可选增强（HyDE、重排序开关）
+func (s *Service) Search(
+    ctx context.Context,
+    query string,
+    st store.Store,
+    searchOpts SearchOpts,
+    aiOpts *AISearchOpts,
+) (*SearchResult, error)
 ```
 
-**索引策略**：
-- AI 分析完成后**自动触发**向量化（可配置 `auto_vectorize: true/false`）
-- `starman vectorize [--full]` 手动触发全量/增量重建
-- 增量索引：对比 `analyzed_at` 和 `indexed_at`，只处理新分析或内容变更的仓库
+### 2.2 搜索参数结构
 
-### 3. Embedding API 多后端支持
+```go
+// SearchOpts CLI 层面传入的过滤和排序参数
+type SearchOpts struct {
+    Language  string   // --lang，编程语言过滤
+    Category  string   // --category，分类过滤
+    Platform  string   // --platform，平台过滤（web/desktop/mobile/cli/library/service）
+    Tags      []string // --tag，标签过滤（匹配 ai_tags + topics + custom_tags）
+    MinStars  int      // --min-stars
+    MaxStars  int      // --max-stars
+    Sort      string   // --sort，score/stars/name/updated/starred
+    Limit     int      // --limit，结果数量限制
+    Analyzed  *bool    // --analyzed / --no-analyzed，AI 分析状态（与 analysis-failed 互斥）
+    AnalysisFailed *bool // --analysis-failed，分析是否失败
+}
 
-参考 GithubStarsManager 的 `EmbeddingClient`，支持多种 Embedding API：
-
-| API 类型 | 端点 | 说明 |
-|----------|------|------|
-| `openai` | `/v1/embeddings` | text-embedding-3-small（1536 维） |
-| `siliconflow` | `/v1/embeddings` | 国产廉价 embedding，BGE-M3（1024 维） |
-| `ollama` | `/api/embed` | 本地部署，推荐 nomic-embed-text（768 维） |
-| `openai-compat` | 自定义 URL | 兼容 OpenAI 格式的任意服务 |
-
-**配置方式**（`config.yaml`）：
-```yaml
-embedding:
-  provider: openai           # openai / siliconflow / ollama / openai-compat
-  model: text-embedding-3-small
-  api_key: ${EMBEDDING_API_KEY}
-  base_url: ""              # 自定义 endpoint（ollama: http://localhost:11434/v1）
+// AISearchOpts AI 增强搜索的可选开关
+type AISearchOpts struct {
+    EnableView  bool // --vector-search，是否尝试向量搜索
+    EnableHyDE  bool // --hyde，是否启用 HyDE 查询增强（默认 true）
+    EnableRerank bool // --no-rerank，是否启用 LLM 语义重排序（默认 true）
+    RerankTopK  int  // 重排序时取前多少个候选（默认 30）
+}
 ```
 
-### 4. 向量搜索流程
+### 2.3 主流程伪代码
 
+```go
+func (s *Service) Search(ctx context.Context, query string, st store.Store, opts SearchOpts, aiOpts *AISearchOpts) (*SearchResult, error) {
+    if aiOpts == nil {
+        aiOpts = &AISearchOpts{EnableHyDE: true, EnableRerank: true, RerankTopK: 30}
+    }
+    query = strings.TrimSpace(query)
+    if query == "" {
+        return &SearchResult{Mode: SearchModeBasicText, Hits: nil}, nil
+    }
+
+    // ========== 第一层：向量语义搜索 ==========
+    if aiOpts.EnableView && s.isVectorConfigured() {
+        result, err := s.vectorSearch(ctx, query, st, opts, aiOpts)
+        if err == nil {
+            result.Mode = SearchModeVector
+            result.VectorHit = true
+            return result, nil
+        }
+        // 失败降级
+        log.Printf("vector search failed, falling back to AI search: %v", err)
+    }
+
+    // ========== 第二层：LLM 语义搜索 ==========
+    if s.cfg.AI.APIKey != "" {
+        result, err := s.aiSearch(ctx, query, st, opts, aiOpts)
+        if err == nil {
+            result.Mode = SearchModeAI
+            return result, nil
+        }
+        log.Printf("AI search failed, falling back to basic search: %v", err)
+    }
+
+    // ========== 第三层：纯文本/FTS5 兜底 ==========
+    result, err := s.basicTextSearch(ctx, query, st, opts)
+    if err != nil {
+        return nil, fmt.Errorf("basic text search: %w", err)
+    }
+    result.Mode = SearchModeBasicText
+    return result, nil
+}
 ```
-Search(service):
-  1. HyDE 查询增强（可选，--hyde flag）
-  2. EmbeddingClient.Embed(query) → queryVector
-  3. VecStore.KNN(queryVector, topK=30, threshold=0.35)
-     → 返回 [(repoId, similarity)]
-  4. 关键词加分：
-     - 名称精确匹配 +0.05
-     - 描述匹配 +0.03
-     - 标签匹配 +0.02
-  5. 对 topN 做 LLM 语义重排序（--rerank，默认开启）
-  6. 叠加结构化过滤（--lang/--tag/--platform/--stars）
-  7. 返回最终排序结果
-```
-
-### 5. 搜索缓存
-
-向量搜索结果按 `(query_hash, filters_hash)` 缓存到 SQLite：
-
-```
-search_cache 表
-├── query_hash    TEXT
-├── filters_hash  TEXT
-├── results       BLOB    (gob 编码的 [(repoId, score)])
-├── created_at    TEXT
-```
-
-存续时间 1 小时，超过失效自动清除。用户仅修改过滤条件时直接复用缓存结果重排序，不重复调 LLM 和向量搜索。
 
 ---
 
-## 方案对比总结
+## 三、第一层：向量语义搜索（接口保留，暂不实现）
 
-| 维度 | 方案 A：FTS5 增强 | 方案 B：引入向量化 |
-|------|-------------------|-------------------|
-| **召回率** | 依赖关键词匹配，复杂语义可能漏召回 | 语义匹配，召回率显著提升 |
-| **精度** | 依赖 LLM 精排补偿，上限受限 | 向量初步排序 + LLM 精排，精度更高 |
-| **延迟** | 低（FTS5 毫秒级 + LLM 精排 3-5s） | 中（Embedding 0.5-1s + kNN 毫秒级 + LLM 精排 3-5s） |
-| **依赖** | 无新依赖，纯工程优化 | 需引入向量存储（sqlite-vec / 纯 Go 库） |
-| **复杂度** | 低，现有架构增量改进 | 中，需新增向量化流程和存储层 |
-| **成本** | 仅 LLM token 成本 | LLM + Embedding API token 成本 |
-| **适用场景** | 仓库量 < 5000，对召回率要求不极端 | 仓库量大（5000+），追求最佳语义匹配 |
+向量搜索层保留完整接口定义，后续引入 sqlite-vec 或外部向量服务时直接对接。
 
-**推荐路径**：先实施方案 A（低风险、快收益），验证优化效果。如果 FTS5 增强后召回率仍不满足需求，再考虑引入向量化。两种方案不互斥，方案 B 可视为方案 A 的超集。
+### 3.1 接口定义
+
+```go
+// file: internal/store/store.go（新增接口）
+
+// VectorStore 向量存储和搜索接口（暂不实现）
+type VectorStore interface {
+    // UpsertVectors 写入或更新向量
+    UpsertVectors(ctx context.Context, vectors []*VectorRecord) error
+    // SearchNN k-近邻搜索
+    SearchNN(ctx context.Context, queryVector []float64, topK int, threshold float64) ([]*VectorResult, error)
+    // DeleteVector 删除指定仓库的向量
+    DeleteVector(ctx context.Context, repoID int64) error
+    // CleanupStale 清理不在 keepIDs 中的过期向量
+    CleanupStale(ctx context.Context, keepIDs []int64) error
+    // Status 获取索引状态（向量数量、维度等）
+    Status(ctx context.Context) (*VectorStatus, error)
+}
+
+type VectorRecord struct {
+    RepoID    int64     // 仓库 ID
+    Values    []float64 // embedding 向量（768/1024/1536 维）
+    Dim       int       // 向量维度
+    Model     string    // embedding 模型名
+    TextHash  string    // 入参文本 hash（用于增量索引判断）
+    IndexedAt time.Time
+}
+
+type VectorResult struct {
+    RepoID int64   // 仓库 ID
+    Score  float64 // 相似度分数（0~1）
+}
+
+type VectorStatus struct {
+    Count int // 已索引向量数量
+    Dim   int // 向量维度
+}
+```
+
+### 3.2 Embedding 客户端接口
+
+```go
+// file: internal/ai/embedding.go（新增文件，暂不实现核心逻辑）
+
+// EmbeddingProvider embedding API 提供者类型
+type EmbeddingProvider string
+const (
+    EmbeddingOpenAI   EmbeddingProvider = "openai"
+    EmbeddingOllama   EmbeddingProvider = "ollama"
+    EmbeddingSiliconFlow EmbeddingProvider = "siliconflow"
+)
+
+// EmbeddingConfig embedding 配置（暂不加入 config.yaml，后续扩展）
+type EmbeddingConfig struct {
+    Provider EmbeddingProvider `yaml:"provider"`
+    BaseURL  string            `yaml:"base_url"`
+    APIKey   string            `yaml:"api_key"`
+    Model    string            `yaml:"model"`
+}
+
+// EmbeddingClient 向量化客户端
+type EmbeddingClient struct {
+    cfg EmbeddingConfig
+}
+
+// Embed 对文本列表生成 embedding 向量
+// task: "query"（查询向量）或 "document"（文档向量）
+func (ec *EmbeddingClient) Embed(ctx context.Context, texts []string, task string) ([][]float64, error) {
+    // TODO: 实现 OpenAI/Ollama/SiliconFlow 兼容的 embedding API 调用
+    return nil, fmt.Errorf("embedding not implemented")
+}
+```
+
+### 3.3 向量搜索流程（接口级保留）
+
+```go
+// file: internal/ai/search_vector.go（新增文件）
+func (s *Service) vectorSearch(ctx context.Context, query string, st store.Store, opts SearchOpts, aiOpts *AISearchOpts) (*SearchResult, error) {
+    // 1. HyDE 查询增强（可选，5 秒超时降级）
+    embeddingQuery := query
+    if aiOpts.EnableHyDE {
+        hydeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+        defer cancel()
+        if hydeResult, err := s.generateHyDEQuery(hydeCtx, query); err == nil {
+            embeddingQuery = hydeResult
+        }
+        // 失败不阻断，降级用原始 query
+    }
+
+    // 2. 生成查询向量
+    // queryVectors, err := s.embeddingClient.Embed(ctx, []string{embeddingQuery}, "query")
+
+    // 3. 向量相似度搜索
+    // results, err := s.vectorStore.SearchNN(ctx, queryVectors[0], 30, 0.35)
+
+    // 4. 关键词加分
+    // boosted := boostByKeywordMatch(results, query)
+
+    // 5. 取匹配仓库做 LLM 语义重排序
+    // if aiOpts.EnableRerank { ... }
+
+    // 6. filter 叠加 + 排序
+    // hits := applyFiltersAndSort(matchedRepos, opts)
+
+    return nil, fmt.Errorf("vector search not implemented")
+}
+```
+
+### 3.4 向量化索引流程
+
+```go
+// file: internal/ai/indexer.go（新增文件，暂不实现）
+// 分析完成后自动触发的向量化流程
+func (s *Service) IndexReposAfterAnalyze(ctx context.Context, st store.Store, repoIDs []int64) error {
+    // TODO: 对已分析的仓库调用 embedding API 生成向量，存入 VectorStore
+    // 增量索引：只处理 vector_indexed_at 为空或内容变更的仓库
+    return nil
+}
+```
+
+---
+
+## 四、第二层：LLM 语义搜索（核心实现）
+
+### 4.1 流程
+
+```
+HyDE 查询增强（可选）→ FTS5 全文检索（top 50）→ 加权评分 → LLM 语义重排序（top 30）
+```
+
+### 4.2 HyDE 查询增强（新增）
+
+参考 GithubStarsManager 的 `generateHyDEQuery`，用 LLM 将用户查询转化为"理想仓库描述"，再提取关键词做 FTS5 搜索。
+
+```go
+// file: internal/ai/search_hyde.go（新增文件）
+
+// generateHyDEQuery 用 LLM 生成假设文档（理想仓库描述）
+// 超时 5 秒，失败返回原始 query
+func (s *Service) generateHyDEQuery(ctx context.Context, userQuery string) (string, error) {
+    msgs := []Message{
+        {Role: "system", Content: `你是一个 GitHub 仓库推荐专家。用户会描述他们想要的仓库类型，请你生成一段假设的仓库说明文档，用来做语义搜索匹配。
+
+规则：
+1. 用 50-100 字的中文描述这个仓库的核心功能、适用场景、技术栈
+2. 重点描述功能特性和使用场景，不要说"这是一个..."
+3. 保持技术词（如 Go、Rust、React、Kubernetes 等）用英文
+
+输出纯文本，不要 JSON。`},
+        {Role: "user", Content: userQuery},
+    }
+    result, err := s.client.Complete(ctx, msgs)
+    if err != nil {
+        return userQuery, fmt.Errorf("hyde generation failed: %w", err)
+    }
+    return strings.TrimSpace(result), nil
+}
+```
+
+### 4.3 AI 语义搜索主逻辑
+
+```go
+// file: internal/ai/search_ai.go（新增文件）
+
+func (s *Service) aiSearch(
+    ctx context.Context,
+    query string,
+    st store.Store,
+    opts SearchOpts,
+    aiOpts *AISearchOpts,
+) (*SearchResult, error) {
+
+    // 1. HyDE 查询增强（可选，失败降级）
+    searchText := query
+    if aiOpts.EnableHyDE {
+        hydeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+        defer cancel()
+        if hydeResult, err := s.generateHyDEQuery(hydeCtx, query); err == nil && hydeResult != "" {
+            searchText = hydeResult
+        }
+    }
+
+    // 2. LLM 查询理解：将增强后的描述转为 FTS5 查询 + 提取关键词
+    intent, err := s.understandQuery(ctx, searchText)
+    if err != nil {
+        return nil, fmt.Errorf("understand query: %w", err)
+    }
+
+    // 3. FTS5 全文检索（候选集 50 条）
+    filters := &store.SearchFilters{
+        Language: coalesce(opts.Language, intent.Language),
+        Category: coalesce(opts.Category, intent.Category),
+        Platform: coalesce(opts.Platform, intent.Platform),
+        MinStars: max(opts.MinStars, intent.MinStars),
+        MaxStars: maxZero(opts.MaxStars, intent.MaxStars),
+        Limit:    50,
+    }
+    ftsResults, err := st.SearchFTS(ctx, intent.FTSQuery, filters)
+    if err != nil {
+        return nil, fmt.Errorf("fts search: %w", err)
+    }
+
+    // 4. 加权评分
+    hits := make([]*SearchHit, 0, len(ftsResults))
+    for _, fr := range ftsResults {
+        score := calcWeightedScore(fr.BM25Score, fr.Repo.StargazersCount, fr.Repo, intent.Keywords)
+        hits = append(hits, &SearchHit{Repo: fr.Repo, Score: score})
+    }
+
+    if len(hits) == 0 {
+        return &SearchResult{Hits: []*SearchHit{}}, nil
+    }
+
+    // 5. LLM 语义重排序（取 topK 个候选）
+    if aiOpts.EnableRerank {
+        topK := aiOpts.RerankTopK
+        if topK <= 0 || topK > len(hits) {
+            topK = len(hits)
+        }
+        reranked, err := s.rerank(ctx, query, hits[:topK])
+        if err == nil {
+            hits = reranked
+        }
+        // 失败不阻断，保留加权评分排序
+    }
+
+    // 6. 应用 CLI filter 排序
+    sortHits(hits, opts.Sort)
+
+    // 7. 截断到 limit
+    if opts.Limit > 0 && opts.Limit < len(hits) {
+        hits = hits[:opts.Limit]
+    }
+
+    return &SearchResult{Hits: hits}, nil
+}
+```
+
+### 4.4 LLM 语义重排序增强
+
+改造现有 `rerank` 方法：扩大候选集到 30 条，增加并发批量重排序。
+
+```go
+// file: internal/ai/search.go（改造 rerank 方法）
+
+// rerank LLM 对候选仓库做语义相关性评分，返回重排序后的结果
+// topK: 参与重排序的候选数（最多 50）
+// 使用并发批量调用加速：每批 5 个候选仓库
+func (s *Service) rerank(ctx context.Context, query string, hits []*SearchHit) ([]*SearchHit, error) {
+    topK := len(hits)
+    if topK > 50 {
+        topK = 50
+    }
+    candidates := hits[:topK]
+
+    // 并发批量重排序：每批 10 个
+    batchSize := 10
+    allRankings := make(map[int]float64)
+    var mu sync.Mutex
+    var g errgroup.Group
+
+    for i := 0; i < len(candidates); i += batchSize {
+        start := i
+        end := i + batchSize
+        if end > len(candidates) {
+            end = len(candidates)
+        }
+        g.Go(func() error {
+            batch := candidates[start:end]
+            scores, err := s.rerankBatch(ctx, query, batch, start)
+            if err != nil {
+                return err
+            }
+            mu.Lock()
+            for idx, score := range scores {
+                allRankings[idx] = score
+            }
+            mu.Unlock()
+            return nil
+        })
+    }
+
+    if err := g.Wait(); err != nil {
+        return nil, err
+    }
+
+    // 新数组，按 LLM 评分排序，缺失的保留原顺序
+    reranked := make([]*SearchHit, len(hits))
+    copy(reranked, hits)
+    sort.SliceStable(reranked[:len(candidates)], func(i, j int) bool {
+        si := allRankings[candidates[i].Index()]  // 需要确保 SearchHit 有唯一标识
+        sj := allRankings[candidates[j].Index()]
+        return si > sj
+    })
+
+    return reranked, nil
+}
+
+// rerankBatch 对一批候选仓库做 LLM 语义评分
+func (s *Service) rerankBatch(ctx context.Context, query string, candidates []*SearchHit, offset int) (map[int]float64, error) {
+    // 构建候选信息
+    type candidateInfo struct {
+        Index      int    `json:"index"`
+        FullName   string `json:"full_name"`
+        Summary    string `json:"summary"`
+        SearchText string `json:"search_text"`
+    }
+    infos := make([]candidateInfo, len(candidates))
+    for i, h := range candidates {
+        infos[i] = candidateInfo{
+            Index:      offset + i,
+            FullName:   h.Repo.FullName,
+            Summary:    h.Repo.AISummary,
+            SearchText: h.Repo.AISearchText,
+        }
+    }
+    candJSON, _ := json.Marshal(infos)
+
+    msgs := []Message{
+        {Role: "system", Content: fmt.Sprintf(
+            `对候选仓库按查询相关性评分 (0-10)。
+查询："%s"
+候选仓库列表：
+%s
+输出 JSON：{"rankings":[{"index":%d,"score":8.5}]}`, query, string(candJSON), offset)},
+    }
+
+    resp, err := s.client.Complete(ctx, msgs)
+    if err != nil {
+        return nil, err
+    }
+
+    var result struct {
+        Rankings []struct {
+            Index int     `json:"index"`
+            Score float64 `json:"score"`
+        } `json:"rankings"`
+    }
+    if err := json.Unmarshal([]byte(resp), &result); err != nil {
+        return nil, fmt.Errorf("parse rerank: %w", err)
+    }
+
+    scores := make(map[int]float64, len(result.Rankings))
+    for _, r := range result.Rankings {
+        scores[r.Index] = r.Score
+    }
+    return scores, nil
+}
+```
+
+---
+
+## 五、第三层：纯文本/FTS5 兜底搜索
+
+当用户未配置 AI API 时，使用 FTS5 全文搜索兜底。
+
+```go
+// file: internal/ai/search_basic.go（新增文件）
+
+func (s *Service) basicTextSearch(
+    ctx context.Context,
+    query string,
+    st store.Store,
+    opts SearchOpts,
+) (*SearchResult, error) {
+
+    // 直接使用原始 query 做 FTS5 匹配
+    filters := &store.SearchFilters{
+        Language: opts.Language,
+        Category: opts.Category,
+        Platform: opts.Platform,
+        MinStars: opts.MinStars,
+        MaxStars: opts.MaxStars,
+        Limit:    50,
+    }
+
+    ftsResults, err := st.SearchFTS(ctx, query, filters)
+    if err != nil {
+        return nil, fmt.Errorf("fts search: %w", err)
+    }
+
+    hits := make([]*SearchHit, 0, len(ftsResults))
+    for _, fr := range ftsResults {
+        score := fr.BM25Score
+        hits = append(hits, &SearchHit{Repo: fr.Repo, Score: score})
+    }
+
+    // 按指定方式排序
+    sortHits(hits, opts.Sort)
+
+    if opts.Limit > 0 && opts.Limit < len(hits) {
+        hits = hits[:opts.Limit]
+    }
+
+    return &SearchResult{Hits: hits}, nil
+}
+```
+
+---
+
+## 六、FTS5 索引和 Store 改造
+
+### 6.1 FTS5 索引字段增强
+
+当前 FTS5 索引 7 个字段，需要增加 `ai_platforms` 字段：
+
+```sql
+-- file: internal/store/sqlite.go（改造 createFTSIndex）
+CREATE VIRTUAL TABLE IF NOT EXISTS repositories_fts USING fts5(
+    full_name, description, ai_summary, ai_tags, ai_platforms, ai_search_text, language, topics,
+    content='repositories', content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+)
+```
+
+需要在 `migrate` 中增加一步：检测 FTS5 索引是否已包含 `ai_platforms` 列，若不包含则重建。
+
+### 6.2 SearchFilters 扩展
+
+```go
+// file: internal/store/models.go（改造 SearchFilters）
+
+type SearchFilters struct {
+    Language string   // 编程语言精确匹配
+    Category string   // 分类精确匹配
+    Platform string   // 平台类型（web/desktop/mobile/cli/library/service）
+    Tags     []string // 标签（匹配 ai_tags + topics + custom_tags，OR 逻辑）
+    MinStars int
+    MaxStars int
+    Limit    int
+    Analyzed        *bool // nil=不限, true=已分析, false=未分析
+    AnalysisFailed *bool // nil=不限，与 Analyzed 互斥
+}
+
+// SearchFTS 改造：增加 platform、tags、analyzed、analysis_failed 条件
+```
+
+### 6.3 SearchFTS 改造
+
+在现有 `SearchFTS` 方法中增加 filter 支持：
+
+```go
+// file: internal/store/repository.go（改造 SearchFTS）
+
+func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *SearchFilters) ([]*FTSResult, error) {
+    where := "repositories_fts MATCH ?"
+    args := []interface{}{query}
+
+    if filters != nil {
+        if filters.Language != "" {
+            where += " AND r.language = ?"
+            args = append(args, filters.Language)
+        }
+        if filters.Platform != "" {
+            // ai_platforms 存的是 JSON 数组，需要用 json_each 或 LIKE 匹配
+            where += " AND r.ai_platforms LIKE ?"
+            args = append(args, "%"+filters.Platform+"%")
+        }
+        if filters.Category != "" {
+            where += " AND COALESCE(NULLIF(r.custom_category,''), NULLIF(r.ai_category,''), '其他') = ?"
+            args = append(args, filters.Category)
+        }
+        if len(filters.Tags) > 0 {
+            // 标签 OR 匹配：ai_tags + topics + custom_tags 中任意一个匹配
+            tagConditions := make([]string, 0, len(filters.Tags))
+            for _, tag := range filters.Tags {
+                tagConditions = append(tagConditions,
+                    `(r.ai_tags LIKE ? OR r.topics LIKE ? OR r.custom_tags LIKE ?)`)
+                args = append(args, "%"+tag+"%", "%"+tag+"%", "%"+tag+"%")
+            }
+            where += " AND (" + strings.Join(tagConditions, " OR ") + ")"
+        }
+        if filters.Analyzed != nil {
+            if *filters.Analyzed {
+                where += " AND r.analyzed_at IS NOT NULL AND r.analysis_failed = 0"
+            } else {
+                where += " AND r.analyzed_at IS NULL"
+            }
+        }
+        if filters.AnalysisFailed != nil {
+            if *filters.AnalysisFailed {
+                where += " AND r.analyzed_at IS NOT NULL AND r.analysis_failed = 1"
+            } else {
+                where += " AND NOT (r.analyzed_at IS NOT NULL AND r.analysis_failed = 1)"
+            }
+        }
+        if filters.MinStars > 0 { /* existing logic */ }
+        if filters.MaxStars > 0 { /* existing logic */ }
+    }
+
+    // ... rest of existing logic
+}
+```
+
+### 6.4 新增 sync_state 搜索缓存 KV
+
+```go
+// file: internal/store/sync_state.go（扩展）
+
+// CacheSearchResult 缓存搜索结果（key: search:<hash>）
+func (s *sqliteStore) CacheSearchResult(ctx context.Context, cacheKey string, value string, ttl time.Duration) error {
+    expiresAt := time.Now().Add(ttl).Format(time.RFC3339)
+    _, err := s.db.ExecContext(ctx,
+        `INSERT INTO sync_state (key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+        "search_cache:"+cacheKey, value)
+    return err
+}
+
+// GetCachedSearchResult 获取缓存的搜索结果
+func (s *sqliteStore) GetCachedSearchResult(ctx context.Context, cacheKey string) (string, bool, error) {
+    var value sql.NullString
+    err := s.db.QueryRowContext(ctx,
+        `SELECT value FROM sync_state WHERE key = ?`, "search_cache:"+cacheKey).Scan(&value)
+    if err == sql.ErrNoRows {
+        return "", false, nil
+    }
+    if err != nil {
+        return "", false, err
+    }
+    return value.String, value.Valid, nil
+}
+```
+
+缓存策略：
+- cacheKey = `sha256(query + JSON(filters))`
+- TTL = 1 小时
+- 仅缓存 FTS5 检索结果（不缓存 LLM 排序后的最终结果，因为 LLM 结果非确定性）
+
+---
+
+## 七、CLI 命令改造
+
+### 7.1 新增 flag
+
+```go
+// file: internal/cli/search.go（改造 newSearchCmd）
+
+searchCmd.Flags().String("lang", "", "按编程语言过滤")
+searchCmd.Flags().String("category", "", "按分类过滤")
+searchCmd.Flags().String("platform", "", "按平台过滤 (web/desktop/mobile/cli/library/service)")
+searchCmd.Flags().StringSlice("tag", nil, "按标签过滤（可多次使用，OR 逻辑）")
+searchCmd.Flags().Int("min-stars", 0, "最低 star 数")
+searchCmd.Flags().Int("max-stars", 0, "最高 star 数（0 表示不限）")
+searchCmd.Flags().Bool("analyzed", false, "只显示已 AI 分析的仓库")
+searchCmd.Flags().Bool("no-analyzed", false, "只显示未 AI 分析的仓库")
+searchCmd.Flags().Bool("analysis-failed", false, "只显示 AI 分析失败的仓库")
+
+searchCmd.Flags().String("sort", "score", "排序方式 (score/stars/name/updated/starred)")
+searchCmd.Flags().Int("limit", 10, "结果数量限制")
+searchCmd.Flags().Bool("rerank", true, "启用 LLM 语义重排序")
+searchCmd.Flags().Bool("no-rerank", false, "禁用 LLM 语义重排序")
+searchCmd.Flags().Bool("hyde", true, "启用 HyDE 查询增强")
+searchCmd.Flags().Bool("no-hyde", false, "禁用 HyDE 查询增强")
+searchCmd.Flags().Bool("json", false, "JSON 格式输出")
+
+// 暂不启用向量搜索 flag（向量层未实现）
+// searchCmd.Flags().Bool("vector", false, "启用向量语义搜索")
+```
+
+### 7.2 改造后的 runSearch
+
+```go
+func runSearch(cmd *cobra.Command, args []string) error {
+    // 解析参数
+    query := strings.Join(args, " ")
+    lang, _ := cmd.Flags().GetString("lang")
+    category, _ := cmd.Flags().GetString("category")
+    platform, _ := cmd.Flags().GetString("platform")
+    tags, _ := cmd.Flags().GetStringSlice("tag")
+    minStars, _ := cmd.Flags().GetInt("min-stars")
+    maxStars, _ := cmd.Flags().GetInt("max-stars")
+    sortBy, _ := cmd.Flags().GetString("sort")
+    limit, _ := cmd.Flags().GetInt("limit")
+    rerank := cmd.Flags().GetBool("rerank") && !cmd.Flags().GetBool("no-rerank")
+    hyde := cmd.Flags().GetBool("hyde") && !cmd.Flags().GetBool("no-hyde")
+    jsonOut, _ := cmd.Flags().GetBool("json")
+
+    // Analyzed 与 AnalysisFailed 互斥处理
+    var analyzed *bool
+    var analysisFailed *bool
+    analyzerFlag := cmd.Flags().GetBool("analyzed")
+    noAnalyzerFlag := cmd.Flags().GetBool("no-analyzer")
+    analysisFailedFlag := cmd.Flags().GetBool("analysis-failed")
+    if analyzerFlag || noAnalyzerFlag {
+        v := !noAnalyzerFlag
+        analyzed = &v
+    }
+    if analysisFailedFlag {
+        v := true
+        analysisFailed = &v
+    }
+
+    // 构建搜索参数
+    opts := ai.SearchOpts{
+        Language: lang, Category: category, Platform: platform,
+        Tags: tags, MinStars: minStars, MaxStars: maxStars,
+        Sort: sortBy, Limit: limit,
+        Analyzed: analyzed, AnalysisFailed: analysisFailed,
+    }
+    aiOpts := &ai.AISearchOpts{
+        EnableHyDE: hyde, EnableRerank: rerank, RerankTopK: 30,
+    }
+
+    // 三层降级搜索
+    result, err := svc.Search(ctx, query, st, opts, aiOpts)
+    // ... 输出
+}
+```
+
+### 7.3 输出增强
+
+```go
+// 输出时标注搜索模式
+if jsonOut {
+    outputJSON(result, query)
+} else {
+    outputTable(result, query)
+}
+
+// 输出模式标注
+fmt.Fprintf(os.Stderr, "Search mode: %s (共 %d 条结果)\n", result.Mode, len(result.Hits))
+```
+
+---
+
+## 八、文件变更清单
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `internal/ai/search.go` | 改造 | 新增 `Search` 三层降级入口，改造 `rerank` 为批量并发 |
+| `internal/ai/search_ai.go` | 新增 | 第二层 LLM 语义搜索实现 |
+| `internal/ai/search_basic.go` | 新增 | 第三层纯文本兜底搜索 |
+| `internal/ai/search_hyde.go` | 新增 | HyDE 查询增强 |
+| `internal/ai/search_vector.go` | 新增 | 第一层向量搜索（接口保留，暂不实现） |
+| `internal/ai/embedding.go` | 新增 | Embedding 客户端接口（暂不实现核心逻辑） |
+| `internal/store/store.go` | 改造 | 新增 `VectorStore` 接口、`CacheSearchResult`/`GetCachedSearchResult`、扩展 `SearchFilters` |
+| `internal/store/repository.go` | 改造 | `SearchFTS` 增加 platform/tags/analyzed/analysis_failed 过滤 |
+| `internal/store/sqlite.go` | 改造 | FTS5 索引增加 `ai_platforms` 字段 |
+| `internal/store/models.go` | 改造 | `SearchFilters` 结构体扩展 |
+| `internal/cli/search.go` | 改造 | 新增 flag，调用三层降级搜索，输出增强 |
+
+---
+
+## 九、测试策略
+
+1. **单元测试**：
+   - 各搜索模式的 filter 组合测试（language + platform + tags + analyzed 同时生效）
+   - HyDE 超时降级测试（mock 5 秒延迟）
+   - LLM 重排序失败降级测试（mock API 错误）
+   - FTS5 查询结果缓存命中/过期测试
+
+2. **集成测试**：
+   - 无 AI API 配置时搜索正常（pure FTS5 only）
+   - 有 AI API 时走 LLM 语义搜索
+   - Analyzed 与 AnalysisFailed 互斥逻辑验证
