@@ -24,6 +24,7 @@ type TuiModel struct {
 	statusbar   *components.StatusBarModel
 	pages       map[PageID]tea.Model
 	ready       bool
+	showHelp    bool
 }
 
 func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
@@ -93,6 +94,9 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "/":
 			return m, func() tea.Msg { return NavigatedMsg{Page: PageSearch} }
+		case "?":
+			m.showHelp = !m.showHelp
+			return m, nil
 		}
 	}
 
@@ -111,12 +115,31 @@ func (m *TuiModel) View() string {
 	if !m.ready {
 		return "loading..."
 	}
+	if m.showHelp {
+		help := m.renderHelp()
+		return lipgloss.Place(m.width, m.height,
+			lipgloss.Center, lipgloss.Center, help)
+	}
 	sidebar := m.theme.Sidebar.Render(m.sidebar.View())
 	content := m.renderContent()
 	status := m.statusbar.View()
 
 	main := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, content)
 	return lipgloss.JoinVertical(lipgloss.Left, main, status)
+}
+
+func (m *TuiModel) renderHelp() string {
+	lines := []string{
+		"  q      Quit                Esc    Back/Cancel",
+		"  /      Search              ?      This help",
+		"  1-9    Jump sidebar item   Tab    Switch panel",
+		"  up/down Navigate list      Enter  Select/Confirm",
+		"  Space  Toggle selection    s      Star/Unstar",
+	}
+	return m.theme.Card.Render(
+		m.theme.PageTitle.Render("Keyboard Shortcuts") + "\n\n" +
+			lipgloss.JoinVertical(lipgloss.Left, lines...),
+	)
 }
 
 func (m *TuiModel) renderContent() string {
