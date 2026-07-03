@@ -8,16 +8,60 @@ import (
 
 	"github.com/morehao/starman/internal/backup"
 	"github.com/morehao/starman/internal/config"
+	"github.com/morehao/starman/internal/github"
 	"github.com/spf13/cobra"
 )
 
 func newBackupCmd() *cobra.Command {
+	var repoName, msg string
 	cmd := &cobra.Command{
 		Use:   "backup",
 		Short: "Backup and restore data",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if repoName == "" {
+				return cmd.Help()
+			}
+			cfg, _, err := loadConfig(cmd)
+			if err != nil {
+				return err
+			}
+			token := resolveGitHubToken(cmd, cfg)
+			if token == "" {
+				return fmt.Errorf("GitHub token required for --repo")
+			}
+			if cfg.GitHub.Username == "" {
+				return fmt.Errorf("GitHub username not configured, run 'starman config init'")
+			}
+			s, err := openStore()
+			if err != nil {
+				return err
+			}
+			defer s.Close()
+
+			ctx := context.Background()
+			data, err := backup.ExportJSON(ctx, s)
+			if err != nil {
+				return err
+			}
+
+			date := time.Now().UTC().Format("2006-01-02")
+			filePath := "starman-backup/" + date + ".json"
+			if msg == "" {
+				msg = "backup starman data " + date
+			}
+
+			gh := github.New(token)
+			if err := gh.CommitFile(ctx, cfg.GitHub.Username, repoName, filePath, data, msg); err != nil {
+				return fmt.Errorf("push backup to %s/%s: %w", cfg.GitHub.Username, repoName, err)
+			}
+			fmt.Printf("Pushed backup to %s/%s/%s\n", cfg.GitHub.Username, repoName, filePath)
+			return nil
+		},
 	}
 	cmd.AddCommand(newBackupJSONCmd())
 	cmd.AddCommand(newBackupWebDAVCmd())
+	cmd.Flags().StringVar(&repoName, "repo", "", "push backup to GitHub repo (e.g. awesome-stars)")
+	cmd.Flags().StringVarP(&msg, "message", "m", "", "commit message (default: auto-generated)")
 	return cmd
 }
 
