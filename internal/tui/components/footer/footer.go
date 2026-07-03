@@ -8,10 +8,20 @@ import (
 	"github.com/morehao/starman/internal/tui/context"
 )
 
+type TaskInfo struct {
+	Status     int
+	Message    string
+	Err        error
+	SpinnerIdx int
+}
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
 type Model struct {
 	ctx        *context.ProgramContext
 	pager      string
 	taskStatus string
+	task       *TaskInfo
 }
 
 func NewModel(ctx *context.ProgramContext) Model {
@@ -19,7 +29,7 @@ func NewModel(ctx *context.ProgramContext) Model {
 }
 
 func (m *Model) SetPager(v string)      { m.pager = v }
-func (m *Model) SetTaskStatus(v string) { m.taskStatus = v }
+func (m *Model) SetTask(t *TaskInfo)     { m.task = t }
 
 func (m Model) View() string {
 	theme := m.ctx.Theme
@@ -32,6 +42,12 @@ func (m Model) View() string {
 		Width(m.ctx.ScreenWidth)
 	faintStyle := lipgloss.NewStyle().
 		Foreground(theme.FaintText).
+		Background(theme.SelectedBackground)
+	successStyle := lipgloss.NewStyle().
+		Foreground(theme.SuccessText).
+		Background(theme.SelectedBackground)
+	errorStyle := lipgloss.NewStyle().
+		Foreground(theme.ErrorText).
 		Background(theme.SelectedBackground)
 
 	views := []struct {
@@ -56,11 +72,25 @@ func (m Model) View() string {
 	viewSwitcher := strings.Join(viewParts, " | ")
 
 	var rightParts []string
+
+	if m.task != nil {
+		switch m.task.Status {
+		case 0:
+			frame := spinnerFrames[m.task.SpinnerIdx%len(spinnerFrames)]
+			rightParts = append(rightParts, frame+" "+m.task.Message)
+		case 1:
+			rightParts = append(rightParts, successStyle.Render("✅ "+m.task.Message))
+		case 2:
+			msg := m.task.Message
+			if m.task.Err != nil {
+				msg = m.task.Message + ": " + m.task.Err.Error()
+			}
+			rightParts = append(rightParts, errorStyle.Render("❌ "+msg))
+		}
+	}
+
 	if m.pager != "" {
 		rightParts = append(rightParts, m.pager)
-	}
-	if m.taskStatus != "" {
-		rightParts = append(rightParts, m.taskStatus)
 	}
 	rightParts = append(rightParts, faintStyle.Render("?help"))
 

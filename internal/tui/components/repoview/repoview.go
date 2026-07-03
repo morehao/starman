@@ -70,17 +70,28 @@ func (m Model) renderOverview() string {
 
 	var b strings.Builder
 
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render(m.repo.FullName))
-	b.WriteString(fmt.Sprintf("  ⭐%d  🍴%d\n", m.repo.StargazersCount, m.repo.ForksCount))
+	repoName := lipgloss.NewStyle().Bold(true).Render(m.repo.FullName)
+	meta := fmt.Sprintf("  ⭐%d  🍴%d", m.repo.StargazersCount, m.repo.ForksCount)
+	b.WriteString(repoName + meta)
+
+	if m.repo.Language != "" {
+		b.WriteString("  " + m.repo.Language)
+	}
+	b.WriteString("\n")
+
+	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.NoColor{}).Render(strings.Repeat("─", 50)))
+	b.WriteString("\n")
 
 	if m.repo.Description != "" {
-		b.WriteString("\n")
-		b.WriteString(m.repo.Description)
-		b.WriteString("\n")
+		b.WriteString("\n" + m.repo.Description)
+	}
+
+	fieldLabel := func(s string) string {
+		return lipgloss.NewStyle().Bold(true).Width(10).Render(s)
 	}
 
 	if m.repo.Language != "" {
-		b.WriteString(fmt.Sprintf("\nLanguage   %s", m.repo.Language))
+		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Language"), m.repo.Language))
 	}
 
 	if m.repo.AICategory != "" || m.repo.CustomCategory != "" {
@@ -92,33 +103,36 @@ func (m Model) renderOverview() string {
 		if m.repo.CategoryLocked {
 			lock = " 🔒"
 		}
-		b.WriteString(fmt.Sprintf("\nCategory   %s%s", cat, lock))
+		b.WriteString(fmt.Sprintf("\n%s  %s%s", fieldLabel("Category"), cat, lock))
 	}
 
 	if len(m.repo.AIPlatforms) > 0 {
-		b.WriteString(fmt.Sprintf("\nPlatform   %s", strings.Join(m.repo.AIPlatforms, ", ")))
+		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Platform"), strings.Join(m.repo.AIPlatforms, ", ")))
 	}
 
 	if m.repo.StarredAt != "" {
-		b.WriteString(fmt.Sprintf("\nStarred    %s", m.repo.StarredAt))
+		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Starred"), m.repo.StarredAt))
 	}
 
 	if len(m.repo.Topics) > 0 {
-		b.WriteString(fmt.Sprintf("\nTopics     %s", strings.Join(m.repo.Topics, ", ")))
+		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Topics"), strings.Join(m.repo.Topics, ", ")))
 	}
 
 	allTags := append([]string{}, m.repo.AITags...)
 	allTags = append(allTags, m.repo.CustomTags...)
 	if len(allTags) > 0 {
-		b.WriteString(fmt.Sprintf("\nTags       %s", strings.Join(allTags, ", ")))
+		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Tags"), strings.Join(allTags, ", ")))
 	}
 
 	if m.repo.AISummary != "" {
-		b.WriteString(fmt.Sprintf("\n\nAI Summary\n%s", m.repo.AISummary))
+		b.WriteString("\n\n")
+		b.WriteString(lipgloss.NewStyle().Bold(true).Render("AI Summary"))
+		b.WriteString("\n")
+		b.WriteString(m.repo.AISummary)
 	}
 
 	if m.repo.Homepage != "" {
-		b.WriteString(fmt.Sprintf("\n\nHomepage   %s", m.repo.Homepage))
+		b.WriteString(fmt.Sprintf("\n\n%s  %s", fieldLabel("Homepage"), m.repo.Homepage))
 	}
 
 	return b.String()
@@ -130,7 +144,7 @@ func (m Model) renderReadme() string {
 	}
 
 	if m.repo.AISummary != "" {
-		return fmt.Sprintf("AI Summary\n\n%s", m.repo.AISummary)
+		return lipgloss.NewStyle().Bold(true).Render("AI Summary") + "\n\n" + m.repo.AISummary
 	}
 	return "No README available."
 }

@@ -16,6 +16,11 @@ type KeyMap struct {
 	Help          key.Binding
 	OpenGithub    key.Binding
 	Refresh       key.Binding
+	Sync          key.Binding
+	Search        key.Binding
+	Command       key.Binding
+	Escape        key.Binding
+	Enter         key.Binding
 }
 
 var Keys = KeyMap{
@@ -32,4 +37,9 @@ var Keys = KeyMap{
 	Help:          key.NewBinding(key.WithKeys("?")),
 	OpenGithub:    key.NewBinding(key.WithKeys("o")),
 	Refresh:       key.NewBinding(key.WithKeys("r")),
+	Sync:          key.NewBinding(key.WithKeys("s")),
+	Search:        key.NewBinding(key.WithKeys("/")),
+	Command:       key.NewBinding(key.WithKeys(":")),
+	Escape:        key.NewBinding(key.WithKeys("esc")),
+	Enter:         key.NewBinding(key.WithKeys("enter")),
 }
