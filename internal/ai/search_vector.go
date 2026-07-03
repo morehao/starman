@@ -236,7 +236,7 @@ func (s *Service) hybridSearch(
 	}
 
 	filters := buildSearchFilters(opts, nil)
-	textHits := s.searchIndex.Search(query, nil, filters, 200)
+	textHits := s.searchIndex.Search(query, nil, filters, 50)
 
 	vecResult, vecErr := s.vectorSearch(ctx, query, st, opts)
 
@@ -274,13 +274,15 @@ func mergeSearchHits(vectorHits, textHits []*SearchHit) []*SearchHit {
 	}
 
 	for _, h := range textHits {
-		textScore := h.Score / 10.0
+		if h.Score < 0.35 {
+			continue
+		}
 		if existing, ok := seen[h.Repo.ID]; ok {
-			if textScore > existing.Score {
-				existing.Score = textScore
+			if h.Score > existing.Score {
+				existing.Score = h.Score
 			}
 		} else {
-			seen[h.Repo.ID] = &SearchHit{Repo: h.Repo, Score: textScore}
+			seen[h.Repo.ID] = &SearchHit{Repo: h.Repo, Score: h.Score}
 		}
 	}
 
