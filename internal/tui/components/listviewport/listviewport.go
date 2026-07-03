@@ -6,6 +6,9 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
+
+	"github.com/morehao/starman/internal/tui/components/section"
+	"github.com/morehao/starman/internal/tui/context"
 )
 
 type Column struct {
@@ -13,24 +16,23 @@ type Column struct {
 	Width int
 }
 
-type Row struct {
-	Columns []string
-}
-
 type Model struct {
 	viewport viewport.Model
 	columns  []Column
-	rows     []Row
+	rows     []section.RowData
 	cursor   int
+	context  *context.ProgramContext
 }
 
-func New(cols []Column) Model {
-	return Model{viewport: viewport.New(), columns: cols}
+func New(cols []Column, programContext *context.ProgramContext) Model {
+	return Model{viewport: viewport.New(), columns: cols, context: programContext}
 }
 
-func (m *Model) SetRows(rows []Row) {
+func (m *Model) SetRows(rows []section.RowData) {
 	m.rows = rows
-	if m.cursor >= len(rows) && len(rows) > 0 {
+	if len(rows) == 0 {
+		m.cursor = 0
+	} else if m.cursor >= len(rows) {
 		m.cursor = len(rows) - 1
 	}
 	m.viewport.SetContent(m.render())
@@ -53,7 +55,11 @@ func (m *Model) PrevRow() {
 }
 
 func (m *Model) FirstItem() {
-	m.cursor = 0
+	if len(m.rows) == 0 {
+		m.cursor = 0
+	} else {
+		m.cursor = 0
+	}
 	m.viewport.SetContent(m.render())
 }
 
@@ -66,7 +72,12 @@ func (m *Model) LastItem() {
 
 func (m Model) View() string { return m.viewport.View() }
 
-func (m Model) Pager() string { return fmt.Sprintf("%d/%d", m.cursor+1, len(m.rows)) }
+func (m Model) Pager() string {
+	if len(m.rows) == 0 {
+		return "0/0"
+	}
+	return fmt.Sprintf("%d/%d", m.cursor+1, len(m.rows))
+}
 
 func (m Model) render() string {
 	var b strings.Builder
@@ -75,7 +86,7 @@ func (m Model) render() string {
 		if i == m.cursor {
 			prefix = ">"
 		}
-		b.WriteString(prefix + " " + strings.Join(r.Columns, " "))
+		b.WriteString(prefix + " " + r.GetTitle())
 		if i < len(m.rows)-1 {
 			b.WriteString("\n")
 		}
