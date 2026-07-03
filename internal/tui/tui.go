@@ -158,7 +158,15 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.uiState == StatePalette {
 			return m.handlePaletteKey(msg)
 		}
-		return m.handleNormalKey(msg)
+		model, handledCmd, consumed := m.handleNormalKey(msg)
+		if consumed {
+			return model, handledCmd
+		}
+		if m.focusPane == FocusWorkspace {
+			_, wsCmd := m.workspace.Update(msg)
+			return m, tea.Batch(handledCmd, wsCmd)
+		}
+		cmd = handledCmd
 	}
 
 	_, cmd = m.sidebar.Update(msg)
@@ -194,37 +202,36 @@ func (m *TuiModel) handlePaletteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m *TuiModel) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *TuiModel) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	switch msg.String() {
 	case "ctrl+c", "q":
-		return m, tea.Quit
+		return m, tea.Quit, true
 	case "ctrl+k":
-		m.uiState = StatePalette
-		m.palette.Open()
-		return m, nil
+		m.openPalette()
+		return m, nil, true
 	case "/":
 		m.showHelp = false
-		return m, func() tea.Msg { return NavigatedMsg{Page: PageSearch} }
+		return m, func() tea.Msg { return NavigatedMsg{Page: PageSearch} }, true
 	case "?":
 		m.showHelp = !m.showHelp
-		return m, nil
+		return m, nil, true
 	case "esc":
 		m.showHelp = false
-		return m, nil
+		return m, nil, true
 	case "tab":
 		if m.focusPane == FocusSidebar {
 			m.focusPane = FocusWorkspace
 		} else {
 			m.focusPane = FocusSidebar
 		}
-		return m, nil
+		return m, nil, true
 	default:
 		if page, ok := components.ShortcutPage(msg.String()); ok {
 			m.showHelp = false
-			return m, func() tea.Msg { return NavigatedMsg{Page: page} }
+			return m, func() tea.Msg { return NavigatedMsg{Page: page} }, true
 		}
 	}
-	return m, nil
+	return m, nil, false
 }
 
 func (m *TuiModel) openPalette() {
