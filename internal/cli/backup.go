@@ -44,10 +44,9 @@ func newBackupCmd() *cobra.Command {
 				return err
 			}
 
-			date := time.Now().UTC().Format("2006-01-02")
-			filePath := "starman-backup/" + date + ".json"
+			filePath := "starman-backup.json"
 			if msg == "" {
-				msg = "backup starman data " + date
+				msg = "backup starman data"
 			}
 
 			gh := github.New(token)
