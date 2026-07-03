@@ -134,6 +134,112 @@ func TestGetContentFile(t *testing.T) {
 	}
 }
 
+func TestCommitFile_Create(t *testing.T) {
+	var method, reqPath string
+	var reqBody map[string]any
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo" {
+			json.NewEncoder(w).Encode(map[string]any{"id": 1, "full_name": "owner/repo"})
+			return
+		}
+		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
+			w.WriteHeader(404)
+			return
+		}
+		method = r.Method
+		reqPath = r.URL.Path
+		json.NewDecoder(r.Body).Decode(&reqBody)
+		w.WriteHeader(201)
+		json.NewEncoder(w).Encode(map[string]any{"content": map[string]any{}})
+	})
+	defer server.Close()
+
+	content := []byte(`{"version":1,"repositories":[]}`)
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/2025-07-03.json", content, "backup starman data 2025-07-03")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != "PUT" {
+		t.Fatalf("expected PUT, got %s", method)
+	}
+	if reqPath != "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
+		t.Fatalf("unexpected path: %s", reqPath)
+	}
+	if reqBody["message"] != "backup starman data 2025-07-03" {
+		t.Fatalf("unexpected message: %v", reqBody["message"])
+	}
+}
+
+func TestCommitFile_Update(t *testing.T) {
+	var method string
+	var reqBody map[string]any
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo" {
+			json.NewEncoder(w).Encode(map[string]any{"id": 1, "full_name": "owner/repo"})
+			return
+		}
+		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{
+				"content":  base64.StdEncoding.EncodeToString([]byte("old")),
+				"encoding": "base64",
+				"sha":      "abc123",
+			})
+			return
+		}
+		method = r.Method
+		json.NewDecoder(r.Body).Decode(&reqBody)
+		w.WriteHeader(200)
+		json.NewEncoder(w).Encode(map[string]any{"content": map[string]any{}})
+	})
+	defer server.Close()
+
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/2025-07-03.json", []byte(`{"new":true}`), "backup starman data 2025-07-03")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != "PUT" {
+		t.Fatalf("expected PUT, got %s", method)
+	}
+	if reqBody["sha"] != "abc123" {
+		t.Fatalf("expected sha abc123, got %v", reqBody["sha"])
+	}
+}
+
+func TestCommitFile_RepoNotFound(t *testing.T) {
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/owner/repo" {
+			w.WriteHeader(404)
+			json.NewEncoder(w).Encode(map[string]any{"message": "Not Found"})
+			return
+		}
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/test.json", []byte(`{}`), "test")
+	if err == nil {
+		t.Fatal("expected error for non-existent repo")
+	}
+}
+
+func TestCommitFile_TooLarge(t *testing.T) {
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("should not make any API call for oversized content: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	// 1MB + 1 byte
+	content := make([]byte, 1*1024*1024+1)
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/test.json", content, "test")
+	if err == nil {
+		t.Fatal("expected error for file exceeding 1MB limit")
+	}
+	if !strings.Contains(err.Error(), "1MB") {
+		t.Fatalf("expected error mentioning 1MB limit, got: %v", err)
+	}
+}
+
 func TestSearchRepositories(t *testing.T) {
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/search/repositories") {

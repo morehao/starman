@@ -14,7 +14,7 @@ starman syncs your GitHub stars, analyzes them with AI, generates awesome lists,
 - **Generate** — Markdown Awesome List in 3 modes: by language, by AI category, or flat (auto-push to GitHub repo)
 - **Release Tracking** — Subscribe to repos and pull new releases with incremental watermark
 - **Star/Unstar** — Star management with local DB sync
-- **Backup** — JSON export/import + WebDAV push/pull
+- **Backup** — JSON export/import + WebDAV push/pull + GitHub repo push
 - **Config** — Interactive config with env var resolution for secrets
 - **Stats** — View distribution of synced repos by language, category, or tag
 - **Info** — Inspect repo details including AI summary, README with multi-language variant support
@@ -324,6 +324,8 @@ starman backup json --import <file> [--mode merge|replace]  # Import from JSON
 starman backup webdav --push                      # Push backup to WebDAV
 starman backup webdav --pull                      # Pull latest from WebDAV
 starman backup webdav --test                      # Test WebDAV connection
+starman backup --repo awesome-stars               # Push backup to GitHub repo
+starman backup --repo awesome-stars -m "msg"      # With custom commit message
 ```
 
 ## Configuration
@@ -423,7 +425,7 @@ internal/
   discovery/                 # Trending repos (RSS + search API fallback)
   generate/                  # Markdown template rendering
   release/                   # Release tracker with watermark
-  backup/                    # JSON + WebDAV backup
+  backup/                    # JSON + WebDAV + GitHub backup
   version/                   # Version info (ldflags injection)
 internal/generate/templates/ # Embedded Markdown templates
 ```
@@ -432,4 +434,4 @@ Package dependencies flow in one direction: `cli` → business packages → `sto
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[MIT License](LICENSE)

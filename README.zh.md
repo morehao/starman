@@ -14,7 +14,7 @@ starman 支持星标同步、AI 分析、Awesome List 生成、Release 追踪、
 - **生成** — Markdown Awesome List，三种模式：按语言、按 AI 分类、平铺列表（可自动提交到 GitHub 仓库）
 - **Release 追踪** — 订阅仓库并拉取新版本，支持增量水位
 - **Star/Unstar** — 星标管理，同步到本地 DB
-- **备份** — JSON 导出/导入 + WebDAV 上传/下载
+- **备份** — JSON 导出/导入 + WebDAV 上传/下载 + GitHub 仓库推送
 - **配置** — 交互式配置，敏感字段支持环境变量
 - **统计** — 按语言、分类、标签查看已同步仓库的分布
 - **详情** — 查看仓库详细信息，包括 AI 摘要、多语言 README 变体支持
@@ -324,6 +324,8 @@ starman backup json --import <file> [--mode merge|replace]  # 从 JSON 导入
 starman backup webdav --push                      # 推送备份到 WebDAV
 starman backup webdav --pull                      # 从 WebDAV 拉取最新备份
 starman backup webdav --test                      # 测试 WebDAV 连接
+starman backup --repo awesome-stars               # 推送备份到 GitHub 仓库
+starman backup --repo awesome-stars -m "msg"      # 自定义 commit 信息
 ```
 
 ## 配置
@@ -423,7 +425,7 @@ internal/
   discovery/                 # 趋势仓库发现（RSS + Search API 兜底）
   generate/                  # Markdown 模板渲染
   release/                   # Release 追踪器（水位）
-  backup/                    # JSON + WebDAV 备份
+  backup/                    # JSON + WebDAV + GitHub 备份
   version/                   # 版本信息（ldflags 注入）
 internal/generate/templates/ # 内嵌 Markdown 模板
 ```
@@ -432,4 +434,4 @@ internal/generate/templates/ # 内嵌 Markdown 模板
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[MIT License](LICENSE)

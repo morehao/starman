@@ -67,7 +67,7 @@ nfpms:
     description: >-
       CLI tool for managing GitHub starred repositories with AI —
       sync, analyze, categorize, search, and generate awesome lists
-    license: Apache-2.0
+    license: MIT
     formats:
       - deb
       - rpm
@@ -83,7 +83,7 @@ brews:
     description: >-
       CLI tool for managing GitHub starred repositories with AI —
       sync, analyze, categorize, search, and generate awesome lists
-    license: Apache-2.0
+    license: MIT
     test: |
       system "#{bin}/starman --version"
 
@@ -96,7 +96,7 @@ scoops:
     description: >-
       CLI tool for managing GitHub starred repositories with AI —
       sync, analyze, categorize, search, and generate awesome lists
-    license: Apache-2.0
+    license: MIT
     commit_author:
       name: morehao
       email: morehao@qq.com

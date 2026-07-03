@@ -126,6 +126,38 @@ func (c *Client) UpdateReadmeFile(ctx context.Context, owner, repo, content, mes
 	return nil
 }
 
+func (c *Client) CommitFile(ctx context.Context, owner, repo, path string, content []byte, message string) error {
+	if len(content) > 1*1024*1024 {
+		return fmt.Errorf("file too large (%d bytes) for GitHub Contents API (max 1MB); use 'starman backup webdav --push'", len(content))
+	}
+	if _, _, err := c.client.Repositories.Get(ctx, owner, repo); err != nil {
+		return fmt.Errorf("repo %s/%s not accessible: %w", owner, repo, err)
+	}
+
+	fileContent, _, resp, err := c.client.Repositories.GetContents(ctx, owner, repo, path, nil)
+	if err != nil && resp != nil && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("get contents: %w", err)
+	}
+
+	opts := &gh.RepositoryContentFileOptions{
+		Message: gh.Ptr(message),
+		Content: content,
+	}
+	if fileContent != nil {
+		opts.SHA = fileContent.SHA
+	}
+
+	if fileContent == nil {
+		_, _, err = c.client.Repositories.CreateFile(ctx, owner, repo, path, opts)
+	} else {
+		_, _, err = c.client.Repositories.UpdateFile(ctx, owner, repo, path, opts)
+	}
+	if err != nil {
+		return fmt.Errorf("commit file: %w", err)
+	}
+	return nil
+}
+
 type Rate struct {
 	Remaining int
 	Reset     time.Time
