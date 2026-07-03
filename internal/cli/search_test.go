@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/morehao/starman/internal/ai"
-	"github.com/morehao/starman/internal/store"
 )
 
 func TestSearchCommandUsesAction(t *testing.T) {
@@ -15,70 +14,37 @@ func TestSearchCommandUsesAction(t *testing.T) {
 	if cmd.Flags().Lookup("limit") == nil {
 		t.Fatal("expected --limit flag")
 	}
-}
-
-func TestFilterByCLIOptsByLang(t *testing.T) {
-	hits := []*ai.SearchHit{
-		{Repo: &store.Repository{FullName: "a/b", Language: "Go", StargazersCount: 10}, Score: 5},
-		{Repo: &store.Repository{FullName: "c/d", Language: "Python", StargazersCount: 20}, Score: 8},
-		{Repo: &store.Repository{FullName: "e/f", Language: "Go", StargazersCount: 30}, Score: 3},
+	if cmd.Flags().Lookup("lang") == nil {
+		t.Fatal("expected --lang flag")
 	}
-	opts := searchOpts{Lang: "Go"}
-	filtered := filterByCLIOpts(hits, opts)
-	if len(filtered) != 2 {
-		t.Fatalf("expected 2 Go repos, got %d", len(filtered))
+	if cmd.Flags().Lookup("category") == nil {
+		t.Fatal("expected --category flag")
 	}
-	for _, h := range filtered {
-		if h.Repo.Language != "Go" {
-			t.Fatalf("expected only Go repos, got %s", h.Repo.Language)
-		}
+	if cmd.Flags().Lookup("sort") == nil {
+		t.Fatal("expected --sort flag")
+	}
+	if cmd.Flags().Lookup("rerank") != nil {
+		t.Fatal("--rerank flag should not exist")
 	}
 }
 
-func TestFilterByCLIOptsByCategory(t *testing.T) {
-	hits := []*ai.SearchHit{
-		{Repo: &store.Repository{FullName: "a/b", AICategory: "dev-tools"}, Score: 5},
-		{Repo: &store.Repository{FullName: "c/d", CustomCategory: "dev-tools"}, Score: 8},
-		{Repo: &store.Repository{FullName: "e/f", AICategory: "web-app"}, Score: 3},
-	}
-	opts := searchOpts{Category: "dev-tools"}
-	filtered := filterByCLIOpts(hits, opts)
-	if len(filtered) != 2 {
-		t.Fatalf("expected 2 dev-tools repos, got %d", len(filtered))
+func TestSearchCmd_NoRerankFlag(t *testing.T) {
+	cmd := newSearchCmd()
+	if cmd.Flags().Lookup("rerank") != nil {
+		t.Fatal("--rerank flag was not removed")
 	}
 }
 
-func TestFilterByCLIOptsByStars(t *testing.T) {
-	hits := []*ai.SearchHit{
-		{Repo: &store.Repository{FullName: "a/b", StargazersCount: 10}, Score: 5},
-		{Repo: &store.Repository{FullName: "c/d", StargazersCount: 50}, Score: 3},
-		{Repo: &store.Repository{FullName: "e/f", StargazersCount: 30}, Score: 8},
-	}
-	opts := searchOpts{Sort: "stars"}
-	sorted := filterByCLIOpts(hits, opts)
-	if len(sorted) != 3 {
-		t.Fatalf("expected 3 repos, got %d", len(sorted))
-	}
-	if sorted[0].Repo.StargazersCount != 50 {
-		t.Fatalf("expected 50 stars first, got %d", sorted[0].Repo.StargazersCount)
-	}
-	if sorted[1].Repo.StargazersCount != 30 {
-		t.Fatalf("expected 30 stars second, got %d", sorted[1].Repo.StargazersCount)
+func TestOutputSearchJSON_NilHits(t *testing.T) {
+	err := outputSearchJSON(nil)
+	if err != nil {
+		t.Fatalf("expected no error for nil hits, got %v", err)
 	}
 }
 
-func TestFilterByCLIOptsLimit(t *testing.T) {
-	hits := []*ai.SearchHit{
-		{Repo: &store.Repository{FullName: "a/b"}, Score: 5},
-		{Repo: &store.Repository{FullName: "c/d"}, Score: 3},
-		{Repo: &store.Repository{FullName: "e/f"}, Score: 8},
-	}
-	opts := searchOpts{Limit: 2}
-	limited := filterByCLIOpts(hits, opts)
-	if len(limited) != 2 {
-		t.Fatalf("expected 2 repos after limit, got %d", len(limited))
-	}
-	if limited[0].Score != 8 {
-		t.Fatalf("expected score 8 first, got %f", limited[0].Score)
+func TestOutputSearchJSON_EmptyHits(t *testing.T) {
+	err := outputSearchJSON([]*ai.SearchHit{})
+	if err != nil {
+		t.Fatalf("expected no error for empty hits, got %v", err)
 	}
 }

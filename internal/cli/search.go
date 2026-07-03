@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
-	"strings"
 
 	"github.com/morehao/starman/internal/ai"
 	"github.com/morehao/starman/internal/app"
@@ -14,21 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type searchOpts struct {
-	Lang     string
-	Category string
-	Sort     string
-	Limit    int
-	Rerank   bool
-}
-
 func newSearchCmd() *cobra.Command {
 	var jsonOut bool
 	var limit int
 	var lang string
 	var category string
 	var sortBy string
-	var rerank bool
 	cmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "AI-powered three-tier degraded search (vector → LLM semantic → text)",
@@ -71,13 +60,10 @@ func newSearchCmd() *cobra.Command {
 
 			fmt.Fprintf(os.Stderr, "%s\n", res.Summary)
 
-			cliOpts := searchOpts{Lang: lang, Category: category, Sort: sortBy, Limit: limit, Rerank: rerank}
-			hits := filterByCLIOpts(res.Hits, cliOpts)
-
 			if jsonOut {
-				return outputSearchJSON(hits)
+				return outputSearchJSON(res.Hits)
 			}
-			outputSearchTable(hits)
+			outputSearchTable(res.Hits)
 			return nil
 		},
 	}
@@ -86,45 +72,7 @@ func newSearchCmd() *cobra.Command {
 	cmd.Flags().StringVar(&lang, "lang", "", "filter by language")
 	cmd.Flags().StringVar(&category, "category", "", "filter by category")
 	cmd.Flags().StringVar(&sortBy, "sort", "score", "sort by: score|stars|name")
-	cmd.Flags().BoolVar(&rerank, "rerank", false, "use LLM to rerank top candidates")
 	return cmd
-}
-
-func filterByCLIOpts(hits []*ai.SearchHit, opts searchOpts) []*ai.SearchHit {
-	var filtered []*ai.SearchHit
-	for _, h := range hits {
-		if opts.Lang != "" && !strings.EqualFold(h.Repo.Language, opts.Lang) {
-			continue
-		}
-		if opts.Category != "" {
-			cat := h.Repo.CustomCategory
-			if cat == "" {
-				cat = h.Repo.AICategory
-			}
-			if !strings.EqualFold(cat, opts.Category) {
-				continue
-			}
-		}
-		filtered = append(filtered, h)
-	}
-	switch opts.Sort {
-	case "stars":
-		sort.Slice(filtered, func(i, j int) bool {
-			return filtered[i].Repo.StargazersCount > filtered[j].Repo.StargazersCount
-		})
-	case "name":
-		sort.Slice(filtered, func(i, j int) bool {
-			return filtered[i].Repo.FullName < filtered[j].Repo.FullName
-		})
-	default:
-		sort.Slice(filtered, func(i, j int) bool {
-			return filtered[i].Score > filtered[j].Score
-		})
-	}
-	if opts.Limit > 0 && opts.Limit < len(filtered) {
-		filtered = filtered[:opts.Limit]
-	}
-	return filtered
 }
 
 func outputSearchTable(hits []*ai.SearchHit) {
