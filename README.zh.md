@@ -434,4 +434,4 @@ internal/generate/templates/ # 内嵌 Markdown 模板
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[MIT License](LICENSE)

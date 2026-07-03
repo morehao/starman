@@ -434,4 +434,4 @@ Package dependencies flow in one direction: `cli` → business packages → `sto
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[MIT License](LICENSE)
