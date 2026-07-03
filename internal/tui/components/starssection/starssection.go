@@ -3,6 +3,7 @@ package starssection
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -18,6 +19,13 @@ const (
 	GroupCategory = "category"
 	GroupTag      = "tag"
 )
+
+var defaultColumns = []listviewport.Column{
+	{Title: "repo", Width: 40},
+	{Title: "stars", Width: 7},
+	{Title: "lang", Width: 12},
+	{Title: "cat", Width: 12},
+}
 
 type RepoRow struct {
 	Repo *store.Repository
@@ -44,6 +52,28 @@ func (r RepoRow) GetUrl() string {
 	return r.Repo.URL
 }
 
+func (r RepoRow) GetColumns() []string {
+	if r.Repo == nil {
+		return []string{"", "", "", ""}
+	}
+	stars := fmt.Sprintf("%d", r.Repo.StargazersCount)
+	lang := r.Repo.Language
+	if lang == "" {
+		lang = "—"
+	}
+	if len(lang) > 12 {
+		lang = lang[:11] + "…"
+	}
+	cat := r.Repo.AICategory
+	if cat == "" {
+		cat = r.Repo.CustomCategory
+	}
+	if cat == "" {
+		cat = "—"
+	}
+	return []string{r.Repo.FullName, stars, lang, cat}
+}
+
 type ReposFetchedMsg struct {
 	SectionID int
 	Repos     []*store.Repository
@@ -58,9 +88,10 @@ type GroupHeaderRow struct {
 	Title string
 }
 
-func (r GroupHeaderRow) GetId() string    { return "group:" + r.Title }
-func (r GroupHeaderRow) GetTitle() string { return r.Title }
-func (r GroupHeaderRow) GetUrl() string   { return "" }
+func (r GroupHeaderRow) GetId() string      { return "group:" + r.Title }
+func (r GroupHeaderRow) GetTitle() string   { return r.Title }
+func (r GroupHeaderRow) GetUrl() string     { return "" }
+func (r GroupHeaderRow) GetColumns() []string { return []string{} }
 
 type Model struct {
 	id        int
@@ -71,10 +102,11 @@ type Model struct {
 	rows      []section.RowData
 	loaded    bool
 	isLoading bool
+	groupData *GroupedRepos
 }
 
 func NewModel(id int, ctx *tuicontext.ProgramContext, cfg section.SectionConfig, groupBy string) *Model {
-	list := listviewport.New(nil, ctx)
+	list := listviewport.New(defaultColumns, ctx)
 	return &Model{id: id, ctx: ctx, cfg: cfg, groupBy: groupBy, list: list}
 }
 
@@ -90,6 +122,14 @@ func (m *Model) IsSearchFocused() bool                               { return fa
 func (m *Model) ResetFilters()                                       {}
 func (m *Model) SetIsLoading(v bool)                                 { m.isLoading = v }
 func (m *Model) UpdateProgramContext(ctx *tuicontext.ProgramContext) { m.ctx = ctx }
+
+func (m *Model) SetSize(w, h int) {
+	m.list.SetSize(w, h)
+}
+
+func (m *Model) Pager() string {
+	return m.list.Pager()
+}
 
 func (m *Model) CurrRow() section.RowData {
 	idx := m.list.Cursor()
@@ -111,6 +151,17 @@ func (m *Model) PrevRow() {
 func (m *Model) FirstItem() { m.list.FirstItem() }
 
 func (m *Model) LastItem() { m.list.LastItem() }
+
+func (m *Model) GroupCounts() map[string]int {
+	if m.groupData == nil {
+		return nil
+	}
+	counts := make(map[string]int)
+	for _, key := range m.groupData.KeysSorted() {
+		counts[key] = m.groupData.BucketCount(key)
+	}
+	return counts
+}
 
 func (m *Model) Update(msg tea.Msg) (section.Section, tea.Cmd) {
 	switch typed := msg.(type) {
@@ -161,6 +212,7 @@ func (m *Model) buildRows(repos []*store.Repository) []section.RowData {
 	}
 
 	grouped := groupReposBy(m.groupBy, repos)
+	m.groupData = &grouped
 	keys := grouped.KeysSorted()
 	m.rows = make([]section.RowData, 0, len(repos)+len(keys))
 	rows := make([]section.RowData, 0, len(repos)+len(keys))
@@ -195,4 +247,12 @@ func (m *Model) ResetRows() {
 	m.list.SetRows(nil)
 	m.loaded = false
 	m.isLoading = false
+	m.groupData = nil
+}
+
+func formatStarCount(n int) string {
+	if n >= 1000 {
+		return fmt.Sprintf("%.1fk", float64(n)/1000)
+	}
+	return strconv.Itoa(n)
 }

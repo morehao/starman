@@ -5,6 +5,7 @@ import (
 
 	"github.com/morehao/starman/internal/tui/components/section"
 	"github.com/morehao/starman/internal/tui/context"
+	"github.com/morehao/starman/internal/tui/theme"
 )
 
 type fakeRow struct {
@@ -13,9 +14,16 @@ type fakeRow struct {
 	url   string
 }
 
-func (r fakeRow) GetId() string    { return r.id }
-func (r fakeRow) GetTitle() string { return r.title }
-func (r fakeRow) GetUrl() string   { return r.url }
+func (r fakeRow) GetId() string      { return r.id }
+func (r fakeRow) GetTitle() string   { return r.title }
+func (r fakeRow) GetUrl() string     { return r.url }
+func (r fakeRow) GetColumns() []string { return []string{r.title} }
+
+func testCtx() *context.ProgramContext {
+	return &context.ProgramContext{
+		Theme: theme.DefaultTheme(),
+	}
+}
 
 func testRows(titles ...string) []section.RowData {
 	rows := make([]section.RowData, 0, len(titles))
@@ -26,7 +34,7 @@ func testRows(titles ...string) []section.RowData {
 }
 
 func TestCursorNavigation(t *testing.T) {
-	m := New(nil, &context.ProgramContext{})
+	m := New(nil, testCtx())
 	m.SetRows(testRows("a", "b"))
 	if m.Cursor() != 0 {
 		t.Fatalf("cursor=%d want=0", m.Cursor())
@@ -50,7 +58,7 @@ func TestCursorNavigation(t *testing.T) {
 }
 
 func TestFirstAndLastItem(t *testing.T) {
-	m := New(nil, &context.ProgramContext{})
+	m := New(nil, testCtx())
 	m.SetRows(testRows("a", "b", "c"))
 
 	m.LastItem()
@@ -75,7 +83,7 @@ func TestFirstAndLastItem(t *testing.T) {
 }
 
 func TestSetRowsEmptyResetsCursorAndPager(t *testing.T) {
-	m := New(nil, &context.ProgramContext{})
+	m := New(nil, testCtx())
 	m.SetRows(testRows("a", "b"))
 	m.LastItem()
 	if m.Cursor() != 1 {

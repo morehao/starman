@@ -15,6 +15,7 @@ type RowData interface {
 	GetId() string
 	GetTitle() string
 	GetUrl() string
+	GetColumns() []string
 }
 
 type Section interface {

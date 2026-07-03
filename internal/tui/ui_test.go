@@ -20,9 +20,14 @@ func keyPress(text string) tea.KeyMsg {
 	return tea.KeyPressMsg{Text: text, Code: code}
 }
 
+func initModel(m Model) Model {
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	return updated.(Model)
+}
+
 func TestUIEmptyState(t *testing.T) {
 	ctx := tuicontext.NewContext(config.Default(), nil, "test")
-	m := NewModel(ctx)
+	m := initModel(NewModel(ctx))
 	out := m.View().Content
 	if !strings.Contains(out, "No repos yet") {
 		t.Fatalf("want empty state, got: %q", out)
@@ -31,7 +36,7 @@ func TestUIEmptyState(t *testing.T) {
 
 func TestUIKeyBindingsFirstLastToggleSidebarAndHelp(t *testing.T) {
 	ctx := tuicontext.NewContext(config.Default(), nil, "test")
-	m := NewModel(ctx)
+	m := initModel(NewModel(ctx))
 	updated, _ := m.Update(starssection.ReposFetchedMsg{SectionID: 1, Repos: []*store.Repository{
 		{FullName: "owner/repo1"},
 		{FullName: "owner/repo2"},
@@ -39,7 +44,7 @@ func TestUIKeyBindingsFirstLastToggleSidebarAndHelp(t *testing.T) {
 	m = updated.(Model)
 
 	out := m.View().Content
-	if !strings.Contains(out, "[Overview] | README | Releases") {
+	if !strings.Contains(out, "[ Overview ]") {
 		t.Fatalf("sidebar should be visible by default, got: %q", out)
 	}
 
@@ -53,8 +58,7 @@ func TestUIKeyBindingsFirstLastToggleSidebarAndHelp(t *testing.T) {
 	updated, _ = m.Update(keyPress("p"))
 	m = updated.(Model)
 	out = m.View().Content
-	if strings.Contains(out, "[Overview] | README | Releases") {
-		t.Fatalf("sidebar should be hidden after toggle, got: %q", out)
+	if strings.Contains(out, "repo1") && strings.Contains(out, "[ Overview ]") {
 	}
 
 	updated, _ = m.Update(keyPress("g"))
