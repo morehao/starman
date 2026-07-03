@@ -264,3 +264,34 @@ func TestTuiModelQQuits(t *testing.T) {
 		t.Error("expected quit command on q")
 	}
 }
+
+func TestCommandFlowSelectAndValidate(t *testing.T) {
+	m := NewTuiModel(config.Default(), nil)
+	m.ready = true
+	m.width, m.height = 140, 36
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.workspace == nil {
+		t.Fatal("workspace should be initialized")
+	}
+}
+
+func TestCommandFlowWorkspacePopulatedAfterSelect(t *testing.T) {
+	m := NewTuiModel(config.Default(), nil)
+	m.ready = true
+	m.width, m.height = 140, 36
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	view := m.workspace.View()
+	if view == "" {
+		t.Fatal("expected non-empty workspace view")
+	}
+	if m.uiState != StateNormal {
+		t.Fatalf("expected normal state after command selection, got %d", m.uiState)
+	}
+}
