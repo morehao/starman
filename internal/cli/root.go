@@ -3,7 +3,10 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/morehao/starman/internal/config"
+	"github.com/morehao/starman/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -38,9 +41,80 @@ func NewRootCmd(ver string) *cobra.Command {
 }
 
 func Run(ver string) {
+	if !hasSubcommandArgs(os.Args[1:]) {
+		configPath, err := configPathForArgs(os.Args[1:])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+
+		cfg, err := config.Load(configPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+
+		if err := tui.Run(cfg, ver); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	root := NewRootCmd(ver)
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func configPathForArgs(args []string) (string, error) {
+	root := NewRootCmd("test")
+	if err := root.ParseFlags(args); err != nil {
+		return "", err
+	}
+
+	v, err := root.PersistentFlags().GetString("config")
+	if err != nil {
+		return "", err
+	}
+	if v != "" {
+		return v, nil
+	}
+
+	return config.DefaultPath()
+}
+
+func hasSubcommandArgs(args []string) bool {
+	root := NewRootCmd("test")
+	flags := root.PersistentFlags()
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			return i+1 < len(args)
+		}
+		if !strings.HasPrefix(arg, "-") {
+			return true
+		}
+		if arg == "-h" || arg == "--help" || arg == "--version" {
+			return true
+		}
+		if !strings.HasPrefix(arg, "--") {
+			return true
+		}
+
+		name, _, hasValue := strings.Cut(arg[2:], "=")
+		f := flags.Lookup(name)
+		if f == nil {
+			return true
+		}
+		if hasValue || f.NoOptDefVal != "" {
+			continue
+		}
+		if i+1 >= len(args) {
+			return true
+		}
+		i++
+	}
+	return false
 }

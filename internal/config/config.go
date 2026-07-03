@@ -14,6 +14,21 @@ type Config struct {
 	Embedding EmbeddingConfig `yaml:"embedding"`
 	WebDAV    WebDAVConfig    `yaml:"webdav"`
 	Generate  GenerateConfig  `yaml:"generate"`
+	TUI       TUIConfig       `yaml:"tui"`
+}
+
+type TUIConfig struct {
+	Preview      PreviewConfig `yaml:"preview"`
+	DefaultView  string        `yaml:"default_view"`
+	ConfirmQuit  bool          `yaml:"confirm_quit"`
+	Theme        string        `yaml:"theme"`
+}
+
+type PreviewConfig struct {
+	Open     bool    `yaml:"open"`
+	Position string  `yaml:"position"`
+	Width    float64 `yaml:"width"`
+	Height   float64 `yaml:"height"`
 }
 
 type GitHubConfig struct {
@@ -59,6 +74,17 @@ func Default() *Config {
 		},
 		Generate: GenerateConfig{Sort: "language"},
 		WebDAV:   WebDAVConfig{Path: "/starman"},
+		TUI: TUIConfig{
+			Preview: PreviewConfig{
+				Open:     true,
+				Position: "right",
+				Width:    0.38,
+				Height:   0.4,
+			},
+			DefaultView: "stars",
+			ConfirmQuit: false,
+			Theme:       "dark",
+		},
 	}
 }
 
