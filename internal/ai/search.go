@@ -23,6 +23,7 @@ const (
 	SearchModeVector    SearchMode = "vector"
 	SearchModeAI        SearchMode = "ai"
 	SearchModeBasicText SearchMode = "basic_text"
+	SearchModeHybrid    SearchMode = "hybrid"
 )
 
 type SearchResult struct {
@@ -60,16 +61,7 @@ func (s *Service) Search(ctx context.Context, query string, st store.Store, opts
 	}
 
 	if s.hasEmbeddingConfig() {
-		result, err := s.vectorSearch(ctx, query, st, opts)
-		if err == nil && len(result.Hits) > 0 {
-			result.Mode = SearchModeVector
-			return result, nil
-		}
-		if err != nil {
-			log.Printf("vector search failed: %v, falling back", err)
-		} else {
-			log.Printf("vector search: 0 hits, falling back")
-		}
+		return s.hybridSearch(ctx, query, st, opts)
 	}
 
 	if s.hasAIConfig() {

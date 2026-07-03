@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"log"
 	"regexp"
 	"sort"
 	"strings"
@@ -74,13 +75,7 @@ func (s *Service) vectorSearch(
 		hits[i] = &SearchHit{Repo: sr.repo, Score: sr.score}
 	}
 
-	// Apply CLI-side filter and sort (Language/Category/Platform/Tags/MinStars/MaxStars)
 	hits = filterHits(hits, opts)
-	sortHits(hits, opts.Sort)
-	if opts.Limit > 0 && opts.Limit < len(hits) {
-		hits = hits[:opts.Limit]
-	}
-
 	return &SearchResult{Hits: hits}, nil
 }
 
@@ -231,4 +226,67 @@ func cleanReadme(content string) string {
 	content = regexp.MustCompile(`\n{3,}`).ReplaceAllString(content, "\n\n")
 	content = regexp.MustCompile(`\[!\[.*?\]\(.*?\)\]\(.*?\)`).ReplaceAllString(content, "")
 	return strings.TrimSpace(content)
+}
+
+func (s *Service) hybridSearch(
+	ctx context.Context, query string, st store.Store, opts SearchOpts,
+) (*SearchResult, error) {
+	if err := s.searchIndex.ensureLoaded(ctx, st); err != nil {
+		return nil, fmt.Errorf("load search index: %w", err)
+	}
+
+	filters := buildSearchFilters(opts, nil)
+	textHits := s.searchIndex.Search(query, nil, filters, 200)
+
+	vecResult, vecErr := s.vectorSearch(ctx, query, st, opts)
+
+	if vecErr != nil {
+		log.Printf("vector search failed: %v, using text search only", vecErr)
+		sortHits(textHits, opts.Sort)
+		if opts.Limit > 0 && opts.Limit < len(textHits) {
+			textHits = textHits[:opts.Limit]
+		}
+		return &SearchResult{Hits: textHits, Mode: SearchModeBasicText}, nil
+	}
+
+	if len(vecResult.Hits) == 0 {
+		sortHits(textHits, opts.Sort)
+		if opts.Limit > 0 && opts.Limit < len(textHits) {
+			textHits = textHits[:opts.Limit]
+		}
+		return &SearchResult{Hits: textHits, Mode: SearchModeBasicText}, nil
+	}
+
+	hits := mergeSearchHits(vecResult.Hits, textHits)
+	sortHits(hits, opts.Sort)
+	if opts.Limit > 0 && opts.Limit < len(hits) {
+		hits = hits[:opts.Limit]
+	}
+
+	return &SearchResult{Hits: hits, Mode: SearchModeHybrid}, nil
+}
+
+func mergeSearchHits(vectorHits, textHits []*SearchHit) []*SearchHit {
+	seen := make(map[int64]*SearchHit, len(vectorHits)+len(textHits))
+
+	for _, h := range vectorHits {
+		seen[h.Repo.ID] = &SearchHit{Repo: h.Repo, Score: h.Score}
+	}
+
+	for _, h := range textHits {
+		textScore := h.Score / 10.0
+		if existing, ok := seen[h.Repo.ID]; ok {
+			if textScore > existing.Score {
+				existing.Score = textScore
+			}
+		} else {
+			seen[h.Repo.ID] = &SearchHit{Repo: h.Repo, Score: textScore}
+		}
+	}
+
+	result := make([]*SearchHit, 0, len(seen))
+	for _, h := range seen {
+		result = append(result, h)
+	}
+	return result
 }
