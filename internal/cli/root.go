@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/morehao/starman/internal/config"
+	"github.com/morehao/starman/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -38,6 +40,26 @@ func NewRootCmd(ver string) *cobra.Command {
 }
 
 func Run(ver string) {
+	if len(os.Args) <= 1 {
+		configPath, err := config.DefaultPath()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+
+		cfg, err := config.Load(configPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+
+		if err := tui.Run(cfg, ver); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	root := NewRootCmd(ver)
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
