@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/morehao/starman/internal/app"
 	"github.com/morehao/starman/internal/github"
 	"github.com/morehao/starman/internal/store"
 	"github.com/spf13/cobra"
@@ -61,20 +62,18 @@ func runSync(cmd *cobra.Command, fullSync bool) error {
 	fmt.Fprintf(os.Stderr, "Fetching starred repos...\n")
 	start := time.Now()
 
-	repos, err := gh.ListStarred(ctx, cfg.GitHub.Username)
-	if err != nil {
-		return fmt.Errorf("list starred: %w", err)
-	}
-
 	prevStats, _ := s.GetSyncStats(ctx)
 	prevCount := prevStats.LastRepoCount
-	newCount := 0
-	if len(repos) > prevCount {
-		newCount = len(repos) - prevCount
+
+	action := app.NewSyncAction(s, gh, cfg.GitHub.Username)
+	res, err := action.Run(ctx, app.SyncOpts{Full: fullSync})
+	if err != nil {
+		return err
 	}
 
-	if err := s.UpsertReposOnSync(ctx, repos, fullSync); err != nil {
-		return fmt.Errorf("sync to db: %w", err)
+	newCount := 0
+	if res.Fetched > prevCount {
+		newCount = res.Fetched - prevCount
 	}
 
 	duration := time.Since(start).Round(time.Millisecond * 100)
@@ -86,12 +85,12 @@ func runSync(cmd *cobra.Command, fullSync bool) error {
 	}
 	stats.LastSync = time.Now().UTC()
 	stats.LastDuration = duration.String()
-	stats.LastRepoCount = len(repos)
+	stats.LastRepoCount = res.Fetched
 	stats.LastNewCount = newCount
 	_ = s.SaveSyncStats(ctx, stats)
 
 	_ = s.SetSyncState(ctx, "last_sync", time.Now().UTC().Format(time.RFC3339))
-	fmt.Fprintf(os.Stderr, "  %d repos fetched (%d new) in %v\n", len(repos), newCount, duration)
+	fmt.Fprintf(os.Stderr, "  %d repos fetched (%d new) in %v\n", res.Fetched, newCount, duration)
 	fmt.Fprintf(os.Stderr, "  Sync complete.\n")
 	return nil
 }

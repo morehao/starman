@@ -7,6 +7,16 @@ import (
 	"github.com/morehao/starman/internal/store"
 )
 
+func TestSearchCommandUsesAction(t *testing.T) {
+	cmd := newSearchCmd()
+	if cmd == nil {
+		t.Fatal("expected non-nil command")
+	}
+	if cmd.Flags().Lookup("limit") == nil {
+		t.Fatal("expected --limit flag")
+	}
+}
+
 func TestFilterByCLIOptsByLang(t *testing.T) {
 	hits := []*ai.SearchHit{
 		{Repo: &store.Repository{FullName: "a/b", Language: "Go", StargazersCount: 10}, Score: 5},

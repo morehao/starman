@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/morehao/starman/internal/ai"
+	"github.com/morehao/starman/internal/app"
 	"github.com/morehao/starman/internal/config"
 	"github.com/spf13/cobra"
 )
@@ -28,12 +29,6 @@ func newSearchCmd() *cobra.Command {
 	var category string
 	var sortBy string
 	var rerank bool
-	var platform string
-	var tags []string
-	var minStars int
-	var maxStars int
-	var analyzed, noAnalyzed, analysisFailed bool
-	var hyde, noHyde, noRerank bool
 	cmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "AI-powered three-tier degraded search (vector → LLM semantic → text)",
@@ -68,51 +63,16 @@ func newSearchCmd() *cobra.Command {
 			}
 			svc.SetSearchIndex(searchIndex)
 
-			var analyzedPtr *bool
-			if analyzed || noAnalyzed {
-				v := analyzed
-				analyzedPtr = &v
-			}
-			var analysisFailedPtr *bool
-			if analysisFailed {
-				v := true
-				analysisFailedPtr = &v
-			}
-
-			enableHyDE := !noHyde
-			if hyde {
-				enableHyDE = true
-			}
-			enableRerank := !noRerank
-			if rerank {
-				enableRerank = true
-			}
-
-			opts := ai.SearchOpts{
-				Language:       lang,
-				Category:       category,
-				Platform:       platform,
-				Tags:           tags,
-				MinStars:       minStars,
-				MaxStars:       maxStars,
-				Sort:           sortBy,
-				Limit:          limit,
-				Analyzed:       analyzedPtr,
-				AnalysisFailed: analysisFailedPtr,
-				EnableHyDE:     enableHyDE,
-				EnableRerank:   enableRerank,
-				RerankTopK:     30,
-			}
-
-			result, err := svc.Search(ctx, args[0], s, opts)
+			action := app.NewSearchAction(s, svc)
+			res, err := action.Run(ctx, args[0], app.SearchOpts{Lang: lang, Category: category, Sort: sortBy, Limit: limit})
 			if err != nil {
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "Search mode: %s (%d results)\n", result.Mode, len(result.Hits))
+			fmt.Fprintf(os.Stderr, "%s\n", res.Summary)
 
 			cliOpts := searchOpts{Lang: lang, Category: category, Sort: sortBy, Limit: limit, Rerank: rerank}
-			hits := filterByCLIOpts(result.Hits, cliOpts)
+			hits := filterByCLIOpts(res.Hits, cliOpts)
 
 			if jsonOut {
 				return outputSearchJSON(hits)
@@ -127,16 +87,6 @@ func newSearchCmd() *cobra.Command {
 	cmd.Flags().StringVar(&category, "category", "", "filter by category")
 	cmd.Flags().StringVar(&sortBy, "sort", "score", "sort by: score|stars|name")
 	cmd.Flags().BoolVar(&rerank, "rerank", false, "use LLM to rerank top candidates")
-	cmd.Flags().StringVar(&platform, "platform", "", "filter by platform (web/desktop/mobile/cli/library/service)")
-	cmd.Flags().StringSliceVar(&tags, "tag", nil, "filter by tag (OR logic, can use multiple times)")
-	cmd.Flags().IntVar(&minStars, "min-stars", 0, "minimum star count")
-	cmd.Flags().IntVar(&maxStars, "max-stars", 0, "maximum star count (0=no limit)")
-	cmd.Flags().BoolVar(&analyzed, "analyzed", false, "only show analyzed repos")
-	cmd.Flags().BoolVar(&noAnalyzed, "no-analyzed", false, "only show unanalyzed repos")
-	cmd.Flags().BoolVar(&analysisFailed, "analysis-failed", false, "only show analysis-failed repos")
-	cmd.Flags().BoolVar(&hyde, "hyde", false, "enable HyDE query enhancement")
-	cmd.Flags().BoolVar(&noHyde, "no-hyde", false, "disable HyDE query enhancement")
-	cmd.Flags().BoolVar(&noRerank, "no-rerank", false, "disable LLM reranking")
 	return cmd
 }
 
