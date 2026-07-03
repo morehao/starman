@@ -36,7 +36,7 @@ func TestUpsertAndDeleteCustomCategory(t *testing.T) {
 	if !found {
 		t.Fatal("custom category not found")
 	}
-	if err := s.DeleteCategory(ctx, "my-cat"); err != nil {
+	if _, err := s.DeleteCategory(ctx, "my-cat"); err != nil {
 		t.Fatal(err)
 	}
 	cats, _ = s.ListCategories(ctx, false)
@@ -49,7 +49,7 @@ func TestUpsertAndDeleteCustomCategory(t *testing.T) {
 
 func TestCannotDeleteDefaultCategory(t *testing.T) {
 	s := testStore(t)
-	err := s.DeleteCategory(context.Background(), "web-app")
+	_, err := s.DeleteCategory(context.Background(), "web-app")
 	if err == nil {
 		t.Fatal("expected error deleting default category")
 	}
