@@ -72,6 +72,8 @@ nfpms:
 
 brews:
   - name: starman
+    ids:
+      - binary
     repository:
       owner: morehao
       name: homebrew-tap
