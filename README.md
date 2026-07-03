@@ -24,6 +24,41 @@ starman syncs your GitHub stars, analyzes them with AI, generates awesome lists,
 
 ## Installation
 
+### macOS / Linux (Homebrew)
+
+```bash
+brew install morehao/tap/starman
+```
+
+### Linux (Shell)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/morehao/starman/main/scripts/install.sh | sh
+```
+
+### Linux (.deb)
+
+Download the `.deb` file from [GitHub Releases](https://github.com/morehao/starman/releases/latest):
+
+```bash
+dpkg -i starman_*.deb
+```
+
+### Linux (.rpm)
+
+Download the `.rpm` file from [GitHub Releases](https://github.com/morehao/starman/releases/latest):
+
+```bash
+rpm -i starman_*.rpm
+```
+
+### Windows (Scoop)
+
+```powershell
+scoop bucket add morehao https://github.com/morehao/scoop-bucket
+scoop install starman
+```
+
 ### From source
 
 ```bash

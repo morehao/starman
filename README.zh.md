@@ -24,6 +24,41 @@ starman 支持星标同步、AI 分析、Awesome List 生成、Release 追踪、
 
 ## 安装
 
+### macOS / Linux (Homebrew)
+
+```bash
+brew install morehao/tap/starman
+```
+
+### Linux (Shell)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/morehao/starman/main/scripts/install.sh | sh
+```
+
+### Linux (.deb)
+
+从 [GitHub Releases](https://github.com/morehao/starman/releases/latest) 下载 `.deb` 包：
+
+```bash
+dpkg -i starman_*.deb
+```
+
+### Linux (.rpm)
+
+从 [GitHub Releases](https://github.com/morehao/starman/releases/latest) 下载 `.rpm` 包：
+
+```bash
+rpm -i starman_*.rpm
+```
+
+### Windows (Scoop)
+
+```powershell
+scoop bucket add morehao https://github.com/morehao/scoop-bucket
+scoop install starman
+```
+
 ### 从源码安装
 
 ```bash
