@@ -188,7 +188,7 @@ func scoreRepo(entry *repoEntry, query string, keywords []string) float64 {
 	starNorm := math.Log1p(float64(entry.repo.StargazersCount)) / math.Log1p(100000)
 	score += starNorm * 2.0
 
-	return score
+	return score / (score + 5.0)
 }
 
 func buildSearchText(repo *store.Repository) string {

@@ -30,10 +30,10 @@ func newSearchCmd() *cobra.Command {
 	var tags []string
 	var minStars int
 	var maxStars int
-	var analyzed, noAnalyzed, analysisFailed bool
+	var analyzed, noAnalyzed, analysisFailed, noVector bool
 	cmd := &cobra.Command{
 		Use:   "search <query>",
-		Short: "AI-powered three-tier degraded search (vector → LLM semantic → text)",
+		Short: "AI-powered hybrid search (vector + keyword) with three-tier fallback",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, _, err := loadConfig(cmd)
@@ -56,7 +56,10 @@ func newSearchCmd() *cobra.Command {
 				aiClient = ai.NewClient(cfg.AI.BaseURL, aiKey, cfg.AI.Model)
 			}
 
-			embeddingClient := ai.NewEmbeddingClient(cfg.Embedding.BaseURL, embeddingKey, cfg.Embedding.Model)
+			var embeddingClient *ai.EmbeddingClient
+			if !noVector {
+				embeddingClient = ai.NewEmbeddingClient(cfg.Embedding.BaseURL, embeddingKey, cfg.Embedding.Model)
+			}
 			svc := ai.NewServiceWithEmbedding(aiClient, nil, embeddingClient)
 
 			searchIndex := ai.NewSearchIndex()
@@ -115,6 +118,7 @@ func newSearchCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&analyzed, "analyzed", false, "only show analyzed repos")
 	cmd.Flags().BoolVar(&noAnalyzed, "no-analyzed", false, "only show unanalyzed repos")
 	cmd.Flags().BoolVar(&analysisFailed, "analysis-failed", false, "only show analysis-failed repos")
+	cmd.Flags().BoolVar(&noVector, "no-vector", false, "disable vector search, use text search only")
 	return cmd
 }
 
