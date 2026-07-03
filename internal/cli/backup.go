@@ -45,7 +45,7 @@ func newBackupCmd() *cobra.Command {
 			}
 
 			date := time.Now().UTC().Format("2006-01-02")
-			filePath := "backup/" + date + ".json"
+			filePath := "starman-backup/" + date + ".json"
 			if msg == "" {
 				msg = "backup starman data " + date
 			}
