@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -59,8 +60,12 @@ func (g *Generator) Generate(ctx context.Context, opts Options) ([]byte, error) 
 		return nil, err
 	}
 	funcMap := template.FuncMap{
-		"toLink": toLink,
-		"join":   joinTags,
+		"toLink":        toLink,
+		"formatStars":   formatStars,
+		"mergeTags":     mergeTags,
+		"hasHomepage":   hasHomepage,
+		"hasPlatforms":  hasPlatforms,
+		"hasTags":       hasTags,
 	}
 	tmpl, err := template.New("starred").Funcs(funcMap).Parse(string(content))
 	if err != nil {
@@ -148,6 +153,40 @@ func toLink(name string) string {
 	return strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 }
 
-func joinTags(tags []string, sep string) string {
-	return strings.Join(tags, sep)
+func formatStars(n int) string {
+	if n < 1000 {
+		return strconv.Itoa(n)
+	}
+	return fmt.Sprintf("%.1fk", float64(n)/1000)
+}
+
+func mergeTags(tagSlices ...[]string) []string {
+	seen := make(map[string]struct{})
+	var result []string
+	for _, tags := range tagSlices {
+		for _, t := range tags {
+			t = strings.TrimSpace(t)
+			if t == "" {
+				continue
+			}
+			if _, ok := seen[t]; ok {
+				continue
+			}
+			seen[t] = struct{}{}
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
+func hasHomepage(url string) bool {
+	return url != ""
+}
+
+func hasPlatforms(platforms []string) bool {
+	return len(platforms) > 0
+}
+
+func hasTags(tags []string) bool {
+	return len(tags) > 0
 }

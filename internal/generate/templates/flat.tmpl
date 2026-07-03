@@ -4,7 +4,12 @@
 ## Repositories
 
 {{ range .Groups.flat -}}
-- [{{ .FullName }}]({{ .URL }})
+- [{{ .FullName }}]({{ .URL }}){{ if .AISummary }} – {{ .AISummary }}{{ else if .Description }} – {{ .Description }}{{ end }}
+  {{- if .Language }}{{ .Language }}{{ end -}}
+  {{- if .StargazersCount }} · ⭐ {{ formatStars .StargazersCount }}{{ end -}}
+  {{- if hasHomepage .Homepage }} · 🌐 [site]({{ .Homepage }}){{ end -}}
+  {{- if hasPlatforms .AIPlatforms }} · {{ range .AIPlatforms }}`{{ . }}` {{ end }}{{ end -}}
+  {{- $tags := mergeTags .Topics .AITags .CustomTags }}{{ if hasTags $tags }} · {{ range $tags }}`{{ . }}` {{ end }}{{ end }}
 {{ end -}}
 ## License
 
