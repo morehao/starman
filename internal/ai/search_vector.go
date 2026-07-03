@@ -17,20 +17,12 @@ func (s *Service) vectorSearch(
 	opts SearchOpts,
 ) (*SearchResult, error) {
 
-	embeddingQuery := hydeEnhance(ctx, s, query, opts.EnableHyDE)
-
-	queryVectors, err := s.embeddingClient.Embed(ctx, []string{embeddingQuery})
+	queryVectors, err := s.embeddingClient.Embed(ctx, []string{query})
 	if err != nil {
 		return nil, fmt.Errorf("embed query: %w", err)
 	}
 	if len(queryVectors) == 0 || len(queryVectors[0]) == 0 {
 		return nil, fmt.Errorf("empty query vector")
-	}
-
-	if dim := s.embeddingClient.Dimension(); dim > 0 {
-		if err := st.EnsureVec0Dimension(ctx, dim); err != nil {
-			return nil, fmt.Errorf("ensure vec0 dimension: %w", err)
-		}
 	}
 
 	matches, err := st.SearchVectors(ctx, queryVectors[0], 30, 0.35)
@@ -43,6 +35,7 @@ func (s *Service) vectorSearch(
 
 	queryLower := strings.ToLower(query)
 	scoreMap := make(map[int64]float64, len(matches))
+	repoMap := make(map[int64]*store.Repository, len(matches))
 	for _, m := range matches {
 		repo, err := st.GetRepositoryByID(ctx, m.RepoID)
 		if err != nil {
@@ -63,6 +56,7 @@ func (s *Service) vectorSearch(
 			}
 		}
 		scoreMap[m.RepoID] = m.Similarity + bonus
+		repoMap[m.RepoID] = repo
 	}
 
 	type scoredRepo struct {
@@ -71,29 +65,13 @@ func (s *Service) vectorSearch(
 	}
 	var scored []scoredRepo
 	for repoID, score := range scoreMap {
-		repo, err := st.GetRepositoryByID(ctx, repoID)
-		if err != nil {
-			continue
-		}
-		scored = append(scored, scoredRepo{repo, score})
+		scored = append(scored, scoredRepo{repoMap[repoID], score})
 	}
 	sort.Slice(scored, func(i, j int) bool { return scored[i].score > scored[j].score })
 
 	hits := make([]*SearchHit, len(scored))
 	for i, sr := range scored {
 		hits[i] = &SearchHit{Repo: sr.repo, Score: sr.score}
-	}
-
-	if opts.EnableRerank && s.hasAIConfig() && len(hits) > 0 {
-		topK := opts.RerankTopK
-		if topK <= 0 {
-			topK = 30
-		}
-		topK = min(topK, len(hits))
-		reranked, err := s.rerank(ctx, query, hits[:topK])
-		if err == nil {
-			hits = append(reranked, hits[topK:]...)
-		}
 	}
 
 	// Apply CLI-side filter and sort (Language/Category/Platform/Tags/MinStars/MaxStars)

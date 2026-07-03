@@ -47,9 +47,6 @@ func newSearchCmd() *cobra.Command {
 			svc := ai.NewServiceWithEmbedding(aiClient, nil, embeddingClient)
 
 			searchIndex := ai.NewSearchIndex()
-			if err := searchIndex.Load(ctx, s); err != nil {
-				return fmt.Errorf("load search index: %w", err)
-			}
 			svc.SetSearchIndex(searchIndex)
 
 			action := app.NewSearchAction(s, svc)
