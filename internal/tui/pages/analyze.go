@@ -96,10 +96,14 @@ func (m *AnalyzeModel) runAnalyzeCmd(id string) tea.Cmd {
 			if result != nil {
 				failed = result.Failed
 			}
-			if err != nil {
+			if err != nil && result != nil {
 				failed = result.Total
 			}
-			m.progressCh <- analyzeProgressMsg{id: id, done: result.Total, failed: failed, final: true}
+			done := 0
+			if result != nil {
+				done = result.Total
+			}
+			m.progressCh <- analyzeProgressMsg{id: id, done: done, failed: failed, final: true}
 			close(m.progressCh)
 		}()
 		msg, ok := <-m.progressCh
