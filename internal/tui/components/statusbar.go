@@ -69,7 +69,7 @@ func (m *StatusBarModel) View() string {
 			mid = m.message
 		}
 	}
-	right := "?:Help  Ctrl+C:Quit"
+	right := "Ctrl+K:Palette  Tab:Switch  Ctrl+Enter:Run  Ctrl+C:Quit"
 
 	leftW := len(left)
 	midW := len(mid)

@@ -65,7 +65,7 @@ This opens the interactive terminal UI. From here you can sync your stars, analy
 
 **TUI pages:** Dashboard · Search · Repo List · Repo Detail · Trending · Sync · Analyze · Tag · Categorize · Stats · Releases · Generate · Backup · Config
 
-**Key shortcuts:** `q` quit, `/` search, `?` help, `↑↓` navigate, `Enter` select, `Esc` back
+**Key shortcuts:** `Ctrl+K` open palette, `Tab` switch pane, `Ctrl+Enter` execute, `Esc` back, `q` quit, `/` search, `↑↓` navigate, `Enter` select
 
 ## Usage
 
