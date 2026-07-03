@@ -44,7 +44,7 @@ func newBackupCmd() *cobra.Command {
 				return err
 			}
 
-			filePath := "starman-backup.json"
+			filePath := "starman-backup/data.json"
 			if msg == "" {
 				msg = "backup starman data"
 			}
