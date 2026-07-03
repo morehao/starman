@@ -1,11 +1,14 @@
 package pages
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/morehao/starman/internal/generate"
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/styles"
+	"github.com/morehao/starman/internal/tui/types"
 )
 
 type genMode int
@@ -21,15 +24,25 @@ var genModeNames = []string{"By Language", "By Category", "Flat"}
 type GenerateModel struct {
 	store     store.Store
 	theme     *styles.Theme
+	generator *generate.Generator
+	username  string
+	enqueue   func(string) string
 	mode      genMode
 	preview   string
 	width     int
 	height    int
 	generated bool
+	running   bool
 }
 
-func NewGenerate(s store.Store, theme *styles.Theme) *GenerateModel {
-	return &GenerateModel{store: s, theme: theme}
+type generateDoneMsg struct {
+	id      string
+	preview string
+	err     error
+}
+
+func NewGenerate(s store.Store, theme *styles.Theme, generator *generate.Generator, username string, enqueue func(string) string) *GenerateModel {
+	return &GenerateModel{store: s, theme: theme, generator: generator, username: username, enqueue: enqueue}
 }
 
 func (m *GenerateModel) Init() tea.Cmd { return nil }
@@ -44,9 +57,49 @@ func (m *GenerateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab":
 			m.mode = (m.mode + 1) % 3
 		case "enter":
-			m.preview = fmt.Sprintf("# Awesome Stars\n\nGenerated in %s mode.\n\n- repo1\n- repo2\n", genModeNames[m.mode])
-			m.generated = true
+			if m.running {
+				return m, nil
+			}
+			if m.generator == nil {
+				m.generated = true
+				m.preview = "Error: generate not configured"
+				return m, nil
+			}
+			m.running = true
+			id := m.enqueue("generate")
+			return m, tea.Batch(
+				func() tea.Msg { return types.TaskStartedMsg{ID: id, Label: "Generate"} },
+				func() tea.Msg {
+					ctx := context.Background()
+					var sort generate.SortMode
+					switch m.mode {
+					case genByCategory:
+						sort = generate.SortCategory
+					case genFlat:
+						sort = generate.SortFlat
+					default:
+						sort = generate.SortLanguage
+					}
+					data, err := m.generator.Generate(ctx, generate.Options{
+						Username: m.username,
+						Sort:     sort,
+					})
+					if err != nil {
+						return generateDoneMsg{id: id, err: err}
+					}
+					return generateDoneMsg{id: id, preview: string(data)}
+				},
+			)
 		}
+	case generateDoneMsg:
+		m.running = false
+		m.generated = true
+		if msg.err != nil {
+			m.preview = fmt.Sprintf("Error: %v", msg.err)
+		} else {
+			m.preview = msg.preview
+		}
+		return m, func() tea.Msg { return types.TaskDoneMsg{ID: msg.id, Err: msg.err} }
 	}
 	return m, nil
 }

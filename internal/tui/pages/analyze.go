@@ -1,27 +1,42 @@
 package pages
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/morehao/starman/internal/ai"
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/styles"
+	"github.com/morehao/starman/internal/tui/types"
 )
 
 type AnalyzeModel struct {
-	store    store.Store
-	theme    *styles.Theme
-	status   string
-	analyzed int
-	failed   int
-	total    int
-	width    int
-	height   int
-	running  bool
+	store      store.Store
+	theme      *styles.Theme
+	analyzer   *ai.BatchAnalyzer
+	enqueue    func(string) string
+	status     string
+	analyzed   int
+	failed     int
+	total      int
+	width      int
+	height     int
+	running    bool
+	taskID     string
+	progressCh chan analyzeProgressMsg
 }
 
-func NewAnalyze(s store.Store, theme *styles.Theme) *AnalyzeModel {
-	return &AnalyzeModel{store: s, theme: theme, status: "Press Enter to start analysis"}
+type analyzeProgressMsg struct {
+	id     string
+	done   int
+	total  int
+	failed int
+	final  bool
+}
+
+func NewAnalyze(s store.Store, theme *styles.Theme, analyzer *ai.BatchAnalyzer, enqueue func(string) string) *AnalyzeModel {
+	return &AnalyzeModel{store: s, theme: theme, analyzer: analyzer, enqueue: enqueue, status: "Press Enter to start analysis"}
 }
 
 func (m *AnalyzeModel) Init() tea.Cmd { return nil }
@@ -33,28 +48,76 @@ func (m *AnalyzeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height - 3
 	case tea.KeyMsg:
 		if msg.String() == "enter" && !m.running {
+			if m.analyzer == nil {
+				m.status = "Error: AI analyzer not configured"
+				return m, nil
+			}
 			m.running = true
 			m.status = "Analyzing..."
-			m.total = 10
-			return m, m.stepAnalyzeCmd
+			m.total = 0
+			m.analyzed = 0
+			m.failed = 0
+			id := m.enqueue("analyze")
+			m.taskID = id
+			return m, tea.Batch(
+				func() tea.Msg { return types.TaskStartedMsg{ID: id, Label: "Analyze"} },
+				m.runAnalyzeCmd(id),
+			)
 		}
-	case analyzeStepMsg:
-		m.analyzed = msg.done
-		m.failed += msg.failed
-		if msg.done >= m.total {
+	case analyzeProgressMsg:
+		if msg.final {
 			m.running = false
-			m.status = fmt.Sprintf("Done. Analyzed %d, failed %d.", m.analyzed, m.failed)
-		} else {
-			return m, m.stepAnalyzeCmd
+			m.status = fmt.Sprintf("Done. Analyzed %d, failed %d.", msg.done, msg.failed)
+			return m, func() tea.Msg { return types.TaskDoneMsg{ID: msg.id, Err: nil} }
 		}
+		m.analyzed = msg.done
+		m.total = msg.total
+		m.failed = msg.failed
+		return m, m.waitForProgress()
 	}
 	return m, nil
 }
 
-type analyzeStepMsg struct{ done, failed int }
+func (m *AnalyzeModel) runAnalyzeCmd(id string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		repos, err := m.store.ListRepositories(ctx)
+		if err != nil {
+			return analyzeProgressMsg{id: id, final: true, done: 0, failed: 0}
+		}
+		m.progressCh = make(chan analyzeProgressMsg, len(repos)+1)
+		go func() {
+			result, err := m.analyzer.Run(ctx, repos, ai.BatchOpts{
+				OnProgress: func(done, total int, _ string) {
+					m.progressCh <- analyzeProgressMsg{id: id, done: done, total: total}
+				},
+			})
+			var failed int
+			if result != nil {
+				failed = result.Failed
+			}
+			if err != nil {
+				failed = result.Total
+			}
+			m.progressCh <- analyzeProgressMsg{id: id, done: result.Total, failed: failed, final: true}
+			close(m.progressCh)
+		}()
+		msg, ok := <-m.progressCh
+		if !ok {
+			return analyzeProgressMsg{id: id, final: true}
+		}
+		return msg
+	}
+}
 
-func (m *AnalyzeModel) stepAnalyzeCmd() tea.Msg {
-	return analyzeStepMsg{done: m.analyzed + 1, failed: 0}
+func (m *AnalyzeModel) waitForProgress() tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-m.progressCh
+		if !ok {
+			return analyzeProgressMsg{final: true}
+		}
+		return msg
+	}
 }
 
 func (m *AnalyzeModel) View() string {

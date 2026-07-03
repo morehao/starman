@@ -11,7 +11,9 @@ import (
 	"github.com/morehao/starman/internal/app"
 	"github.com/morehao/starman/internal/config"
 	"github.com/morehao/starman/internal/discovery"
+	"github.com/morehao/starman/internal/generate"
 	"github.com/morehao/starman/internal/github"
+	"github.com/morehao/starman/internal/release"
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/components"
 	"github.com/morehao/starman/internal/tui/pages"
@@ -19,21 +21,24 @@ import (
 )
 
 type TuiModel struct {
-	config       *config.Config
-	store        store.Store
-	theme        *styles.Theme
-	width        int
-	height       int
-	currentPage  PageID
-	sidebar      *components.SidebarModel
-	statusbar    *components.StatusBarModel
-	taskCenter   *TaskCenter
-	syncAction   app.SyncAction
-	searchAction app.SearchAction
-	discovery    *discovery.Service
-	pages        map[PageID]tea.Model
-	ready        bool
-	showHelp     bool
+	config         *config.Config
+	store          store.Store
+	theme          *styles.Theme
+	width          int
+	height         int
+	currentPage    PageID
+	sidebar        *components.SidebarModel
+	statusbar      *components.StatusBarModel
+	taskCenter     *TaskCenter
+	syncAction     app.SyncAction
+	searchAction   app.SearchAction
+	discovery      *discovery.Service
+	batchAnalyzer  *ai.BatchAnalyzer
+	generator      *generate.Generator
+	releaseTracker *release.Tracker
+	pages          map[PageID]tea.Model
+	ready          bool
+	showHelp       bool
 }
 
 func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
@@ -57,17 +62,24 @@ func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 	aiSvc.SetSearchIndex(searchIndex)
 	searchAction := app.NewSearchAction(s, aiSvc)
 
+	batchAnalyzer := ai.NewBatchAnalyzer(aiSvc, s, gh, 1)
+	generator := generate.NewGenerator(s)
+	releaseTracker := release.NewTracker(s, gh)
+
 	m := &TuiModel{
-		config:       cfg,
-		store:        s,
-		theme:        theme,
-		currentPage:  PageDashboard,
-		sidebar:      components.NewSidebar(theme),
-		statusbar:    components.NewStatusBar(theme),
-		taskCenter:   NewTaskCenter(),
-		syncAction:   syncAction,
-		searchAction: searchAction,
-		discovery:    ds,
+		config:         cfg,
+		store:          s,
+		theme:          theme,
+		currentPage:    PageDashboard,
+		sidebar:        components.NewSidebar(theme),
+		statusbar:      components.NewStatusBar(theme),
+		taskCenter:     NewTaskCenter(),
+		syncAction:     syncAction,
+		searchAction:   searchAction,
+		discovery:      ds,
+		batchAnalyzer:  batchAnalyzer,
+		generator:      generator,
+		releaseTracker: releaseTracker,
 	}
 	m.pages = map[PageID]tea.Model{
 		PageDashboard:  pages.NewDashboard(s, theme),
@@ -76,13 +88,13 @@ func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 		PageRepoDetail: pages.NewRepoDetail(s, theme),
 		PageTrending:   pages.NewTrending(s, theme, ds),
 		PageSync:       pages.NewSync(s, theme, syncAction, m.taskCenter.Enqueue),
-		PageAnalyze:    pages.NewAnalyze(s, theme),
+		PageAnalyze:    pages.NewAnalyze(s, theme, m.batchAnalyzer, m.taskCenter.Enqueue),
 		PageTag:        pages.NewTag(s, theme),
 		PageCategorize: pages.NewCategorize(s, theme),
 		PageStats:      pages.NewStats(s, theme),
-		PageRelease:    pages.NewRelease(s, theme),
-		PageGenerate:   pages.NewGenerate(s, theme),
-		PageBackup:     pages.NewBackup(s, theme),
+		PageRelease:    pages.NewRelease(s, theme, m.releaseTracker, m.taskCenter.Enqueue),
+		PageGenerate:   pages.NewGenerate(s, theme, m.generator, cfg.GitHub.Username, m.taskCenter.Enqueue),
+		PageBackup:     pages.NewBackup(s, theme, cfg, m.taskCenter.Enqueue),
 		PageConfig:     pages.NewConfig(cfg, theme),
 	}
 	return m
