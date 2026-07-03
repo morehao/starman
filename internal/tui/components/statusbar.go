@@ -10,14 +10,15 @@ import (
 )
 
 type StatusBarModel struct {
-	theme     *styles.Theme
-	repoCount int
-	lastSync  string
-	aiQuota   string
-	message   string
-	msgLevel  types.StatusLevel
-	msgExpiry time.Time
-	width     int
+	theme       *styles.Theme
+	repoCount   int
+	lastSync    string
+	aiQuota     string
+	message     string
+	msgLevel    types.StatusLevel
+	msgExpiry   time.Time
+	taskSummary string
+	width       int
 }
 
 func NewStatusBar(theme *styles.Theme) *StatusBarModel {
@@ -48,8 +49,15 @@ func (m *StatusBarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *StatusBarModel) SetTaskSummary(summary string) {
+	m.taskSummary = summary
+}
+
 func (m *StatusBarModel) View() string {
 	left := fmt.Sprintf("⭐ %d repos | 🔄 %s", m.repoCount, m.lastSync)
+	if m.taskSummary != "" {
+		left += " | 📋 " + m.taskSummary
+	}
 	var mid string
 	if m.message != "" {
 		switch m.msgLevel {

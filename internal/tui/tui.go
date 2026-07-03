@@ -22,6 +22,7 @@ type TuiModel struct {
 	currentPage PageID
 	sidebar     *components.SidebarModel
 	statusbar   *components.StatusBarModel
+	taskCenter  *TaskCenter
 	pages       map[PageID]tea.Model
 	ready       bool
 	showHelp    bool
@@ -36,6 +37,7 @@ func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 		currentPage: PageDashboard,
 		sidebar:     components.NewSidebar(theme),
 		statusbar:   components.NewStatusBar(theme),
+		taskCenter:  NewTaskCenter(),
 	}
 	m.pages = map[PageID]tea.Model{
 		PageDashboard:  pages.NewDashboard(s, theme),
@@ -87,6 +89,20 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case RepoSelectedMsg:
 		m.currentPage = PageRepoDetail
 		return m, func() tea.Msg { return msg }
+
+	case TaskStartedMsg:
+		m.taskCenter.MarkRunning(msg.ID)
+		m.statusbar.SetTaskSummary(m.taskCenter.Summary())
+		return m, nil
+
+	case TaskProgressMsg:
+		m.statusbar.SetTaskSummary(m.taskCenter.Summary())
+		return m, nil
+
+	case TaskDoneMsg:
+		m.taskCenter.MarkDone(msg.ID, msg.Err)
+		m.statusbar.SetTaskSummary(m.taskCenter.Summary())
+		return m, nil
 
 	case tea.KeyMsg:
 		switch msg.String() {
