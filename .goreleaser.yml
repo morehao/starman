@@ -24,13 +24,19 @@ builds:
       - -X github.com/morehao/starman/internal/version.date={{.Date}}
 
 archives:
-  - format: tar.gz
+  - id: default
+    format: tar.gz
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
       {{- .Os }}_
       {{- .Arch }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - src: scripts/install.sh
+        dst: .
+  - id: binary
+    format: binary
 
 checksum:
   name_template: checksums.txt
@@ -44,3 +50,51 @@ changelog:
       - "^ci:"
       - Merge pull request
       - Merge branch
+
+nfpms:
+  - id: starman
+    package_name: starman
+    file_name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    vendor: morehao
+    homepage: https://github.com/morehao/starman
+    maintainer: morehao <morehao@qq.com>
+    description: >-
+      CLI tool for managing GitHub starred repositories with AI —
+      sync, analyze, categorize, search, and generate awesome lists
+    license: Apache-2.0
+    formats:
+      - deb
+      - rpm
+
+brews:
+  - name: starman
+    repository:
+      owner: morehao
+      name: homebrew-tap
+    homepage: https://github.com/morehao/starman
+    description: >-
+      CLI tool for managing GitHub starred repositories with AI —
+      sync, analyze, categorize, search, and generate awesome lists
+    license: Apache-2.0
+    test: |
+      system "#{bin}/starman --version"
+    install: |
+      bin.install "starman"
+
+scoops:
+  - name: starman
+    repository:
+      owner: morehao
+      name: scoop-bucket
+    homepage: https://github.com/morehao/starman
+    description: >-
+      CLI tool for managing GitHub starred repositories with AI —
+      sync, analyze, categorize, search, and generate awesome lists
+    license: Apache-2.0
+    commit_author:
+      name: morehao
+      email: morehao@qq.com
