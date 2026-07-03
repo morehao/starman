@@ -51,6 +51,20 @@ func (m *Model) executeCommand(cmd parsedCommand) tea.Cmd {
 	case "help":
 		m.showHelp = !m.showHelp
 		return nil
+	case "star":
+		if len(cmd.Args) < 1 {
+			m.setError("usage: :star owner/repo")
+			return nil
+		}
+		return m.cmdStar(cmd.Args[0])
+
+	case "unstar":
+		if len(cmd.Args) < 1 {
+			m.setError("usage: :unstar owner/repo")
+			return nil
+		}
+		return m.cmdUnstar(cmd.Args[0])
+
 	case "sync":
 		if cmd.Flags["full"] == "true" {
 			return m.startFullSync()
@@ -98,6 +112,64 @@ func (m *Model) startFullSync() tea.Cmd {
 				Name:    "sync --full",
 				Message: fmt.Sprintf("synced %d repos (full)", len(repos)),
 			}
+		},
+	)
+}
+
+func (m *Model) cmdStar(fullName string) tea.Cmd {
+	parts := strings.SplitN(fullName, "/", 2)
+	if len(parts) != 2 {
+		m.setError("invalid repo: " + fullName)
+		return nil
+	}
+	cfg := m.ctx.Config
+	token := config.ResolveToken(cfg, "")
+	if token == "" {
+		m.setError("GitHub token required")
+		return nil
+	}
+	taskID := "star-cmd-" + time.Now().Format("150405")
+	m.tasks.start(taskID, "star "+fullName)
+	return tea.Batch(
+		func() tea.Msg { return TaskStartedMsg{TaskID: taskID, Name: "star " + fullName} },
+		func() tea.Msg {
+			gh := github.New(token)
+			if err := gh.Star(context.Background(), parts[0], parts[1]); err != nil {
+				return TaskFinishedMsg{TaskID: taskID, Name: "star", Message: "star failed", Err: err}
+			}
+			return TaskFinishedMsg{TaskID: taskID, Name: "star", Message: "starred " + fullName}
+		},
+	)
+}
+
+func (m *Model) cmdUnstar(fullName string) tea.Cmd {
+	parts := strings.SplitN(fullName, "/", 2)
+	if len(parts) != 2 {
+		m.setError("invalid repo: " + fullName)
+		return nil
+	}
+	cfg := m.ctx.Config
+	token := config.ResolveToken(cfg, "")
+	if token == "" {
+		m.setError("GitHub token required")
+		return nil
+	}
+	taskID := "unstar-cmd-" + time.Now().Format("150405")
+	m.tasks.start(taskID, "unstar "+fullName)
+	return tea.Batch(
+		func() tea.Msg { return TaskStartedMsg{TaskID: taskID, Name: "unstar " + fullName} },
+		func() tea.Msg {
+			gh := github.New(token)
+			ctx := context.Background()
+			if err := gh.Unstar(ctx, parts[0], parts[1]); err != nil {
+				return TaskFinishedMsg{TaskID: taskID, Name: "unstar", Message: "unstar failed", Err: err}
+			}
+			existing, err := m.ctx.Store.GetRepository(ctx, fullName)
+			if err == nil {
+				existing.StarredAt = ""
+				_ = m.ctx.Store.UpsertRepository(ctx, existing)
+			}
+			return TaskFinishedMsg{TaskID: taskID, Name: "unstar", Message: "unstarred " + fullName}
 		},
 	)
 }
