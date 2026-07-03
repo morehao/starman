@@ -14,8 +14,8 @@ func TestHasSubcommandArgs(t *testing.T) {
 		{name: "global string equals value", args: []string{"--token=abc"}, want: false},
 		{name: "subcommand only", args: []string{"sync"}, want: true},
 		{name: "global flags and subcommand", args: []string{"--verbose", "search", "go"}, want: true},
-		{name: "help flag", args: []string{"--help"}, want: false},
-		{name: "version flag", args: []string{"--version"}, want: false},
+		{name: "help flag", args: []string{"--help"}, want: true},
+		{name: "version flag", args: []string{"--version"}, want: true},
 	}
 
 	for _, tc := range tests {

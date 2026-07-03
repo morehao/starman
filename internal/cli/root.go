@@ -80,7 +80,7 @@ func hasSubcommandArgs(args []string) bool {
 			return true
 		}
 		if arg == "-h" || arg == "--help" || arg == "--version" {
-			return false
+			return true
 		}
 		if !strings.HasPrefix(arg, "--") {
 			return true
