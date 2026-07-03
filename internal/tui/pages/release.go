@@ -45,7 +45,12 @@ func NewRelease(s store.Store, theme *styles.Theme, tracker *release.Tracker, en
 }
 
 func (m *ReleaseModel) Init() tea.Cmd {
-	return tea.Batch(m.loadCmd, m.pullCmd)
+	id := m.enqueue("release-pull")
+	return tea.Batch(
+		func() tea.Msg { return types.TaskStartedMsg{ID: id, Label: "Release Pull"} },
+		func() tea.Msg { return m.pullCmd(id) },
+		m.loadCmd,
+	)
 }
 
 func (m *ReleaseModel) loadCmd() tea.Msg {
@@ -63,11 +68,10 @@ func (m *ReleaseModel) loadCmd() tea.Msg {
 	return reposLoadedMsg{repos: subs}
 }
 
-func (m *ReleaseModel) pullCmd() tea.Msg {
+func (m *ReleaseModel) pullCmd(id string) tea.Msg {
 	if m.tracker == nil {
 		return releasePulledMsg{err: fmt.Errorf("release tracker not configured")}
 	}
-	id := m.enqueue("release-pull")
 	ctx := context.Background()
 	stats, err := m.tracker.PullReleases(ctx)
 	return releasePulledMsg{id: id, stats: stats, err: err}
@@ -132,7 +136,7 @@ func (m *ReleaseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.taskID = id
 			return m, tea.Batch(
 				func() tea.Msg { return types.TaskStartedMsg{ID: id, Label: "Release Pull"} },
-				m.pullCmd,
+				func() tea.Msg { return m.pullCmd(id) },
 			)
 		}
 	}
