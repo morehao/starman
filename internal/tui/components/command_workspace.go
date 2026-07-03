@@ -35,6 +35,13 @@ func (m *CommandWorkspaceModel) SelectCommand(node CommandNode) {
 	}
 }
 
+func (m *CommandWorkspaceModel) SelectedID() string {
+	if m.selected == nil {
+		return ""
+	}
+	return m.selected.ID
+}
+
 func (m *CommandWorkspaceModel) Params() map[string]string {
 	return m.params
 }

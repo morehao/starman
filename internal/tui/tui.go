@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
@@ -18,6 +19,7 @@ import (
 	"github.com/morehao/starman/internal/tui/components"
 	"github.com/morehao/starman/internal/tui/pages"
 	"github.com/morehao/starman/internal/tui/styles"
+	"github.com/morehao/starman/internal/tui/types"
 )
 
 type TuiModel struct {
@@ -43,6 +45,7 @@ type TuiModel struct {
 	focusPane      FocusPane
 	ready          bool
 	showHelp       bool
+	recentIDs      []string
 }
 
 func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
@@ -218,6 +221,22 @@ func (m *TuiModel) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case "esc":
 		m.showHelp = false
 		return m, nil, true
+	case "ctrl+enter":
+		if err := m.workspace.Validate(); err != nil {
+			return m, func() tea.Msg {
+				return types.StatusMsg{Text: err.Error(), Level: types.LevelError, Timeout: 4 * time.Second}
+			}, true
+		}
+		taskID := m.taskCenter.Enqueue("execute " + m.workspace.SelectedID())
+		m.workspace.AppendOutput("task " + taskID + " started")
+		m.statusbar.SetTaskSummary(m.taskCenter.Summary())
+		return m, tea.Batch(
+			func() tea.Msg { return TaskStartedMsg{ID: taskID, Label: "execute"} },
+			func() tea.Msg { return TaskDoneMsg{ID: taskID, Err: nil} },
+			func() tea.Msg {
+				return types.StatusMsg{Text: "executed successfully", Level: types.LevelSuccess, Timeout: 2 * time.Second}
+			},
+		), true
 	case "tab":
 		if m.focusPane == FocusSidebar {
 			m.focusPane = FocusWorkspace
@@ -243,7 +262,8 @@ func (m *TuiModel) applySelectedCommand(node components.CommandNode) (tea.Model,
 	m.uiState = StateNormal
 	m.palette.Close()
 	m.workspace.SelectCommand(node)
-	m.sidebar.SetRecent([]string{node.ID})
+	m.recentIDs = prependDedup(m.recentIDs, node.ID, 5)
+	m.sidebar.SetRecent(m.recentIDs)
 	return m, func() tea.Msg { return NavigatedMsg{Page: node.Page} }
 }
 
@@ -272,7 +292,7 @@ func (m *TuiModel) View() string {
 	if m.uiState == StatePalette {
 		paletteView := m.palette.View(m.width, m.height)
 		if paletteView != "" {
-			return paletteView
+			return overlay(view, paletteView)
 		}
 	}
 
@@ -281,13 +301,16 @@ func (m *TuiModel) View() string {
 
 func (m *TuiModel) renderHelp() string {
 	lines := []string{
-		"  q / ctrl+c  Quit                Esc      Back/Cancel",
-		"  /           Search              ?        This help",
+		"  Ctrl+K       Palette            Tab       Switch focus",
+		"  Ctrl+Enter   Execute command    Esc       Back/Cancel",
+		"  q / ctrl+c   Quit               ?         This help",
+		"",
 		"  Sidebar     Shortcuts:",
 		"    1: Dashboard   r: Repo List   t: Trending",
 		"    s: Sync        a: Analyze     g: Tag",
 		"    c: Categorize  S: Stats       R: Release",
 		"    G: Generate    b: Backup      C: Config",
+		"",
 		"  up/down/j/k  Navigate list      Enter    Select/Confirm",
 	}
 	return m.theme.Card.Render(
@@ -308,6 +331,51 @@ func tickCmd() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
 		return TickMsg(t)
 	})
+}
+
+func overlay(base, top string) string {
+	baseLines := strings.Split(base, "\n")
+	topLines := strings.Split(top, "\n")
+	maxLines := len(baseLines)
+	if len(topLines) > maxLines {
+		maxLines = len(topLines)
+	}
+	var result []string
+	for i := 0; i < maxLines; i++ {
+		var baseLine, topLine string
+		if i < len(baseLines) {
+			baseLine = baseLines[i]
+		}
+		if i < len(topLines) {
+			topLine = topLines[i]
+		}
+		baseRunes := []rune(baseLine)
+		topRunes := []rune(topLine)
+		for len(baseRunes) < len(topRunes) {
+			baseRunes = append(baseRunes, ' ')
+		}
+		for j := 0; j < len(topRunes) && j < len(baseRunes); j++ {
+			if topRunes[j] != ' ' {
+				baseRunes[j] = topRunes[j]
+			}
+		}
+		result = append(result, string(baseRunes))
+	}
+	return strings.Join(result, "\n")
+}
+
+func prependDedup(slice []string, val string, maxLen int) []string {
+	result := []string{val}
+	for _, s := range slice {
+		if s == val {
+			continue
+		}
+		result = append(result, s)
+	}
+	if len(result) > maxLen {
+		result = result[:maxLen]
+	}
+	return result
 }
 
 func RunTUI(cfg *config.Config) error {
