@@ -36,6 +36,19 @@ func TestUpsertAndDeleteCustomCategory(t *testing.T) {
 	if !found {
 		t.Fatal("custom category not found")
 	}
+
+	repo := &Repository{FullName: "test/repo", Name: "repo", CustomCategory: "my-cat"}
+	if err := s.UpsertRepository(ctx, repo); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetRepository(ctx, "test/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CustomCategory != "my-cat" {
+		t.Fatalf("expected CustomCategory 'my-cat', got %q", got.CustomCategory)
+	}
+
 	if _, err := s.DeleteCategory(ctx, "my-cat"); err != nil {
 		t.Fatal(err)
 	}
@@ -44,6 +57,14 @@ func TestUpsertAndDeleteCustomCategory(t *testing.T) {
 		if cat.ID == "my-cat" {
 			t.Fatal("custom category should be deleted")
 		}
+	}
+
+	got, err = s.GetRepository(ctx, "test/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CustomCategory != "" {
+		t.Fatalf("expected CustomCategory to be cleared after category deletion, got %q", got.CustomCategory)
 	}
 }
 

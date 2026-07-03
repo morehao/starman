@@ -24,7 +24,9 @@ func (s *sqliteStore) ListCategories(ctx context.Context, visibleOnly bool) ([]*
 			return nil, fmt.Errorf("scan category: %w", err)
 		}
 		if kwJSON.Valid {
-			json.Unmarshal([]byte(kwJSON.String), &c.Keywords)
+			if err := json.Unmarshal([]byte(kwJSON.String), &c.Keywords); err != nil {
+				return nil, fmt.Errorf("unmarshal category keywords: %w", err)
+			}
 		}
 		c.IsCustom = isCustom != 0
 		c.IsHidden = isHidden != 0
@@ -108,7 +110,9 @@ func (s *sqliteStore) getCategory(ctx context.Context, id string) (*Category, er
 		return nil, err
 	}
 	if kwJSON.Valid {
-		json.Unmarshal([]byte(kwJSON.String), &c.Keywords)
+		if err := json.Unmarshal([]byte(kwJSON.String), &c.Keywords); err != nil {
+			return nil, fmt.Errorf("unmarshal category keywords: %w", err)
+		}
 	}
 	c.IsCustom = isCustom != 0
 	c.IsHidden = isHidden != 0
