@@ -49,4 +49,18 @@ type TaskDoneMsg     struct{ ID string; Err error }
 
 type RepoSelectedMsg struct{ FullName string }
 
+type UIState int
+
+const (
+	StateNormal  UIState = iota
+	StatePalette
+)
+
+type FocusPane int
+
+const (
+	FocusSidebar   FocusPane = iota
+	FocusWorkspace
+)
+
 type TickMsg time.Time

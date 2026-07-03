@@ -37,6 +37,10 @@ type TuiModel struct {
 	generator      *generate.Generator
 	releaseTracker *release.Tracker
 	pages          map[PageID]tea.Model
+	palette        *components.CommandPaletteModel
+	workspace      *components.CommandWorkspaceModel
+	uiState        UIState
+	focusPane      FocusPane
 	ready          bool
 	showHelp       bool
 }
@@ -80,6 +84,10 @@ func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 		batchAnalyzer:  batchAnalyzer,
 		generator:      generator,
 		releaseTracker: releaseTracker,
+		palette:        components.NewCommandPalette(theme, components.DefaultCommandCatalog()),
+		workspace:      components.NewCommandWorkspace(theme),
+		uiState:        StateNormal,
+		focusPane:      FocusSidebar,
 	}
 	m.pages = map[PageID]tea.Model{
 		PageDashboard:  pages.NewDashboard(s, theme),
@@ -147,24 +155,10 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-	case "/":
-		m.showHelp = false
-		return m, func() tea.Msg { return NavigatedMsg{Page: PageSearch} }
-		case "?":
-			m.showHelp = !m.showHelp
-			return m, nil
-		case "esc":
-		m.showHelp = false
-		return m, nil
-	default:
-		if page, ok := components.ShortcutPage(msg.String()); ok {
-			m.showHelp = false
-			return m, func() tea.Msg { return NavigatedMsg{Page: page} }
+		if m.uiState == StatePalette {
+			return m.handlePaletteKey(msg)
 		}
-		}
+		return m.handleNormalKey(msg)
 	}
 
 	_, cmd = m.sidebar.Update(msg)
@@ -178,6 +172,74 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m *TuiModel) handlePaletteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+k":
+		m.uiState = StateNormal
+		m.palette.Close()
+		return m, nil
+	case "esc":
+		m.uiState = StateNormal
+		m.palette.Close()
+		return m, nil
+	case "enter":
+		node, ok := m.palette.Selected()
+		if !ok {
+			return m, nil
+		}
+		return m.applySelectedCommand(node)
+	default:
+		_, _ = m.palette.Update(msg)
+		return m, nil
+	}
+}
+
+func (m *TuiModel) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+	case "ctrl+k":
+		m.uiState = StatePalette
+		m.palette.Open()
+		return m, nil
+	case "/":
+		m.showHelp = false
+		return m, func() tea.Msg { return NavigatedMsg{Page: PageSearch} }
+	case "?":
+		m.showHelp = !m.showHelp
+		return m, nil
+	case "esc":
+		m.showHelp = false
+		return m, nil
+	case "tab":
+		if m.focusPane == FocusSidebar {
+			m.focusPane = FocusWorkspace
+		} else {
+			m.focusPane = FocusSidebar
+		}
+		return m, nil
+	default:
+		if page, ok := components.ShortcutPage(msg.String()); ok {
+			m.showHelp = false
+			return m, func() tea.Msg { return NavigatedMsg{Page: page} }
+		}
+	}
+	return m, nil
+}
+
+func (m *TuiModel) openPalette() {
+	m.uiState = StatePalette
+	m.palette.Open()
+}
+
+func (m *TuiModel) applySelectedCommand(node components.CommandNode) (tea.Model, tea.Cmd) {
+	m.uiState = StateNormal
+	m.palette.Close()
+	m.workspace.SelectCommand(node)
+	m.sidebar.SetRecent([]string{node.ID})
+	return m, func() tea.Msg { return NavigatedMsg{Page: node.Page} }
+}
+
 func (m *TuiModel) View() string {
 	if !m.ready {
 		return "loading..."
@@ -187,12 +249,27 @@ func (m *TuiModel) View() string {
 		return lipgloss.Place(m.width, m.height,
 			lipgloss.Center, lipgloss.Center, help)
 	}
-	sidebar := m.theme.Sidebar.Render(m.sidebar.View())
-	content := m.renderContent()
-	status := m.statusbar.View()
 
-	main := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, content)
-	return lipgloss.JoinVertical(lipgloss.Left, main, status)
+	sidebar := m.theme.Sidebar.Render(m.sidebar.View())
+	workspace := m.workspace.View()
+	content := m.renderContent()
+	body := lipgloss.JoinHorizontal(lipgloss.Top, workspace, content)
+
+	main := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, body)
+	if m.width < 90 {
+		main = lipgloss.JoinVertical(lipgloss.Left, sidebar, body)
+	}
+	status := m.statusbar.View()
+	view := lipgloss.JoinVertical(lipgloss.Left, main, status)
+
+	if m.uiState == StatePalette {
+		paletteView := m.palette.View(m.width, m.height)
+		if paletteView != "" {
+			return paletteView
+		}
+	}
+
+	return view
 }
 
 func (m *TuiModel) renderHelp() string {

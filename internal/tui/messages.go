@@ -43,3 +43,19 @@ type TaskDoneMsg = types.TaskDoneMsg
 type RepoSelectedMsg = types.RepoSelectedMsg
 
 type TickMsg = types.TickMsg
+
+type CommandSelectedMsg = types.CommandSelectedMsg
+
+type UIState = types.UIState
+
+const (
+	StateNormal  = types.StateNormal
+	StatePalette = types.StatePalette
+)
+
+type FocusPane = types.FocusPane
+
+const (
+	FocusSidebar   = types.FocusSidebar
+	FocusWorkspace = types.FocusWorkspace
+)

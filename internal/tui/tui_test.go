@@ -139,6 +139,121 @@ func TestTuiModelSidebarShortcutNavigation(t *testing.T) {
 	}
 }
 
+func TestTuiModelCtrlKOpensPalette(t *testing.T) {
+	cfg := config.Default()
+	m := NewTuiModel(cfg, nil)
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	if m.uiState != StatePalette {
+		t.Fatalf("expected palette state, got %d", m.uiState)
+	}
+	if !m.palette.IsOpen() {
+		t.Fatal("expected palette to be open")
+	}
+}
+
+func TestTuiModelCtrlKTogglesPalette(t *testing.T) {
+	cfg := config.Default()
+	m := NewTuiModel(cfg, nil)
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	if m.uiState != StatePalette {
+		t.Fatal("expected palette state after first Ctrl+K")
+	}
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	if m.uiState != StateNormal {
+		t.Fatal("expected normal state after second Ctrl+K")
+	}
+	if m.palette.IsOpen() {
+		t.Fatal("expected palette to be closed")
+	}
+}
+
+func TestTuiModelEscClosesPalette(t *testing.T) {
+	cfg := config.Default()
+	m := NewTuiModel(cfg, nil)
+
+	m.uiState = StatePalette
+	m.palette.Open()
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if m.uiState != StateNormal {
+		t.Fatal("expected normal state after Esc")
+	}
+	if m.palette.IsOpen() {
+		t.Fatal("expected palette to be closed after Esc")
+	}
+}
+
+func TestTuiModelEnterSelectsCommand(t *testing.T) {
+	cfg := config.Default()
+	m := NewTuiModel(cfg, nil)
+
+	m.uiState = StatePalette
+	m.palette.Open()
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected navigate command after Enter in palette")
+	}
+	if m.uiState != StateNormal {
+		t.Fatal("expected normal state after Enter")
+	}
+	if m.palette.IsOpen() {
+		t.Fatal("expected palette to be closed after Enter")
+	}
+}
+
+func TestTuiModelTabTogglesFocus(t *testing.T) {
+	cfg := config.Default()
+	m := NewTuiModel(cfg, nil)
+
+	if m.focusPane != FocusSidebar {
+		t.Fatal("expected initial focus to be sidebar")
+	}
+
+	m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if m.focusPane != FocusWorkspace {
+		t.Fatal("expected focus to switch to workspace")
+	}
+
+	m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if m.focusPane != FocusSidebar {
+		t.Fatal("expected focus to switch back to sidebar")
+	}
+}
+
+func TestTuiModelViewRendersPalette(t *testing.T) {
+	cfg := config.Default()
+	m := NewTuiModel(cfg, nil)
+	m.ready = true
+	m.width = 100
+	m.height = 30
+
+	m.uiState = StatePalette
+	m.palette.Open()
+
+	view := m.View()
+	if view == "" {
+		t.Fatal("expected non-empty view when palette is open")
+	}
+}
+
+func TestTuiModelViewWithWorkspace(t *testing.T) {
+	cfg := config.Default()
+	m := NewTuiModel(cfg, nil)
+	m.ready = true
+	m.width = 100
+	m.height = 30
+
+	view := m.View()
+	if view == "" {
+		t.Fatal("expected non-empty view")
+	}
+}
+
 func TestTuiModelQQuits(t *testing.T) {
 	cfg := config.Default()
 	m := NewTuiModel(cfg, nil)
