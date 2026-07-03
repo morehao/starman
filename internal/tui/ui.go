@@ -18,13 +18,15 @@ import (
 )
 
 type Model struct {
-	ctx     *tuicontext.ProgramContext
-	keys    *keys.KeyMap
-	tabs    tabs.Model
-	sidebar sidebar.Model
-	footer  footer.Model
-	stars   section.Section
-	repo    *repoview.Model
+	ctx         *tuicontext.ProgramContext
+	keys        *keys.KeyMap
+	tabs        tabs.Model
+	sidebar     sidebar.Model
+	footer      footer.Model
+	stars       section.Section
+	repo        *repoview.Model
+	showSidebar bool
+	showHelp    bool
 }
 
 func NewModel(ctx *tuicontext.ProgramContext) Model {
@@ -37,13 +39,14 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 	footerModel.SetRight(ctx.Version)
 
 	return Model{
-		ctx:     ctx,
-		keys:    &keyMap,
-		tabs:    tabModel,
-		sidebar: sidebar.NewModel(ctx),
-		footer:  footerModel,
-		stars:   starssection.NewModel(1, ctx, section.SectionConfig{Title: "Stars"}, starssection.GroupAll),
-		repo:    repoview.NewModel(),
+		ctx:         ctx,
+		keys:        &keyMap,
+		tabs:        tabModel,
+		sidebar:     sidebar.NewModel(ctx),
+		footer:      footerModel,
+		stars:       starssection.NewModel(1, ctx, section.SectionConfig{Title: "Stars"}, starssection.GroupAll),
+		repo:        repoview.NewModel(),
+		showSidebar: true,
 	}
 }
 
@@ -67,6 +70,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(typed, m.keys.Up):
 			m.stars.PrevRow()
 			m.syncSidebar()
+		case key.Matches(typed, m.keys.FirstLine):
+			m.stars.FirstItem()
+			m.syncSidebar()
+		case key.Matches(typed, m.keys.LastLine):
+			m.stars.LastItem()
+			m.syncSidebar()
+		case key.Matches(typed, m.keys.ToggleSidebar):
+			m.showSidebar = !m.showSidebar
+		case key.Matches(typed, m.keys.Help):
+			m.showHelp = !m.showHelp
 		}
 	}
 
@@ -81,7 +94,14 @@ func (m Model) View() tea.View {
 	if strings.TrimSpace(starsView) == "" {
 		starsView = "No repos yet"
 	}
-	content := m.tabs.View() + "\n" + starsView + "\n" + m.sidebar.View() + "\n" + m.footer.View()
+	content := m.tabs.View() + "\n" + starsView
+	if m.showSidebar {
+		content += "\n" + m.sidebar.View()
+	}
+	if m.showHelp {
+		content += "\n" + "j/k move  g/G first/last  p sidebar  ? help  q quit"
+	}
+	content += "\n" + m.footer.View()
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v

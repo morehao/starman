@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/morehao/starman/internal/config"
 	"github.com/morehao/starman/internal/tui"
@@ -40,7 +41,7 @@ func NewRootCmd(ver string) *cobra.Command {
 }
 
 func Run(ver string) {
-	if len(os.Args) <= 1 {
+	if !hasSubcommandArgs(os.Args[1:]) {
 		configPath, err := config.DefaultPath()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -65,4 +66,38 @@ func Run(ver string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func hasSubcommandArgs(args []string) bool {
+	root := NewRootCmd("test")
+	flags := root.PersistentFlags()
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			return i+1 < len(args)
+		}
+		if !strings.HasPrefix(arg, "-") {
+			return true
+		}
+		if arg == "-h" || arg == "--help" || arg == "--version" {
+			return false
+		}
+		if !strings.HasPrefix(arg, "--") {
+			return true
+		}
+
+		name, _, hasValue := strings.Cut(arg[2:], "=")
+		f := flags.Lookup(name)
+		if f == nil {
+			return true
+		}
+		if hasValue || f.NoOptDefVal != "" {
+			continue
+		}
+		if i+1 >= len(args) {
+			return true
+		}
+		i++
+	}
+	return false
 }

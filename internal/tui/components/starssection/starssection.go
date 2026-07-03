@@ -2,6 +2,7 @@ package starssection
 
 import (
 	"context"
+	"fmt"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -12,7 +13,10 @@ import (
 )
 
 const (
-	GroupAll = "all"
+	GroupAll      = "all"
+	GroupLanguage = "language"
+	GroupCategory = "category"
+	GroupTag      = "tag"
 )
 
 type RepoRow struct {
@@ -45,13 +49,26 @@ type ReposFetchedMsg struct {
 	Repos     []*store.Repository
 }
 
+type ReposFetchFailedMsg struct {
+	SectionID int
+	Err       error
+}
+
+type GroupHeaderRow struct {
+	Title string
+}
+
+func (r GroupHeaderRow) GetId() string    { return "group:" + r.Title }
+func (r GroupHeaderRow) GetTitle() string { return r.Title }
+func (r GroupHeaderRow) GetUrl() string   { return "" }
+
 type Model struct {
 	id        int
 	ctx       *tuicontext.ProgramContext
 	cfg       section.SectionConfig
 	groupBy   string
 	list      listviewport.Model
-	rows      []RepoRow
+	rows      []section.RowData
 	loaded    bool
 	isLoading bool
 }
@@ -61,17 +78,17 @@ func NewModel(id int, ctx *tuicontext.ProgramContext, cfg section.SectionConfig,
 	return &Model{id: id, ctx: ctx, cfg: cfg, groupBy: groupBy, list: list}
 }
 
-func (m *Model) GetId() int                        { return m.id }
-func (m *Model) GetType() string                   { return "stars" }
-func (m *Model) GetConfig() section.SectionConfig  { return m.cfg }
-func (m *Model) NumRows() int                      { return len(m.rows) }
-func (m *Model) CurrRowIndex() int                 { return m.list.Cursor() }
-func (m *Model) View() string                      { return m.list.View() }
-func (m *Model) GetIsLoading() bool                { return m.isLoading }
-func (m *Model) GetTotalCount() int                { return len(m.rows) }
-func (m *Model) IsSearchFocused() bool             { return false }
-func (m *Model) ResetFilters()                     {}
-func (m *Model) SetIsLoading(v bool)               { m.isLoading = v }
+func (m *Model) GetId() int                                          { return m.id }
+func (m *Model) GetType() string                                     { return "stars" }
+func (m *Model) GetConfig() section.SectionConfig                    { return m.cfg }
+func (m *Model) NumRows() int                                        { return len(m.rows) }
+func (m *Model) CurrRowIndex() int                                   { return m.list.Cursor() }
+func (m *Model) View() string                                        { return m.list.View() }
+func (m *Model) GetIsLoading() bool                                  { return m.isLoading }
+func (m *Model) GetTotalCount() int                                  { return len(m.rows) }
+func (m *Model) IsSearchFocused() bool                               { return false }
+func (m *Model) ResetFilters()                                       {}
+func (m *Model) SetIsLoading(v bool)                                 { m.isLoading = v }
 func (m *Model) UpdateProgramContext(ctx *tuicontext.ProgramContext) { m.ctx = ctx }
 
 func (m *Model) CurrRow() section.RowData {
@@ -101,14 +118,16 @@ func (m *Model) Update(msg tea.Msg) (section.Section, tea.Cmd) {
 		if typed.SectionID != m.id {
 			return m, nil
 		}
-		m.rows = make([]RepoRow, 0, len(typed.Repos))
-		listRows := make([]section.RowData, 0, len(typed.Repos))
-		for _, repo := range typed.Repos {
-			row := RepoRow{Repo: repo}
-			m.rows = append(m.rows, row)
-			listRows = append(listRows, row)
-		}
+		listRows := m.buildRows(typed.Repos)
 		m.list.SetRows(listRows)
+		m.loaded = true
+		m.isLoading = false
+	case ReposFetchFailedMsg:
+		if typed.SectionID != m.id {
+			return m, nil
+		}
+		m.rows = nil
+		m.list.SetRows(nil)
 		m.loaded = true
 		m.isLoading = false
 	}
@@ -121,9 +140,54 @@ func (m *Model) FetchNextPageSectionRows() []tea.Cmd {
 	}
 	m.isLoading = true
 	return []tea.Cmd{func() tea.Msg {
-		repos, _ := m.ctx.Store.ListRepositories(context.Background())
+		repos, err := m.ctx.Store.ListRepositories(context.Background())
+		if err != nil {
+			return ReposFetchFailedMsg{SectionID: m.id, Err: err}
+		}
 		return ReposFetchedMsg{SectionID: m.id, Repos: repos}
 	}}
+}
+
+func (m *Model) buildRows(repos []*store.Repository) []section.RowData {
+	if m.groupBy == GroupAll {
+		m.rows = make([]section.RowData, 0, len(repos))
+		rows := make([]section.RowData, 0, len(repos))
+		for _, repo := range repos {
+			repoRow := RepoRow{Repo: repo}
+			m.rows = append(m.rows, repoRow)
+			rows = append(rows, repoRow)
+		}
+		return rows
+	}
+
+	grouped := groupReposBy(m.groupBy, repos)
+	keys := grouped.KeysSorted()
+	m.rows = make([]section.RowData, 0, len(repos)+len(keys))
+	rows := make([]section.RowData, 0, len(repos)+len(keys))
+	for _, key := range keys {
+		header := GroupHeaderRow{Title: fmt.Sprintf("%s (%d)", key, grouped.BucketCount(key))}
+		m.rows = append(m.rows, header)
+		rows = append(rows, header)
+		for _, repo := range grouped.Get(key) {
+			repoRow := RepoRow{Repo: repo}
+			m.rows = append(m.rows, repoRow)
+			rows = append(rows, repoRow)
+		}
+	}
+	return rows
+}
+
+func groupReposBy(groupBy string, repos []*store.Repository) GroupedRepos {
+	switch groupBy {
+	case GroupLanguage:
+		return GroupByLanguage(repos)
+	case GroupCategory:
+		return GroupByCategory(repos)
+	case GroupTag:
+		return GroupByTag(repos)
+	default:
+		return GroupByLanguage(repos)
+	}
 }
 
 func (m *Model) ResetRows() {
