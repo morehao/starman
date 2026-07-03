@@ -7,6 +7,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbletea"
+	"github.com/morehao/starman/internal/app"
+	"github.com/morehao/starman/internal/ai"
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/styles"
 	"github.com/morehao/starman/internal/tui/types"
@@ -23,23 +25,25 @@ const (
 var modeNames = []string{"TEXT", "VECTOR", "LLM"}
 
 type SearchModel struct {
-	store   store.Store
-	theme   *styles.Theme
-	input   textinput.Model
-	results []*store.Repository
-	cursor  int
-	mode    searchMode
-	width   int
-	height  int
-	loaded  bool
+	store        store.Store
+	theme        *styles.Theme
+	searchAction app.SearchAction
+	input        textinput.Model
+	results      []*store.Repository
+	cursor       int
+	mode         searchMode
+	width        int
+	height       int
+	loaded       bool
+	err          error
 }
 
-func NewSearch(s store.Store, theme *styles.Theme) *SearchModel {
+func NewSearch(s store.Store, theme *styles.Theme, searchAction app.SearchAction) *SearchModel {
 	ti := textinput.New()
 	ti.Placeholder = "Search repositories..."
 	ti.CharLimit = 100
 	ti.Width = 60
-	return &SearchModel{store: s, theme: theme, input: ti}
+	return &SearchModel{store: s, theme: theme, searchAction: searchAction, input: ti}
 }
 
 func (m *SearchModel) Init() tea.Cmd { return textinput.Blink }
@@ -77,26 +81,29 @@ func (m *SearchModel) doSearch() {
 	q := strings.TrimSpace(m.input.Value())
 	if len(q) < 2 {
 		m.results = nil
+		m.loaded = false
 		return
 	}
-	ctx := context.Background()
-	repos, err := m.store.ListRepositories(ctx)
+	m.err = nil
+	if m.searchAction == nil {
+		return
+	}
+	res, err := m.searchAction.Run(context.Background(), q, app.SearchOpts{Limit: 50, Sort: "score"})
 	if err != nil {
+		m.err = err
 		return
 	}
-	var filtered []*store.Repository
-	qLower := strings.ToLower(q)
-	for _, r := range repos {
-		if strings.Contains(strings.ToLower(r.FullName), qLower) ||
-			strings.Contains(strings.ToLower(r.Description), qLower) ||
-			strings.Contains(strings.ToLower(r.AISummary), qLower) ||
-			strings.Contains(strings.ToLower(r.Language), qLower) {
-			filtered = append(filtered, r)
-		}
-	}
-	m.results = filtered
+	m.results = extractHits(res.Hits)
 	m.loaded = true
 	m.cursor = 0
+}
+
+func extractHits(hits []*ai.SearchHit) []*store.Repository {
+	repos := make([]*store.Repository, len(hits))
+	for i, h := range hits {
+		repos[i] = h.Repo
+	}
+	return repos
 }
 
 func (m *SearchModel) View() string {
@@ -110,6 +117,9 @@ func (m *SearchModel) View() string {
 		}
 	}
 	body := title + m.input.View() + "\n" + modeStr + "\n\n"
+	if m.err != nil {
+		body += fmt.Sprintf("Error: %v\n", m.err)
+	}
 	if m.loaded && len(m.results) > 0 {
 		body += fmt.Sprintf("Results: %d\n", len(m.results))
 		for i, r := range m.results {

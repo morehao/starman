@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/charmbracelet/bubbletea"
@@ -11,26 +12,36 @@ import (
 )
 
 type TrendingModel struct {
-	store  store.Store
-	theme  *styles.Theme
-	repos  []discovery.TrendingRepo
-	cursor int
-	source string
-	width  int
-	height int
-	loaded bool
+	store     store.Store
+	theme     *styles.Theme
+	discovery *discovery.Service
+	repos     []*discovery.TrendingRepo
+	cursor    int
+	source    string
+	since     string
+	width     int
+	height    int
+	loaded    bool
 }
 
-type trendingLoadedMsg struct{ repos []discovery.TrendingRepo }
+type trendingLoadedMsg struct{ repos []*discovery.TrendingRepo }
 
-func NewTrending(s store.Store, theme *styles.Theme) *TrendingModel {
-	return &TrendingModel{store: s, theme: theme, source: "rss"}
+func NewTrending(s store.Store, theme *styles.Theme, discovery *discovery.Service) *TrendingModel {
+	return &TrendingModel{store: s, theme: theme, discovery: discovery, source: "rss", since: "weekly"}
 }
 
 func (m *TrendingModel) Init() tea.Cmd { return m.loadCmd }
 
 func (m *TrendingModel) loadCmd() tea.Msg {
-	return trendingLoadedMsg{repos: nil}
+	if m.discovery == nil {
+		return trendingLoadedMsg{repos: nil}
+	}
+	ctx := context.Background()
+	repos, err := m.discovery.Trending(ctx, discovery.TrendingOpts{Since: m.since, Source: m.source, Top: 20})
+	if err != nil {
+		return trendingLoadedMsg{repos: nil}
+	}
+	return trendingLoadedMsg{repos: repos}
 }
 
 func (m *TrendingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

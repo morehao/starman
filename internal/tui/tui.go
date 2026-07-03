@@ -1,12 +1,17 @@
 package tui
 
 import (
+	"context"
 	"path/filepath"
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/morehao/starman/internal/ai"
+	"github.com/morehao/starman/internal/app"
 	"github.com/morehao/starman/internal/config"
+	"github.com/morehao/starman/internal/discovery"
+	"github.com/morehao/starman/internal/github"
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/components"
 	"github.com/morehao/starman/internal/tui/pages"
@@ -14,38 +19,63 @@ import (
 )
 
 type TuiModel struct {
-	config      *config.Config
-	store       store.Store
-	theme       *styles.Theme
-	width       int
-	height      int
-	currentPage PageID
-	sidebar     *components.SidebarModel
-	statusbar   *components.StatusBarModel
-	taskCenter  *TaskCenter
-	pages       map[PageID]tea.Model
-	ready       bool
-	showHelp    bool
+	config       *config.Config
+	store        store.Store
+	theme        *styles.Theme
+	width        int
+	height       int
+	currentPage  PageID
+	sidebar      *components.SidebarModel
+	statusbar    *components.StatusBarModel
+	taskCenter   *TaskCenter
+	syncAction   app.SyncAction
+	searchAction app.SearchAction
+	discovery    *discovery.Service
+	pages        map[PageID]tea.Model
+	ready        bool
+	showHelp     bool
 }
 
 func NewTuiModel(cfg *config.Config, s store.Store) *TuiModel {
 	theme := styles.DefaultTheme()
+
+	ghToken := config.ResolveToken(cfg, "")
+	gh := github.New(ghToken)
+	ds := discovery.NewService(gh)
+
+	syncAction := app.NewSyncAction(s, gh, cfg.GitHub.Username)
+
+	aiKey := config.ResolveAIKey(cfg, "")
+	aiClient := ai.NewClient(cfg.AI.BaseURL, aiKey, cfg.AI.Model)
+	embeddingKey := config.ResolveEmbeddingKey(cfg, "")
+	embeddingClient := ai.NewEmbeddingClient(cfg.Embedding.BaseURL, embeddingKey, cfg.Embedding.Model)
+	aiSvc := ai.NewServiceWithEmbedding(aiClient, gh, embeddingClient)
+	searchIndex := ai.NewSearchIndex()
+	if s != nil {
+		_ = searchIndex.Load(context.Background(), s)
+	}
+	aiSvc.SetSearchIndex(searchIndex)
+	searchAction := app.NewSearchAction(s, aiSvc)
+
 	m := &TuiModel{
-		config:      cfg,
-		store:       s,
-		theme:       theme,
-		currentPage: PageDashboard,
-		sidebar:     components.NewSidebar(theme),
-		statusbar:   components.NewStatusBar(theme),
-		taskCenter:  NewTaskCenter(),
+		config:       cfg,
+		store:        s,
+		theme:        theme,
+		currentPage:  PageDashboard,
+		sidebar:      components.NewSidebar(theme),
+		statusbar:    components.NewStatusBar(theme),
+		taskCenter:   NewTaskCenter(),
+		syncAction:   syncAction,
+		searchAction: searchAction,
+		discovery:    ds,
 	}
 	m.pages = map[PageID]tea.Model{
 		PageDashboard:  pages.NewDashboard(s, theme),
-		PageSearch:     pages.NewSearch(s, theme),
+		PageSearch:     pages.NewSearch(s, theme, searchAction),
 		PageRepoList:   pages.NewRepoList(s, theme),
 		PageRepoDetail: pages.NewRepoDetail(s, theme),
-		PageTrending:   pages.NewTrending(s, theme),
-		PageSync:       pages.NewSync(s, theme),
+		PageTrending:   pages.NewTrending(s, theme, ds),
+		PageSync:       pages.NewSync(s, theme, syncAction, m.taskCenter.Enqueue),
 		PageAnalyze:    pages.NewAnalyze(s, theme),
 		PageTag:        pages.NewTag(s, theme),
 		PageCategorize: pages.NewCategorize(s, theme),
