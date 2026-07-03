@@ -8,9 +8,12 @@ import (
 	"github.com/morehao/starman/internal/store"
 )
 
-type stubSearchService struct{}
+type stubSearchService struct {
+	searchCalls int
+}
 
 func (s *stubSearchService) Search(ctx context.Context, query string, st store.Store, opts ai.SearchOpts) (*ai.SearchResult, error) {
+	s.searchCalls++
 	return &ai.SearchResult{
 		Hits: []*ai.SearchHit{
 			{Repo: &store.Repository{ID: 1, FullName: "owner/repo1", StargazersCount: 100}, Score: 0.9},
@@ -35,5 +38,8 @@ func TestSearchActionRun(t *testing.T) {
 	}
 	if len(res.Hits) == 0 {
 		t.Fatalf("expected at least one hit")
+	}
+	if fakeAI.searchCalls != 1 {
+		t.Fatalf("expected Search called once, got %d", fakeAI.searchCalls)
 	}
 }

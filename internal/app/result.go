@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"time"
 
 	"github.com/morehao/starman/internal/ai"
@@ -35,4 +36,12 @@ type SearchOpts struct {
 type SearchResult struct {
 	Result
 	Hits []*ai.SearchHit
+}
+
+type SyncAction interface {
+	Run(ctx context.Context, opts SyncOpts) (*SyncResult, error)
+}
+
+type SearchAction interface {
+	Run(ctx context.Context, query string, opts SearchOpts) (*SearchResult, error)
 }

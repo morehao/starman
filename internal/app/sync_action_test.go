@@ -115,10 +115,12 @@ func (s *stubStore) IncrementSyncCount(ctx context.Context) error {
 func (s *stubStore) Close() error { return nil }
 
 type stubStarLister struct {
-	repos []*store.Repository
+	listCalls int
+	repos     []*store.Repository
 }
 
 func (s *stubStarLister) ListStarred(ctx context.Context, username string) ([]*store.Repository, error) {
+	s.listCalls++
 	return s.repos, nil
 }
 
@@ -137,5 +139,8 @@ func TestSyncActionRun(t *testing.T) {
 	}
 	if res.Fetched <= 0 {
 		t.Fatalf("expected fetched > 0")
+	}
+	if fakeGitHub.listCalls != 1 {
+		t.Fatalf("expected ListStarred called once, got %d", fakeGitHub.listCalls)
 	}
 }

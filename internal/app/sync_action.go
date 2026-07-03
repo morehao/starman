@@ -17,7 +17,7 @@ type syncAction struct {
 	username string
 }
 
-func NewSyncAction(s store.Store, gh StarLister, username string) *syncAction {
+func NewSyncAction(s store.Store, gh StarLister, username string) SyncAction {
 	return &syncAction{store: s, gh: gh, username: username}
 }
 
@@ -27,25 +27,11 @@ func (a *syncAction) Run(ctx context.Context, opts SyncOpts) (*SyncResult, error
 		return nil, fmt.Errorf("list starred: %w", err)
 	}
 
-	prevStats, _ := a.store.GetSyncStats(ctx)
-	prevCount := 0
-	if prevStats != nil {
-		prevCount = prevStats.LastRepoCount
-	}
-	newCount := 0
-	if len(repos) > prevCount {
-		newCount = len(repos) - prevCount
-	}
-
 	if err := a.store.UpsertReposOnSync(ctx, repos, opts.Full); err != nil {
 		return nil, fmt.Errorf("sync to db: %w", err)
 	}
 
 	return &SyncResult{
-		Result: Result{
-			Summary: fmt.Sprintf("%d repos fetched (%d new)", len(repos), newCount),
-		},
-		Fetched:  len(repos),
-		NewCount: newCount,
+		Fetched: len(repos),
 	}, nil
 }

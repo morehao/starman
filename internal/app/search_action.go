@@ -17,17 +17,11 @@ type searchAction struct {
 	svc   SearchService
 }
 
-func NewSearchAction(s store.Store, svc SearchService) *searchAction {
+func NewSearchAction(s store.Store, svc SearchService) SearchAction {
 	return &searchAction{store: s, svc: svc}
 }
 
 func (a *searchAction) Run(ctx context.Context, query string, opts SearchOpts) (*SearchResult, error) {
-	repos, err := a.store.ListRepositories(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list repositories: %w", err)
-	}
-	_ = repos
-
 	aiOpts := ai.SearchOpts{
 		Language: opts.Lang,
 		Category: opts.Category,
