@@ -42,7 +42,7 @@ func NewRootCmd(ver string) *cobra.Command {
 
 func Run(ver string) {
 	if !hasSubcommandArgs(os.Args[1:]) {
-		configPath, err := config.DefaultPath()
+		configPath, err := configPathForArgs(os.Args[1:])
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -66,6 +66,23 @@ func Run(ver string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func configPathForArgs(args []string) (string, error) {
+	root := NewRootCmd("test")
+	if err := root.ParseFlags(args); err != nil {
+		return "", err
+	}
+
+	v, err := root.PersistentFlags().GetString("config")
+	if err != nil {
+		return "", err
+	}
+	if v != "" {
+		return v, nil
+	}
+
+	return config.DefaultPath()
 }
 
 func hasSubcommandArgs(args []string) bool {
