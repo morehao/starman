@@ -94,3 +94,40 @@ func TestCommandWorkspaceOutputAppend(t *testing.T) {
 		t.Fatal("view missing output line 2")
 	}
 }
+
+func TestCommandWorkspaceLayoutMatchesSpec(t *testing.T) {
+	w := NewCommandWorkspace(styles.DefaultTheme())
+	w.SelectCommand(CommandNode{
+		ID:          "sync",
+		Label:       "Sync Repositories",
+		Description: "拉取 GitHub 星标并合并到本地库",
+		Shortcut:    "s",
+		Params: []CommandParamSpec{
+			{Key: "include_archived", Label: "include archived", Type: ParamBool, Required: false},
+			{Key: "concurrency", Label: "concurrency", Type: ParamNumber, Required: false, DefaultValue: "3"},
+		},
+	})
+	w.AppendOutput("fetching starred repos... 340 found")
+	v := w.View()
+
+	checks := []string{
+		"▍Sync Repositories",
+		"[s]",
+		"拉取 GitHub 星标",
+		"Params",
+		"include archived",
+		"concurrency",
+		"[3]",
+		"Output",
+		"fetching starred repos",
+	}
+	for _, c := range checks {
+		if !strings.Contains(v, c) {
+			t.Fatalf("missing %q in layout\n=== got ===\n%s", c, v)
+		}
+	}
+
+	if strings.Count(v, "──") < 2 {
+		t.Fatalf("missing section separators\n=== got ===\n%s", v)
+	}
+}

@@ -181,10 +181,8 @@ func (m *CommandWorkspaceModel) renderParamField(p CommandParamSpec) string {
 	}
 
 	labelStyle := lipgloss.NewStyle().
-		Width(14).
-		Foreground(m.theme.Text).
-		Bold(true).
-		Foreground(m.theme.Primary)
+		Foreground(m.theme.Primary).
+		Bold(true)
 
 	value := m.params[p.Key]
 	if value == "" {
@@ -198,10 +196,9 @@ func (m *CommandWorkspaceModel) renderParamField(p CommandParamSpec) string {
 		Foreground(m.theme.Muted)
 
 	b.WriteString("  ")
-	b.WriteString(labelStyle.Render(label))
-	b.WriteString(" ")
-	b.WriteString(valueStyle.Render(value))
-	b.WriteString(mutedStyle.Render("  ["+string(p.Type)+"]"))
+	b.WriteString(labelStyle.Render(label) + ":")
+	b.WriteString(valueStyle.Render("["+value+"]"))
+	b.WriteString(mutedStyle.Render(" ["+string(p.Type)+"]"))
 
 	return b.String()
 }
