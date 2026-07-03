@@ -92,3 +92,6 @@ scoops:
       CLI tool for managing GitHub starred repositories with AI —
       sync, analyze, categorize, search, and generate awesome lists
     license: Apache-2.0
+    commit_author:
+      name: morehao
+      email: morehao@users.noreply.github.com
