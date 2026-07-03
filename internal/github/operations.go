@@ -127,6 +127,9 @@ func (c *Client) UpdateReadmeFile(ctx context.Context, owner, repo, content, mes
 }
 
 func (c *Client) CommitFile(ctx context.Context, owner, repo, path string, content []byte, message string) error {
+	if len(content) > 1*1024*1024 {
+		return fmt.Errorf("file too large (%d bytes) for GitHub Contents API (max 1MB); use 'starman backup webdav --push'", len(content))
+	}
 	if _, _, err := c.client.Repositories.Get(ctx, owner, repo); err != nil {
 		return fmt.Errorf("repo %s/%s not accessible: %w", owner, repo, err)
 	}

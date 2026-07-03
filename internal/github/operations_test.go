@@ -138,6 +138,10 @@ func TestCommitFile_Create(t *testing.T) {
 	var method, reqPath string
 	var reqBody map[string]any
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo" {
+			json.NewEncoder(w).Encode(map[string]any{"id": 1, "full_name": "owner/repo"})
+			return
+		}
 		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
 			w.WriteHeader(404)
 			return
@@ -170,6 +174,10 @@ func TestCommitFile_Update(t *testing.T) {
 	var method string
 	var reqBody map[string]any
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo" {
+			json.NewEncoder(w).Encode(map[string]any{"id": 1, "full_name": "owner/repo"})
+			return
+		}
 		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]any{
@@ -195,6 +203,23 @@ func TestCommitFile_Update(t *testing.T) {
 	}
 	if reqBody["sha"] != "abc123" {
 		t.Fatalf("expected sha abc123, got %v", reqBody["sha"])
+	}
+}
+
+func TestCommitFile_RepoNotFound(t *testing.T) {
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/owner/repo" {
+			w.WriteHeader(404)
+			json.NewEncoder(w).Encode(map[string]any{"message": "Not Found"})
+			return
+		}
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/test.json", []byte(`{}`), "test")
+	if err == nil {
+		t.Fatal("expected error for non-existent repo")
 	}
 }
 
