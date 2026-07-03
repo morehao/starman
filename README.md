@@ -176,7 +176,7 @@ Available on every command:
 Sync starred repos from GitHub to local SQLite.
 
 ```bash
-starman sync [flags]
+starman sync [--full] [--watch] [--interval 30m]
 ```
 
 | Flag | Type | Default | Description |
