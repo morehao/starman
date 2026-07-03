@@ -134,6 +134,70 @@ func TestGetContentFile(t *testing.T) {
 	}
 }
 
+func TestCommitFile_Create(t *testing.T) {
+	var method, reqPath string
+	var reqBody map[string]any
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
+			w.WriteHeader(404)
+			return
+		}
+		method = r.Method
+		reqPath = r.URL.Path
+		json.NewDecoder(r.Body).Decode(&reqBody)
+		w.WriteHeader(201)
+		json.NewEncoder(w).Encode(map[string]any{"content": map[string]any{}})
+	})
+	defer server.Close()
+
+	content := []byte(`{"version":1,"repositories":[]}`)
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/2025-07-03.json", content, "backup starman data 2025-07-03")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != "PUT" {
+		t.Fatalf("expected PUT, got %s", method)
+	}
+	if reqPath != "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
+		t.Fatalf("unexpected path: %s", reqPath)
+	}
+	if reqBody["message"] != "backup starman data 2025-07-03" {
+		t.Fatalf("unexpected message: %v", reqBody["message"])
+	}
+}
+
+func TestCommitFile_Update(t *testing.T) {
+	var method string
+	var reqBody map[string]any
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{
+				"content":  base64.StdEncoding.EncodeToString([]byte("old")),
+				"encoding": "base64",
+				"sha":      "abc123",
+			})
+			return
+		}
+		method = r.Method
+		json.NewDecoder(r.Body).Decode(&reqBody)
+		w.WriteHeader(200)
+		json.NewEncoder(w).Encode(map[string]any{"content": map[string]any{}})
+	})
+	defer server.Close()
+
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/2025-07-03.json", []byte(`{"new":true}`), "backup starman data 2025-07-03")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != "PUT" {
+		t.Fatalf("expected PUT, got %s", method)
+	}
+	if reqBody["sha"] != "abc123" {
+		t.Fatalf("expected sha abc123, got %v", reqBody["sha"])
+	}
+}
+
 func TestSearchRepositories(t *testing.T) {
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/search/repositories") {
