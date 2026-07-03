@@ -604,7 +604,7 @@ func (m Model) View() tea.View {
 	helpLine := ""
 	if m.showHelp {
 		helpLine = "\n" + common.RenderPreviewHeader(theme, m.ctx.ScreenWidth,
-			"j/k move  g/G first/last  h/l prev/next tab  p sidebar  s sync  / search  : cmd  Tab view  ? help  q quit")
+			"j/k move  g/G first/last  h/l prev/next tab  p sidebar  x star  c category  t tag  s sync  / search  : cmd  Tab view  ? help  q quit")
 	}
 
 	footerView := m.footer.View()
