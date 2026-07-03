@@ -58,7 +58,8 @@ func (m *SidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = m.theme.Sidebar.GetWidth()
 		m.height = msg.Height
 	case tea.KeyMsg:
-		switch msg.String() {
+		key := msg.String()
+		switch key {
 		case "up", "k":
 			m.cursor = max(m.cursor-1, 0)
 			if menuItems[m.cursor].page == -1 {
@@ -76,6 +77,15 @@ func (m *SidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func ShortcutPage(key string) (types.PageID, bool) {
+	for i := range menuItems {
+		if menuItems[i].shortcut == key && menuItems[i].page >= 0 {
+			return menuItems[i].page, true
+		}
+	}
+	return 0, false
 }
 
 func (m *SidebarModel) View() string {

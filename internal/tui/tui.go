@@ -90,13 +90,22 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c":
+		case "ctrl+c", "q":
 			return m, tea.Quit
-		case "/":
-			return m, func() tea.Msg { return NavigatedMsg{Page: PageSearch} }
+	case "/":
+		m.showHelp = false
+		return m, func() tea.Msg { return NavigatedMsg{Page: PageSearch} }
 		case "?":
 			m.showHelp = !m.showHelp
 			return m, nil
+		case "esc":
+		m.showHelp = false
+		return m, nil
+	default:
+		if page, ok := components.ShortcutPage(msg.String()); ok {
+			m.showHelp = false
+			return m, func() tea.Msg { return NavigatedMsg{Page: page} }
+		}
 		}
 	}
 
@@ -130,11 +139,14 @@ func (m *TuiModel) View() string {
 
 func (m *TuiModel) renderHelp() string {
 	lines := []string{
-		"  q      Quit                Esc    Back/Cancel",
-		"  /      Search              ?      This help",
-		"  1-9    Jump sidebar item   Tab    Switch panel",
-		"  up/down Navigate list      Enter  Select/Confirm",
-		"  Space  Toggle selection    s      Star/Unstar",
+		"  q / ctrl+c  Quit                Esc      Back/Cancel",
+		"  /           Search              ?        This help",
+		"  Sidebar     Shortcuts:",
+		"    1: Dashboard   r: Repo List   t: Trending",
+		"    s: Sync        a: Analyze     g: Tag",
+		"    c: Categorize  S: Stats       R: Release",
+		"    G: Generate    b: Backup      C: Config",
+		"  up/down/j/k  Navigate list      Enter    Select/Confirm",
 	}
 	return m.theme.Card.Render(
 		m.theme.PageTitle.Render("Keyboard Shortcuts") + "\n\n" +

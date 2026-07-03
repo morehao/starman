@@ -27,8 +27,21 @@ func NewRootCmd(ver string) *cobra.Command {
 	root.PersistentFlags().String("token", "", "GitHub token (overrides config/env)")
 	root.PersistentFlags().Bool("verbose", false, "verbose output")
 
+	root.AddCommand(newSyncCmd())
+	root.AddCommand(newGenerateCmd())
+	root.AddCommand(newAnalyzeCmd())
+	root.AddCommand(newSearchCmd())
+	root.AddCommand(newReleaseCmd())
+	root.AddCommand(newStarCmd())
+	root.AddCommand(newUnstarCmd())
+	root.AddCommand(newBackupCmd())
+	root.AddCommand(newCategorizeCmd())
 	root.AddCommand(newConfigCmd())
 	root.AddCommand(newCompletionCmd(root))
+	root.AddCommand(newStatsCmd())
+	root.AddCommand(newInfoCmd())
+	root.AddCommand(newTagCmd())
+	root.AddCommand(newTrendingCmd())
 	return root
 }
 
