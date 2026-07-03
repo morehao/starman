@@ -5,12 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"sync/atomic"
 	"time"
-
-	"github.com/bartventer/httpcache"
-
-	_ "github.com/bartventer/httpcache/store/memcache"
 
 	gh "github.com/google/go-github/v71/github"
 	"github.com/morehao/starman/internal/store"
@@ -24,7 +21,7 @@ type Client struct {
 }
 
 func New(token string) *Client {
-	c := gh.NewClient(httpcache.NewClient("memcache://"))
+	c := gh.NewClient(&http.Client{})
 	if token != "" {
 		c = c.WithAuthToken(token)
 	}

@@ -3,7 +3,6 @@ module github.com/morehao/starman
 go 1.25.0
 
 require (
-	github.com/bartventer/httpcache v0.13.0
 	github.com/google/go-github/v71 v71.0.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/sync v0.21.0
