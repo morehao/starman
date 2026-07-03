@@ -1,6 +1,10 @@
 package components
 
-import "github.com/morehao/starman/internal/tui/types"
+import (
+	"strings"
+
+	"github.com/morehao/starman/internal/tui/types"
+)
 
 type CommandParamType string
 
@@ -53,4 +57,44 @@ func DefaultCommandCatalog() []CommandNode {
 
 func DefaultPinnedCommandIDs() []string {
 	return []string{"dashboard", "config", "sync", "search"}
+}
+
+func FilterCommands(nodes []CommandNode, query string) []CommandNode {
+	q := strings.TrimSpace(strings.ToLower(query))
+	if q == "" {
+		return append([]CommandNode(nil), nodes...)
+	}
+	filtered := make([]CommandNode, 0, len(nodes))
+	for _, n := range nodes {
+		hay := strings.ToLower(n.Label + " " + n.Description + " " + n.Shortcut + " " + n.ID)
+		if strings.Contains(hay, q) {
+			filtered = append(filtered, n)
+		}
+	}
+	return filtered
+}
+
+func NextGroupIndex(nodes []CommandNode, current int) int {
+	if len(nodes) == 0 || current < 0 || current >= len(nodes) {
+		return 0
+	}
+	group := nodes[current].Group
+	for i := current + 1; i < len(nodes); i++ {
+		if nodes[i].Group != group {
+			return i
+		}
+	}
+	return current
+}
+
+func FindByShortcut(nodes []CommandNode, key string) (CommandNode, bool) {
+	if key == "" {
+		return CommandNode{}, false
+	}
+	for _, n := range nodes {
+		if n.Shortcut == key {
+			return n, true
+		}
+	}
+	return CommandNode{}, false
 }

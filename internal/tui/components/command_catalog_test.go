@@ -101,6 +101,103 @@ func TestCommandParamTypes(t *testing.T) {
 	}
 }
 
+func TestFilterCommandsMatchesLabelDescAndShortcut(t *testing.T) {
+	nodes := DefaultCommandCatalog()
+	got := FilterCommands(nodes, "sync")
+	if len(got) != 1 || got[0].ID != "sync" {
+		t.Fatalf("expected sync, got %#v", got)
+	}
+	got = FilterCommands(nodes, "/")
+	if len(got) == 0 || got[0].ID != "search" {
+		t.Fatalf("expected search by shortcut, got %#v", got)
+	}
+}
+
+func TestFilterCommandsEmptyQueryReturnsAll(t *testing.T) {
+	nodes := DefaultCommandCatalog()
+	got := FilterCommands(nodes, "")
+	if len(got) != len(nodes) {
+		t.Fatalf("empty query should return all, got %d, want %d", len(got), len(nodes))
+	}
+	got = FilterCommands(nodes, "  ")
+	if len(got) != len(nodes) {
+		t.Fatalf("whitespace query should return all, got %d, want %d", len(got), len(nodes))
+	}
+}
+
+func TestFilterCommandsCaseInsensitive(t *testing.T) {
+	nodes := DefaultCommandCatalog()
+	got := FilterCommands(nodes, "SYNC")
+	if len(got) != 1 || got[0].ID != "sync" {
+		t.Fatalf("expected case-insensitive match, got %#v", got)
+	}
+}
+
+func TestFilterCommandsNoMatch(t *testing.T) {
+	nodes := DefaultCommandCatalog()
+	got := FilterCommands(nodes, "nonexistentxyz")
+	if len(got) != 0 {
+		t.Fatalf("expected no matches, got %d", len(got))
+	}
+}
+
+func TestGroupJumpMovesAcrossGroupBoundaries(t *testing.T) {
+	nodes := DefaultCommandCatalog()
+	next := NextGroupIndex(nodes, 0)
+	if next <= 0 {
+		t.Fatalf("expected next group index > 0, got %d", next)
+	}
+}
+
+func TestNextGroupIndexAtLastGroup(t *testing.T) {
+	nodes := DefaultCommandCatalog()
+	lastGroupStart := len(nodes) - 2
+	next := NextGroupIndex(nodes, lastGroupStart)
+	if next != lastGroupStart {
+		t.Fatalf("expected to stay at current index %d, got %d", lastGroupStart, next)
+	}
+}
+
+func TestNextGroupIndexEmptyAndOutOfBounds(t *testing.T) {
+	if got := NextGroupIndex(nil, 0); got != 0 {
+		t.Fatalf("empty nodes should return 0, got %d", got)
+	}
+	if got := NextGroupIndex([]CommandNode{}, 0); got != 0 {
+		t.Fatalf("empty nodes should return 0, got %d", got)
+	}
+	nodes := DefaultCommandCatalog()
+	if got := NextGroupIndex(nodes, -1); got != 0 {
+		t.Fatalf("negative index should return 0, got %d", got)
+	}
+	if got := NextGroupIndex(nodes, len(nodes)); got != 0 {
+		t.Fatalf("out of bounds should return 0, got %d", got)
+	}
+}
+
+func TestFindByShortcut(t *testing.T) {
+	nodes := DefaultCommandCatalog()
+	cmd, ok := FindByShortcut(nodes, "/")
+	if !ok || cmd.ID != "search" {
+		t.Fatalf("expected search by shortcut /, got %#v, ok=%v", cmd, ok)
+	}
+	cmd, ok = FindByShortcut(nodes, "s")
+	if !ok || cmd.ID != "sync" {
+		t.Fatalf("expected sync by shortcut s, got %#v, ok=%v", cmd, ok)
+	}
+}
+
+func TestFindByShortcutNotFound(t *testing.T) {
+	nodes := DefaultCommandCatalog()
+	_, ok := FindByShortcut(nodes, "nonexistent")
+	if ok {
+		t.Fatal("expected not found")
+	}
+	_, ok = FindByShortcut(nodes, "")
+	if ok {
+		t.Fatal("expected not found for empty key")
+	}
+}
+
 func TestCommandNodeStruct(t *testing.T) {
 	node := CommandNode{
 		ID:          "test",
