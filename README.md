@@ -9,8 +9,8 @@ starman syncs your GitHub stars, analyzes them with AI, generates awesome lists,
 ## Features
 
 - **Sync** — Concurrent paginated pull of GitHub starred repos into local SQLite (preserves AI analysis on re-sync). Supports `--watch` mode for periodic auto-sync.
-- **Analyze** — Batch AI analysis (OpenAI-compatible): summaries, tags, categories with bidirectional keyword matching, plus `search_text` generation for FTS5 full-text index
-- **Search** — LLM query understanding + FTS5 full-text retrieval with BM25 scoring, structured filtering (`--lang`/`--category`), optional `--rerank` LLM precision reorder, `--sort` options, and `--json` output
+- **Analyze** — Batch AI analysis (OpenAI-compatible): summaries, tags, categories with bidirectional keyword matching, plus embedding vector generation for semantic search and `search_text` for full-text index
+- **Search** — Three-tier hybrid search (vector semantic matching > AI query understanding + text retrieval > basic text search), structured filtering (`--lang`/`--category`/`--platform`/`--tag`), `--sort` options, and `--json` output
 - **Generate** — Markdown Awesome List in 3 modes: by language, by AI category, or flat (auto-push to GitHub repo)
 - **Release Tracking** — Subscribe to repos and pull new releases with incremental watermark
 - **Star/Unstar** — Star management with local DB sync
@@ -56,6 +56,7 @@ You can also set sensitive fields via environment variables instead of the confi
 |----------------------|---------|
 | `STARMAN_GITHUB_TOKEN` | GitHub token (falls back to `GITHUB_TOKEN`) |
 | `STARMAN_AI_API_KEY` | AI API key |
+| `STARMAN_EMBEDDING_API_KEY` | Embedding API key (for vector search) |
 | `STARMAN_WEBDAV_PASSWORD` | WebDAV password |
 
 ### 2. Sync starred repos
@@ -72,7 +73,7 @@ Pulls all your starred repos from GitHub into the local SQLite database at `~/.s
 starman analyze
 ```
 
-Analyzes up to 20 unanalyzed repos by default: fetches README, calls AI for summary/tags/platforms/search_text, and resolves a category via keyword matching. Results are cached in the DB — re-running only processes new repos. Use `--all` to analyze all unanalyzed repos, or `--force` to re-analyze existing ones. After analysis, the FTS5 index is automatically rebuilt for search.
+Analyzes up to 20 unanalyzed repos by default: fetches README, calls AI for summary/tags/platforms/search_text, resolves a category via keyword matching, and generates embedding vectors for semantic search. Results are cached in the DB — re-running only processes new repos. Use `--all` to analyze all unanalyzed repos, or `--force` to re-analyze existing ones. After analysis, the FTS5 index is automatically rebuilt for search.
 
 ### 4. Generate awesome list
 
@@ -93,20 +94,20 @@ starman generate -s language --repo awesome-stars
 ### 5. Search
 
 ```bash
-# Basic keyword search
+# Basic semantic search
 starman search "terminal tools"
 
 # Filter by language and sort by stars
 starman search "framework" --lang Go --sort stars --limit 10
 
-# Use LLM to rerank top candidates
-starman search "machine learning" --rerank
+# Filter by platform and tag
+starman search "database" --platform cli --tag go
 
 # JSON output
 starman search "machine learning" --json
 ```
 
-FTS5 full-text index with BM25 scoring: query intent is understood by LLM, then matched against full_name, description, AI summary, AI search_text, tags, and topics. Use `--rerank` for LLM-based precision reordering on top candidates.
+Three-tier hybrid search: attempts vector semantic matching first (requires embedding config), degrades to AI query understanding + full-text retrieval, then falls back to basic text search. Matches against full_name, description, AI summary, search_text, tags, and topics with weighted scoring.
 
 ### 6. Discover trending repos
 
@@ -208,8 +209,15 @@ starman search <query> [flags]
 | `--limit` | Limit number of results (0 = no limit) |
 | `--lang` | Filter by language |
 | `--category` | Filter by category |
+| `--platform` | Filter by platform: `web` \| `desktop` \| `mobile` \| `cli` \| `library` \| `service` |
+| `--tag` | Filter by tag (OR logic, repeatable) |
+| `--min-stars` | Minimum star count |
+| `--max-stars` | Maximum star count (0 = no limit) |
+| `--analyzed` | Only show analyzed repos |
+| `--no-analyzed` | Only show unanalyzed repos |
+| `--analysis-failed` | Only show analysis-failed repos |
+| `--no-vector` | Disable vector search, use text search only |
 | `--sort` | Sort by: `score` \| `stars` \| `name` (default: score) |
-| `--rerank` | Use LLM to rerank top candidates |
 
 ### stats
 
@@ -299,6 +307,11 @@ ai:
   concurrency: 3
   custom_prompt: ""
 
+embedding:
+  base_url: "https://api.openai.com/v1"
+  api_key: ""         # or use STARMAN_EMBEDDING_API_KEY
+  model: "text-embedding-3-small"
+
 webdav:
   url: ""
   username: ""
@@ -325,11 +338,13 @@ starman works with any OpenAI-compatible API endpoint (`/v1/chat/completions`). 
 
 Set `ai.base_url` and `ai.model` to match your provider. The `ai.concurrency` setting controls batch analysis parallelism.
 
+Embedding also works with any OpenAI-compatible embedding API endpoint (`/v1/embeddings`). Configure the `embedding` section to enable vector semantic search; when unconfigured, search gracefully degrades to text retrieval.
+
 ## Key Design
 
 - **Incremental sync preserves analysis** — Re-syncing from GitHub never overwrites AI summaries, tags, categories, or custom fields you've set.
 - **Category locking** — Lock a repo's category with `category_locked` to prevent AI from overwriting your manual assignment.
-- **FTS5 full-text index** — Search uses SQLite FTS5 with BM25 scoring. An `ai_search_text` field generated by LLM during analysis enriches the search index for better recall.
+- **Three-tier hybrid search** — Search first attempts vector semantic matching (sqlite-vec), degrades to AI query understanding + full-text retrieval, then falls back to basic text search. Transparent degradation when vector config is absent — zero-cost operation. The `ai_search_text` field generated by LLM during analysis enriches the search index for better recall.
 - **Analyze failure isolation** — If AI analysis fails for one repo, the batch continues. Failed repos are marked with `analysis_failed` for retry.
 - **Release watermark** — Subscribed repos track the latest fetched release timestamp, so `release pull` only retrieves new releases.
 - **Generate reads from local DB** — `generate` never calls the GitHub API for data; it reads from SQLite. Run `sync` first, then `analyze` for AI categories.
@@ -343,7 +358,7 @@ Set `ai.base_url` and `ai.model` to match your provider. The `ai.concurrency` se
 | CLI framework | [cobra](https://github.com/spf13/cobra) + [pflag](https://github.com/spf13/pflag) |
 | GitHub API | [go-github v71](https://github.com/google/go-github) + [httpcache](https://github.com/gregjones/httpcache) |
 | Concurrency | [conc](https://github.com/sourcegraph/conc) |
-| SQLite | [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) (pure Go, no CGO) |
+| SQLite | [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) + [modernc.org/sqlite/vec](https://pkg.go.dev/modernc.org/sqlite/vec) (pure Go, no CGO) |
 | Config | [yaml.v3](https://github.com/go-yaml/yaml) |
 | AI | OpenAI-compatible HTTP API (no SDK) |
 

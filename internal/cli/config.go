@@ -82,10 +82,19 @@ func newConfigShowCmd() *cobra.Command {
 			fmt.Printf("  model: %s\n", cfg.AI.Model)
 			fmt.Printf("  api_key: %s\n", mask(cfg.AI.APIKey))
 			fmt.Printf("  concurrency: %d\n", cfg.AI.Concurrency)
+			if cfg.AI.CustomPrompt != "" {
+				fmt.Printf("  custom_prompt: %s\n", cfg.AI.CustomPrompt)
+			}
+			fmt.Printf("embedding:\n")
+			fmt.Printf("  base_url: %s\n", cfg.Embedding.BaseURL)
+			fmt.Printf("  api_key: %s\n", mask(cfg.Embedding.APIKey))
+			fmt.Printf("  model: %s\n", cfg.Embedding.Model)
 			fmt.Printf("generate:\n")
 			fmt.Printf("  sort: %s\n", cfg.Generate.Sort)
 			fmt.Printf("webdav:\n")
 			fmt.Printf("  url: %s\n", cfg.WebDAV.URL)
+			fmt.Printf("  username: %s\n", cfg.WebDAV.Username)
+			fmt.Printf("  password: %s\n", mask(cfg.WebDAV.Password))
 			fmt.Printf("  path: %s\n", cfg.WebDAV.Path)
 			return nil
 		},
