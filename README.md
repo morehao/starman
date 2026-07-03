@@ -157,176 +157,302 @@ starman trending --since daily --lang Rust
 starman trending --star
 ```
 
-## Usage
+## Command Reference
 
-```
-starman syncs your GitHub stars, analyzes them with AI, and generates awesome lists.
+### Global Flags
 
-Usage:
-  starman [command]
+Available on every command:
 
-Available Commands:
-  analyze      Analyze repos with AI to generate summaries, tags, and categories
-  backup       Backup and restore data
-  categorize   Manage custom category on repositories
-  completion   Generate shell completion script
-  config       Configuration management
-  generate     Generate Markdown awesome list from local DB
-  info         Show details of a repository
-  release      Track repository releases
-  search       Search repos by AI-translated keywords
-  star         Star a GitHub repository
-  stats        Show statistics of synced repositories
-  sync         Sync starred repositories from GitHub to local DB
-  tag          Manage custom tags on repositories
-  trending     Browse GitHub trending repositories
-  unstar       Unstar a GitHub repository
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--config` | string | `~/.starman/config.yaml` | Config file path |
+| `--token` | string | `""` | GitHub token (overrides config/env) |
+| `--verbose` | bool | `false` | Verbose output |
 
-Global Flags:
-      --config string   config file path (default ~/.starman/config.yaml)
-      --token string    GitHub token (overrides config/env)
-      --verbose         verbose output
-```
+---
 
-### sync
+### `starman sync`
+
+Sync starred repos from GitHub to local SQLite.
 
 ```bash
-starman sync [--full] [--watch] [--interval 30m]
+starman sync [flags]
 ```
 
-Pulls starred repos from GitHub and stores them locally. AI analysis results and custom fields are preserved across syncs. Use `--full` to remove repos that are no longer starred on GitHub. `--watch` enables periodic auto-sync (requires `--interval`, minimum 5m).
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--full` | bool | `false` | Full sync: remove repos that are no longer starred on GitHub |
+| `--watch` | bool | `false` | Watch mode: periodic auto-sync |
+| `--interval` | duration | `30m` | Watch mode sync interval (minimum 5m) |
 
-### generate
+AI analysis results and custom fields are preserved across syncs.
 
-```bash
-starman generate [flags]
-```
+---
 
-| Flag | Description |
-|------|-------------|
-| `-s, --sort` | Sort mode: `language` \| `category` \| `flat` (default from config) |
-| `-o, --output` | Output file path (default: stdout) |
-| `--repo` | Push to a GitHub repo's README (e.g. `awesome-stars`) |
-| `-m, --message` | Commit message for `--repo` (default: "update stars") |
-| `-T, --template` | Custom template file path |
+### `starman analyze`
 
-### analyze
+Batch AI analysis: README → summary/tags/platform/search_text → category → embedding → FTS5 rebuild.
 
 ```bash
 starman analyze [flags]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--all` | Analyze all unanalyzed repos |
-| `--repo` | Specific repo full names to analyze (repeatable) |
-| `--force` | Force re-analyze even if already analyzed |
-| `--limit` | Max repos to analyze (default: 20, 0 = no limit) |
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--all` | bool | `false` | Analyze all unanalyzed repos |
+| `--repo` | stringSlice | `[]` | Specific repo full names to analyze (repeatable) |
+| `--force` | bool | `false` | Force re-analyze even if already analyzed |
+| `--limit` | int | `20` | Max repos to analyze (0 = no limit) |
 
-### release
+Failure isolation: single repo failure doesn't stop the batch. Failed repos are marked `analysis_failed` for retry.
 
-```bash
-starman release list [--all]              # List unread (or all) releases
-starman release pull                      # Pull new releases for subscribed repos
-starman release subscribe <owner/repo>    # Subscribe and pull initial releases
-starman release unsubscribe <owner/repo>  # Unsubscribe
-```
+---
 
-### search
+### `starman search <query>`
+
+Three-tier hybrid search with structured filtering.
 
 ```bash
 starman search <query> [flags]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--json` | Output as JSON |
-| `--limit` | Limit number of results (0 = no limit) |
-| `--lang` | Filter by language |
-| `--category` | Filter by category |
-| `--platform` | Filter by platform: `web` \| `desktop` \| `mobile` \| `cli` \| `library` \| `service` |
-| `--tag` | Filter by tag (OR logic, repeatable) |
-| `--min-stars` | Minimum star count |
-| `--max-stars` | Maximum star count (0 = no limit) |
-| `--analyzed` | Only show analyzed repos |
-| `--no-analyzed` | Only show unanalyzed repos |
-| `--analysis-failed` | Only show analysis-failed repos |
-| `--no-vector` | Disable vector search, use text search only |
-| `--sort` | Sort by: `score` \| `stars` \| `name` (default: score) |
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | bool | `false` | JSON output |
+| `--limit` | int | `0` | Limit results (0 = no limit) |
+| `--lang` | string | `""` | Filter by language |
+| `--category` | string | `""` | Filter by category |
+| `--platform` | string | `""` | Filter by platform: `web` / `desktop` / `mobile` / `cli` / `library` / `service` |
+| `--tag` | stringSlice | `[]` | Filter by tag (OR logic, repeatable) |
+| `--min-stars` | int | `0` | Minimum star count |
+| `--max-stars` | int | `0` | Maximum star count (0 = no limit) |
+| `--analyzed` | bool | `false` | Only show analyzed repos |
+| `--no-analyzed` | bool | `false` | Only show unanalyzed repos |
+| `--analysis-failed` | bool | `false` | Only show analysis-failed repos |
+| `--no-vector` | bool | `false` | Disable vector search, text search only |
+| `--sort` | string | `score` | Sort by: `score` / `stars` / `name` |
 
-### stats
+**Search tiers:** vector semantic matching (sqlite-vec) → AI query understanding + FTS5 full-text retrieval → basic text search. Transparent degradation when vector config is absent.
+
+---
+
+### `starman generate [output]`
+
+Generate an Awesome List Markdown file from the local database.
 
 ```bash
-starman stats [--by language|category|tag] [--top N] [--json]
+starman generate [output] [flags]
 ```
 
-Show distribution of synced repos by dimension. Outputs a sorted table or JSON.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `-s, --sort` | string | from config | Sort mode: `language` / `category` / `flat` |
+| `-o, --output` | string | `""` | Output file path (default: stdout) |
+| `--repo` | string | `""` | Push to a GitHub repo's README (e.g. `awesome-stars`) |
+| `-m, --message` | string | `"update stars"` | Commit message for `--repo` |
+| `-T, --template` | string | `""` | Custom template file path |
 
-### info
+**Templates:**
+- `language` — Group by programming language (embedded: `by_language.tmpl`)
+- `category` — Group by AI category with summaries and tags (`by_category.tmpl`)
+- `flat` — Flat list (`flat.tmpl`)
+
+---
+
+### `starman config`
+
+Configuration management with interactive init and masked display.
 
 ```bash
-starman info <owner/repo> [--readme] [--readme-variant <file>]
+starman config init   # Interactive config creation
+starman config show   # Display current config (secrets masked)
 ```
 
-Display repo metadata, AI summary, tags, and custom fields. `--readme` fetches the README and lists available multi-language variants.
+**`config init`** walks through GitHub username/token, AI BaseURL/API Key/Model, and writes `~/.starman/config.yaml`.
 
-### tag
+**`config show`** prints full config with token/key/password showing only first and last 2 characters.
+
+---
+
+### `starman release`
+
+Track repository releases with incremental watermark.
 
 ```bash
-# Single repo mode
+starman release list [--all]                        # List unread (or all) releases
+starman release pull                                 # Pull new releases for subscribed repos
+starman release subscribe <owner/repo>               # Subscribe + pull initial releases
+starman release unsubscribe <owner/repo>             # Unsubscribe
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--all` | bool | `false` | `list` subcommand: show all releases including read |
+
+---
+
+### `starman star <owner/repo>`
+
+Star a repository on GitHub and sync to local DB.
+
+```bash
+starman star <owner/repo>
+```
+
+---
+
+### `starman unstar <owner/repo>`
+
+Unstar a repository on GitHub and mark locally as unstarred (`StarredAt=""`).
+
+```bash
+starman unstar <owner/repo>
+```
+
+---
+
+### `starman backup`
+
+Backup and restore data via JSON, WebDAV, or GitHub repo push.
+
+```bash
+starman backup json --export [-o file]                # Export to JSON (stdout if -o omitted)
+starman backup json --import <file> [--mode merge|replace]  # Import from JSON
+starman backup webdav --push                          # Push backup to WebDAV
+starman backup webdav --pull                          # Pull latest from WebDAV
+starman backup webdav --test                          # Test WebDAV connection
+starman backup --repo <name> [-m "msg"]               # Push backup to GitHub repo
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--export` | bool | `false` | `json` subcommand: export mode |
+| `--import` | string | `""` | `json` subcommand: import from file path |
+| `-o, --output` | string | `""` | `json` export output path (default: stdout) |
+| `--mode` | string | `merge` | `json` import mode: `merge` / `replace` |
+| `--push` | bool | `false` | `webdav` subcommand: push backup |
+| `--pull` | bool | `false` | `webdav` subcommand: pull backup |
+| `--test` | bool | `false` | `webdav` subcommand: test connection |
+| `--repo` | string | `""` | Backup to GitHub repo (root command) |
+| `-m, --message` | string | auto | Commit message for `--repo` backup |
+
+---
+
+### `starman stats`
+
+Show distribution statistics of synced repositories.
+
+```bash
+starman stats [flags]
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--by` | string | `language` | Dimension: `language` / `category` / `tag` |
+| `--top` | int | `10` | Show top N items (0 = all) |
+| `--json` | bool | `false` | JSON output |
+
+---
+
+### `starman info <owner/repo>`
+
+Display detailed repository information.
+
+```bash
+starman info <owner/repo> [flags]
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--readme` | bool | `false` | Fetch and display README |
+| `--readme-variant` | string | `""` | Specific README variant (e.g. `README_zh.md`) |
+
+**Shows:** URL, language, stars/forks, topics, starred-at time, AI summary/tags/category, custom fields, lock status.
+
+---
+
+### `starman tag [owner/repo] [tagExpr]`
+
+Manage custom tags on repositories.
+
+```bash
+# Single repo: + to add, - to remove
 starman tag <owner/repo> +awesome,-old
 
-# Batch mode — add tags to all Go repos
+# Batch: add tags to all Go repos
 starman tag --lang Go --add awesome,cli
 
-# Batch mode — filter by category and remove tags
+# Batch: remove tags filtered by category
 starman tag --cat-filter "开发工具" --remove deprecated
 ```
 
-Manages `custom_tags` on repositories. Tags are stored locally and never overwritten by `analyze`.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--lang` | string | `""` | Batch: filter by language |
+| `--cat-filter` | string | `""` | Batch: filter by existing category |
+| `--add` | string | `""` | Batch: comma-separated tags to add |
+| `--remove` | string | `""` | Batch: comma-separated tags to remove |
 
-### categorize
+Tags are stored in `custom_tags` and never overwritten by AI analysis.
+
+---
+
+### `starman categorize [owner/repo] <category>`
+
+Manage custom category on repositories with lock support.
 
 ```bash
-# Single repo mode
+# Single repo: set category with lock
 starman categorize <owner/repo> "AI 机器学习" --lock
 
-# Batch mode — set category for all Python repos
+# Batch: set category for all Python repos
 starman categorize --lang Python "数据分析"
 
-# Batch mode — filter by existing category
+# Batch: recategorize from one category to another
 starman categorize --cat-filter "web-app" "其他"
 ```
 
-Manages `custom_category` on repositories. `--lock` prevents AI analysis from overwriting. `--unlock` releases the lock.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--lang` | string | `""` | Batch: filter by language |
+| `--cat-filter` | string | `""` | Batch: filter by existing category |
+| `--lock` | bool | `false` | Lock category (prevent AI overwrite) |
+| `--unlock` | bool | `false` | Unlock category |
 
-### trending
+---
 
-```bash
-starman trending [--since daily|weekly|monthly] [--lang L] [--top N] [--source rss|search] [--star]
-```
+### `starman trending`
 
-Browse GitHub trending repositories. Default source is RSS (via GitHubTrendingRSS); use `--source search` for the GitHub Search API fallback. `--star` interactively stars selected repos.
-
-### completion
-
-```bash
-starman completion <bash|zsh|fish|powershell>
-```
-
-Generates shell auto-completion scripts. Pipe to source to enable (e.g. `source <(starman completion zsh)`).
-
-### backup
+Browse GitHub trending repositories.
 
 ```bash
-starman backup json --export [-o file]            # Export to JSON
-starman backup json --import <file> [--mode merge|replace]  # Import from JSON
-starman backup webdav --push                      # Push backup to WebDAV
-starman backup webdav --pull                      # Pull latest from WebDAV
-starman backup webdav --test                      # Test WebDAV connection
-starman backup --repo awesome-stars               # Push backup to GitHub repo
-starman backup --repo awesome-stars -m "msg"      # With custom commit message
+starman trending [flags]
 ```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--since` | string | `weekly` | Time range: `daily` / `weekly` / `monthly` |
+| `--lang` | string | `""` | Filter by language |
+| `--top` | int | `20` | Show top N repos |
+| `--source` | string | `rss` | Data source: `rss` / `search` |
+| `--star` | bool | `false` | Interactive star selection |
+
+Default source is RSS (GitHubTrendingRSS); `--source search` uses GitHub Search API fallback.
+
+---
+
+### `starman completion <shell>`
+
+Generate shell auto-completion script.
+
+```bash
+starman completion bash        # Bash completion
+starman completion zsh         # Zsh completion
+starman completion fish        # Fish completion
+starman completion powershell  # PowerShell completion
+```
+
+Usage: `source <(starman completion zsh)` (or the appropriate shell).
 
 ## Configuration
 
