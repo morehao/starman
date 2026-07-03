@@ -39,7 +39,7 @@ func DefaultTheme() *Theme {
 	}
 
 	t.Sidebar = lipgloss.NewStyle().
-		Width(24).
+		Width(30).
 		Height(100).
 		Border(lipgloss.NormalBorder(), false, true, false, false).
 		BorderForeground(t.Muted).

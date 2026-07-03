@@ -8,76 +8,73 @@ import (
 	"github.com/morehao/starman/internal/tui/types"
 )
 
-type menuItem struct {
+type sidebarEntry struct {
+	id       string
 	label    string
 	shortcut string
 	page     types.PageID
 }
 
-type menuGroup struct {
-	title string
-	items []menuItem
-}
-
-var groups = []menuGroup{
-	{title: "发现", items: []menuItem{
-		{"Search", "/", types.PageSearch},
-		{"Trending", "t", types.PageTrending},
-	}},
-	{title: "整理", items: []menuItem{
-		{"Repo List", "r", types.PageRepoList},
-		{"Tag", "g", types.PageTag},
-		{"Categorize", "c", types.PageCategorize},
-		{"Stats", "S", types.PageStats},
-	}},
-	{title: "处理", items: []menuItem{
-		{"Sync", "s", types.PageSync},
-		{"Analyze", "a", types.PageAnalyze},
-		{"Generate", "G", types.PageGenerate},
-		{"Release", "R", types.PageRelease},
-		{"Backup", "b", types.PageBackup},
-	}},
-	{title: "系统", items: []menuItem{
-		{"Dashboard", "1", types.PageDashboard},
-		{"Config", "C", types.PageConfig},
-		{"Help", "?", types.PageDashboard},
-		{"Quit", "q", types.PageDashboard},
-	}},
-}
-
-func totalItems() int {
-	n := 0
-	for _, g := range groups {
-		n += len(g.items)
-	}
-	return n
-}
-
-func itemAt(index int) *menuItem {
-	for _, g := range groups {
-		if index < len(g.items) {
-			return &g.items[index]
-		}
-		index -= len(g.items)
-	}
-	return nil
-}
-
 type SidebarModel struct {
-	theme  *styles.Theme
-	cursor int
-	width  int
-	height int
+	theme     *styles.Theme
+	cursor    int
+	width     int
+	height    int
+	recentIDs []string
+	pinnedIDs []string
+	catalog   []CommandNode
 }
 
 func NewSidebar(theme *styles.Theme) *SidebarModel {
 	return &SidebarModel{
-		theme:  theme,
-		cursor: 0,
+		theme:     theme,
+		cursor:    0,
+		catalog:   DefaultCommandCatalog(),
+		pinnedIDs: DefaultPinnedCommandIDs(),
 	}
 }
 
+func (m *SidebarModel) SetRecent(ids []string) {
+	m.recentIDs = append([]string(nil), ids...)
+}
+
 func (m *SidebarModel) Init() tea.Cmd { return nil }
+
+func (m *SidebarModel) entries() []sidebarEntry {
+	var entries []sidebarEntry
+	for _, id := range m.recentIDs {
+		if cmd, ok := resolveCommandID(m.catalog, id); ok {
+			entries = append(entries, sidebarEntry{
+				id: cmd.ID, label: cmd.Label, shortcut: cmd.Shortcut, page: cmd.Page,
+			})
+		}
+	}
+	for _, id := range m.pinnedIDs {
+		if cmd, ok := resolveCommandID(m.catalog, id); ok {
+			entries = append(entries, sidebarEntry{
+				id: cmd.ID, label: cmd.Label, shortcut: cmd.Shortcut, page: cmd.Page,
+			})
+		}
+	}
+	return entries
+}
+
+func resolveCommandID(catalog []CommandNode, id string) (CommandNode, bool) {
+	for _, n := range catalog {
+		if n.ID == id {
+			return n, true
+		}
+	}
+	return CommandNode{}, false
+}
+
+func (m *SidebarModel) SelectedCommandID() (string, bool) {
+	items := m.entries()
+	if m.cursor >= 0 && m.cursor < len(items) {
+		return items[m.cursor].id, true
+	}
+	return "", false
+}
 
 func (m *SidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -90,10 +87,19 @@ func (m *SidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			m.cursor = max(m.cursor-1, 0)
 		case "down", "j":
-			m.cursor = min(m.cursor+1, totalItems()-1)
+			total := len(m.entries())
+			if total > 0 {
+				m.cursor = min(m.cursor+1, total-1)
+			}
 		case "enter":
-			if item := itemAt(m.cursor); item != nil && item.label != "Quit" && item.page >= 0 {
-				return m, func() tea.Msg { return types.NavigatedMsg{Page: item.page} }
+			items := m.entries()
+			if m.cursor >= 0 && m.cursor < len(items) {
+				item := items[m.cursor]
+				if item.page >= 0 {
+					return m, func() tea.Msg {
+						return types.NavigatedMsg{Page: item.page}
+					}
+				}
 			}
 		}
 	}
@@ -101,24 +107,34 @@ func (m *SidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func ShortcutPage(key string) (types.PageID, bool) {
-	for _, g := range groups {
-		for _, item := range g.items {
-			if item.shortcut == key && item.page >= 0 {
-				return item.page, true
-			}
-		}
+	node, ok := FindByShortcut(DefaultCommandCatalog(), key)
+	if !ok {
+		return 0, false
 	}
-	return 0, false
+	return node.Page, true
 }
 
 func (m *SidebarModel) View() string {
 	var s string
 	s += m.theme.PageTitle.Render("STARMAN") + "\n\n"
+
 	idx := 0
-	for _, g := range groups {
-		s += m.theme.CardTitle.Render(g.title) + "\n"
-		for _, item := range g.items {
-			line := fmt.Sprintf(" %-14s %2s", item.label, item.shortcut)
+	entries := m.entries()
+
+	recentCount := 0
+	for _, id := range m.recentIDs {
+		if _, ok := resolveCommandID(m.catalog, id); ok {
+			recentCount++
+		}
+	}
+
+	if recentCount > 0 {
+		s += m.theme.CardTitle.Render("RECENT") + "\n"
+		for i, e := range entries {
+			if i >= recentCount {
+				break
+			}
+			line := fmt.Sprintf(" %-14s %2s", e.label, e.shortcut)
 			if idx == m.cursor {
 				s += m.theme.SidebarActive.Render(line)
 			} else {
@@ -129,5 +145,22 @@ func (m *SidebarModel) View() string {
 		}
 		s += "\n"
 	}
+
+	s += m.theme.CardTitle.Render("PINNED") + "\n"
+	for i, e := range entries {
+		if i < recentCount {
+			continue
+		}
+		line := fmt.Sprintf(" %-14s %2s", e.label, e.shortcut)
+		if idx == m.cursor {
+			s += m.theme.SidebarActive.Render(line)
+		} else {
+			s += m.theme.HelpText.Render(line)
+		}
+		s += "\n"
+		idx++
+	}
+	s += "\n"
+
 	return s
 }

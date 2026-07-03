@@ -23,6 +23,11 @@ const (
 
 type NavigatedMsg struct{ Page PageID }
 
+type CommandSelectedMsg struct {
+	CommandID string
+	Page      PageID
+}
+
 type StatusLevel int
 
 const (

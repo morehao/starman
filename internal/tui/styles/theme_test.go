@@ -7,7 +7,7 @@ func TestDefaultTheme(t *testing.T) {
 	if th == nil {
 		t.Fatal("expected non-nil theme")
 	}
-	if th.Sidebar.GetWidth() != 24 {
-		t.Errorf("sidebar width = %d, want 24", th.Sidebar.GetWidth())
+	if th.Sidebar.GetWidth() != 30 {
+		t.Errorf("sidebar width = %d, want 30", th.Sidebar.GetWidth())
 	}
 }

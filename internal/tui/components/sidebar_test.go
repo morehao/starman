@@ -27,10 +27,10 @@ func TestShortcutPage(t *testing.T) {
 		{"G", types.PageGenerate, true},
 		{"b", types.PageBackup, true},
 		{"C", types.PageConfig, true},
-		{"?", types.PageDashboard, true},
 		{"/", types.PageSearch, true},
-		{"q", types.PageDashboard, true},
 		{"x", 0, false},
+		{"?", 0, false},
+		{"q", 0, false},
 		{"", 0, false},
 		{"up", 0, false},
 		{"enter", 0, false},
@@ -50,9 +50,20 @@ func TestShortcutPage(t *testing.T) {
 func TestSidebarGroups(t *testing.T) {
 	m := NewSidebar(styles.DefaultTheme())
 	v := m.View()
-	for _, token := range []string{"发现", "整理", "处理", "系统"} {
+	for _, token := range []string{"PINNED", "Dashboard", "Config", "Sync", "Search"} {
 		if !strings.Contains(v, token) {
-			t.Fatalf("missing group %s", token)
+			t.Fatalf("missing %s", token)
+		}
+	}
+}
+
+func TestSidebarRendersRecentAndPinned(t *testing.T) {
+	m := NewSidebar(styles.DefaultTheme())
+	m.SetRecent([]string{"sync", "analyze"})
+	v := m.View()
+	for _, token := range []string{"RECENT", "PINNED", "Sync", "Dashboard"} {
+		if !strings.Contains(v, token) {
+			t.Fatalf("missing %s", token)
 		}
 	}
 }
