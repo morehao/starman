@@ -38,3 +38,4 @@ go.work.sum
 starman
 docs/superpowers
 .superpowers
+.worktrees/
