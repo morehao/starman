@@ -157,176 +157,303 @@ starman trending --since daily --lang Rust
 starman trending --star
 ```
 
-## 命令用法
+## 命令参考
 
-```
-starman syncs your GitHub stars, analyzes them with AI, and generates awesome lists.
+### 全局标志
 
-Usage:
-  starman [command]
+所有命令可用：
 
-Available Commands:
-  analyze      Analyze repos with AI to generate summaries, tags, and categories
-  backup       Backup and restore data
-  categorize   Manage custom category on repositories
-  completion   Generate shell completion script
-  config       Configuration management
-  generate     Generate Markdown awesome list from local DB
-  info         Show details of a repository
-  release      Track repository releases
-  search       Search repos by AI-translated keywords
-  star         Star a GitHub repository
-  stats        Show statistics of synced repositories
-  sync         Sync starred repositories from GitHub to local DB
-  tag          Manage custom tags on repositories
-  trending     Browse GitHub trending repositories
-  unstar       Unstar a GitHub repository
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--config` | string | `~/.starman/config.yaml` | 配置文件路径 |
+| `--token` | string | `""` | GitHub token（覆盖配置/环境变量） |
+| `--verbose` | bool | `false` | 详细输出 |
 
-Global Flags:
-      --config string   config file path (default ~/.starman/config.yaml)
-      --token string    GitHub token (overrides config/env)
-      --verbose         verbose output
-```
+---
 
-### sync
+### `starman sync`
+
+从 GitHub 同步星标仓库到本地 SQLite。
 
 ```bash
 starman sync [--full] [--watch] [--interval 30m]
 ```
 
-从 GitHub 拉取星标仓库并存储到本地。AI 分析结果和自定义字段在同步时保留。使用 `--full` 可删除已在 GitHub 取消星标的仓库。`--watch` 启用定时自动同步（需指定 `--interval`，最小 5 分钟）。
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--full` | bool | `false` | 全量同步：删除 GitHub 上已取消星标的仓库 |
+| `--watch` | bool | `false` | 定时自动同步模式 |
+| `--interval` | duration | `30m` | 同步间隔（最小 5 分钟） |
 
-### generate
+AI 分析结果和自定义字段在同步时保留。
 
-```bash
-starman generate [flags]
-```
+---
 
-| Flag | 说明 |
-|------|------|
-| `-s, --sort` | 排序模式：`language` \| `category` \| `flat`（默认从配置读取） |
-| `-o, --output` | 输出文件路径（默认：stdout） |
-| `--repo` | 推送到 GitHub 仓库的 README（如 `awesome-stars`） |
-| `-m, --message` | `--repo` 的提交信息（默认："update stars"） |
-| `-T, --template` | 自定义模板文件路径 |
+### `starman analyze`
 
-### analyze
+批量 AI 分析：README → 摘要/标签/平台/搜索文本 → 分类 → Embedding → FTS5 重建。
 
 ```bash
-starman analyze [flags]
+starman analyze [--all] [--repo <name> ...] [--force] [--limit N]
 ```
 
-| Flag | 说明 |
-|------|------|
-| `--all` | 分析所有未分析的仓库 |
-| `--repo` | 指定仓库名分析（可重复） |
-| `--force` | 强制重新分析已有仓库 |
-| `--limit` | 最多分析仓库数（默认：20，0 = 不限） |
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--all` | bool | `false` | 分析所有未分析的仓库 |
+| `--repo` | stringSlice | `[]` | 指定仓库全名分析（可重复） |
+| `--force` | bool | `false` | 强制重新分析已有仓库 |
+| `--limit` | int | `20` | 最多分析仓库数（0 = 不限） |
 
-### release
+失败隔离：单个仓库失败不影响批量，失败仓库标记 `analysis_failed` 以便重试。
+
+---
+
+### `starman search <query>`
+
+三层混合搜索，支持结构化过滤。
 
 ```bash
-starman release list [--all]              # 列出未读（或全部）release
-starman release pull                      # 拉取订阅仓库的新 release
-starman release subscribe <owner/repo>    # 订阅并拉取初始 release
-starman release unsubscribe <owner/repo>  # 取消订阅
+starman search <query> [--json] [--limit N] [--lang L] [--category C] [--platform P]
+                      [--tag T] [--min-stars N] [--max-stars N] [--sort score|stars|name]
 ```
 
-### search
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--json` | bool | `false` | JSON 格式输出 |
+| `--limit` | int | `0` | 限制结果数（0 = 不限） |
+| `--lang` | string | `""` | 按语言过滤 |
+| `--category` | string | `""` | 按分类过滤 |
+| `--platform` | string | `""` | 按平台过滤：`web` / `desktop` / `mobile` / `cli` / `library` / `service` |
+| `--tag` | stringSlice | `[]` | 按标签过滤（OR 逻辑，可重复使用） |
+| `--min-stars` | int | `0` | 最低 star 数 |
+| `--max-stars` | int | `0` | 最高 star 数（0 = 不限） |
+| `--analyzed` | bool | `false` | 仅显示已分析的仓库 |
+| `--no-analyzed` | bool | `false` | 仅显示未分析的仓库 |
+| `--analysis-failed` | bool | `false` | 仅显示分析失败的仓库 |
+| `--no-vector` | bool | `false` | 禁用向量搜索，仅用文本搜索 |
+| `--sort` | string | `score` | 排序依据：`score` / `stars` / `name` |
+
+**搜索层级：** 向量语义匹配（sqlite-vec）→ AI 查询理解 + FTS5 全文检索 → 基础文本搜索。未配置向量时透明降级。
+
+---
+
+### `starman generate [output]`
+
+从本地数据库生成 Awesome List Markdown 文件。
 
 ```bash
-starman search <query> [flags]
+starman generate [output] [-s language|category|flat] [-o file] [--repo <name>] [-m msg] [-T template]
 ```
 
-| Flag | 说明 |
-|------|------|
-| `--json` | JSON 格式输出 |
-| `--limit` | 限制结果数（0 = 不限） |
-| `--lang` | 按语言过滤 |
-| `--category` | 按分类过滤 |
-| `--platform` | 按平台过滤：`web` \| `desktop` \| `mobile` \| `cli` \| `library` \| `service` |
-| `--tag` | 按标签过滤（OR 逻辑，可多次使用） |
-| `--min-stars` | 最低 star 数 |
-| `--max-stars` | 最高 star 数（0 = 不限） |
-| `--analyzed` | 仅显示已分析的仓库 |
-| `--no-analyzed` | 仅显示未分析的仓库 |
-| `--analysis-failed` | 仅显示分析失败的仓库 |
-| `--no-vector` | 禁用向量搜索，仅用文本搜索 |
-| `--sort` | 排序依据：`score` \| `stars` \| `name`（默认：score） |
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `-s, --sort` | string | 从配置读取 | 排序模式：`language` / `category` / `flat` |
+| `-o, --output` | string | `""` | 输出文件路径（默认：stdout） |
+| `--repo` | string | `""` | 推送到 GitHub 仓库的 README（如 `awesome-stars`） |
+| `-m, --message` | string | `"update stars"` | `--repo` 的提交信息 |
+| `-T, --template` | string | `""` | 自定义模板文件路径 |
 
-### stats
+**模板：**
+- `language` — 按编程语言分组（内嵌：`by_language.tmpl`）
+- `category` — 按 AI 分类分组，展示摘要和标签（`by_category.tmpl`）
+- `flat` — 平铺列表（`flat.tmpl`）
+
+---
+
+### `starman config`
+
+配置管理，支持交互式初始化和脱敏显示。
+
+```bash
+starman config init   # 交互式创建配置文件
+starman config show   # 显示当前配置（敏感字段脱敏）
+```
+
+**`config init`** 逐步询问 GitHub 用户名/token、AI BaseURL/API Key/Model，写入 `~/.starman/config.yaml`。
+
+**`config show`** 打印完整配置，token/key/password 仅显示首尾各 2 字符。
+
+---
+
+### `starman release`
+
+Release 追踪，支持增量水位。
+
+```bash
+starman release list [--all]                        # 列出未读（或全部）release
+starman release pull                                 # 拉取订阅仓库的新 release
+starman release subscribe <owner/repo>               # 订阅 + 拉取初始 release
+starman release unsubscribe <owner/repo>             # 取消订阅
+```
+
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--all` | bool | `false` | `list` 子命令：显示所有 release 包括已读 |
+
+---
+
+### `starman star <owner/repo>`
+
+在 GitHub 上星标仓库并同步到本地 DB。
+
+```bash
+starman star <owner/repo>
+```
+
+---
+
+### `starman unstar <owner/repo>`
+
+在 GitHub 上取消星标，本地标记为已取消（`StarredAt=""`）。
+
+```bash
+starman unstar <owner/repo>
+```
+
+---
+
+### `starman backup`
+
+通过 JSON、WebDAV 或 GitHub 仓库进行数据备份与恢复。
+
+```bash
+starman backup json --export [-o file]                # 导出为 JSON（默认 stdout）
+starman backup json --import <file> [--mode merge|replace]  # 从 JSON 导入
+starman backup webdav --push                          # 推送备份到 WebDAV
+starman backup webdav --pull                          # 从 WebDAV 拉取最新备份
+starman backup webdav --test                          # 测试 WebDAV 连接
+starman backup --repo <name> [-m "msg"]               # 推送备份到 GitHub 仓库
+```
+
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--export` | bool | `false` | `json` 子命令：导出模式 |
+| `--import` | string | `""` | `json` 子命令：从文件导入 |
+| `-o, --output` | string | `""` | `json` 导出路径（默认：stdout） |
+| `--mode` | string | `merge` | `json` 导入模式：`merge` / `replace` |
+| `--push` | bool | `false` | `webdav` 子命令：推送备份 |
+| `--pull` | bool | `false` | `webdav` 子命令：拉取备份 |
+| `--test` | bool | `false` | `webdav` 子命令：测试连接 |
+| `--repo` | string | `""` | 备份到 GitHub 仓库（根命令） |
+| `-m, --message` | string | 自动生成 | `--repo` 备份的提交信息 |
+
+---
+
+### `starman stats`
+
+显示已同步仓库的分布统计。
 
 ```bash
 starman stats [--by language|category|tag] [--top N] [--json]
 ```
 
-按维度查看已同步仓库的分布情况。输出排序表格或 JSON。
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--by` | string | `language` | 统计维度：`language` / `category` / `tag` |
+| `--top` | int | `10` | 显示前 N 项（0 = 全部） |
+| `--json` | bool | `false` | JSON 格式输出 |
 
-### info
+---
+
+### `starman info <owner/repo>`
+
+显示仓库详细信息。
 
 ```bash
 starman info <owner/repo> [--readme] [--readme-variant <file>]
 ```
 
-展示仓库元数据、AI 摘要、标签和自定义字段。`--readme` 拉取 README 并列出可用的多语言变体。
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--readme` | bool | `false` | 获取并显示 README |
+| `--readme-variant` | string | `""` | 指定 README 变体文件（如 `README_zh.md`） |
 
-### tag
+**显示内容：** 仓库 URL、语言、Star/Fork 数、Topics、标星时间、AI 摘要/标签/分类、自定义字段、锁定状态。
+
+---
+
+### `starman tag [owner/repo] [tagExpr]`
+
+管理仓库的自定义标签。
 
 ```bash
-# 单仓库模式
+# 单仓库模式：+ 添加，- 移除
 starman tag <owner/repo> +awesome,-old
 
-# 批量模式 — 为所有 Go 仓库添加标签
+# 批量：为所有 Go 仓库添加标签
 starman tag --lang Go --add awesome,cli
 
-# 批量模式 — 按分类过滤并移除标签
+# 批量：按分类过滤并移除标签
 starman tag --cat-filter "开发工具" --remove deprecated
 ```
 
-管理仓库的 `custom_tags`。标签存储在本地，不会被 `analyze` 覆盖。
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--lang` | string | `""` | 批量：按语言过滤 |
+| `--cat-filter` | string | `""` | 批量：按已有分类过滤 |
+| `--add` | string | `""` | 批量：逗号分隔的待添加标签 |
+| `--remove` | string | `""` | 批量：逗号分隔的待移除标签 |
 
-### categorize
+标签存储在 `custom_tags`，不会被 AI 分析覆盖。
+
+---
+
+### `starman categorize [owner/repo] <category>`
+
+管理仓库的自定义分类，支持锁定。
 
 ```bash
-# 单仓库模式
+# 单仓库：设置分类并锁定
 starman categorize <owner/repo> "AI 机器学习" --lock
 
-# 批量模式 — 为所有 Python 仓库设置分类
+# 批量：为所有 Python 仓库设置分类
 starman categorize --lang Python "数据分析"
 
-# 批量模式 — 按已有分类过滤
+# 批量：将一个分类重新归类为另一个
 starman categorize --cat-filter "web-app" "其他"
 ```
 
-管理仓库的 `custom_category`。`--lock` 阻止 AI 分析覆盖。`--unlock` 解除锁定。
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--lang` | string | `""` | 批量：按语言过滤 |
+| `--cat-filter` | string | `""` | 批量：按已有分类过滤 |
+| `--lock` | bool | `false` | 锁定分类（防止 AI 覆盖） |
+| `--unlock` | bool | `false` | 解锁分类 |
 
-### trending
+---
+
+### `starman trending`
+
+浏览 GitHub 趋势仓库。
 
 ```bash
 starman trending [--since daily|weekly|monthly] [--lang L] [--top N] [--source rss|search] [--star]
 ```
 
-浏览 GitHub 趋势仓库。默认使用 RSS 数据源（GitHubTrendingRSS）；使用 `--source search` 切换到 GitHub Search API。`--star` 交互式收藏选中的仓库。
+| Flag | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--since` | string | `weekly` | 时间范围：`daily` / `weekly` / `monthly` |
+| `--lang` | string | `""` | 按语言过滤 |
+| `--top` | int | `20` | 显示前 N 个仓库 |
+| `--source` | string | `rss` | 数据源：`rss` / `search` |
+| `--star` | bool | `false` | 交互式收藏 |
 
-### completion
+默认使用 RSS 数据源（GitHubTrendingRSS）；`--source search` 使用 GitHub Search API 兜底。
+
+---
+
+### `starman completion <shell>`
+
+生成 Shell 自动补全脚本。
 
 ```bash
-starman completion <bash|zsh|fish|powershell>
+starman completion bash        # Bash 补全
+starman completion zsh         # Zsh 补全
+starman completion fish        # Fish 补全
+starman completion powershell  # PowerShell 补全
 ```
 
-生成 Shell 自动补全脚本。通过管道加载启用（如 `source <(starman completion zsh)`）。
-
-### backup
-
-```bash
-starman backup json --export [-o file]            # 导出为 JSON
-starman backup json --import <file> [--mode merge|replace]  # 从 JSON 导入
-starman backup webdav --push                      # 推送备份到 WebDAV
-starman backup webdav --pull                      # 从 WebDAV 拉取最新备份
-starman backup webdav --test                      # 测试 WebDAV 连接
-starman backup --repo awesome-stars               # 推送备份到 GitHub 仓库
-starman backup --repo awesome-stars -m "msg"      # 自定义 commit 信息
-```
+用法：`source <(starman completion zsh)`（或对应 Shell 的命令）。
 
 ## 配置
 
