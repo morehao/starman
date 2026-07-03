@@ -15,7 +15,6 @@ type CommandWorkspaceModel struct {
 	selected *CommandNode
 	params   map[string]string
 	output   []string
-	focus    int
 }
 
 func NewCommandWorkspace(theme *styles.Theme) *CommandWorkspaceModel {
@@ -29,7 +28,6 @@ func (m *CommandWorkspaceModel) SelectCommand(node CommandNode) {
 	m.selected = &node
 	m.params = make(map[string]string)
 	m.output = nil
-	m.focus = 0
 	for _, p := range node.Params {
 		if p.DefaultValue != "" {
 			m.params[p.Key] = p.DefaultValue
@@ -152,9 +150,7 @@ func (m *CommandWorkspaceModel) renderParamField(p CommandParamSpec, index int) 
 		Width(14).
 		Foreground(m.theme.Text)
 
-	if index == m.focus {
-		labelStyle = labelStyle.Foreground(m.theme.Primary).Bold(true)
-	}
+	labelStyle = labelStyle.Foreground(m.theme.Primary).Bold(true)
 
 	value := m.params[p.Key]
 	if value == "" {
