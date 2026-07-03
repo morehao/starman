@@ -1,17 +1,19 @@
 package components
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/morehao/starman/internal/tui/styles"
 	"github.com/morehao/starman/internal/tui/types"
 )
 
 func TestShortcutPage(t *testing.T) {
 	tests := []struct {
-		key     string
-		want    types.PageID
-		wantOK  bool
+		key    string
+		want   types.PageID
+		wantOK bool
 	}{
 		{"1", types.PageDashboard, true},
 		{"r", types.PageRepoList, true},
@@ -41,6 +43,16 @@ func TestShortcutPage(t *testing.T) {
 		}
 		if ok && got != tt.want {
 			t.Errorf("ShortcutPage(%q) page = %v, want %v", tt.key, got, tt.want)
+		}
+	}
+}
+
+func TestSidebarGroups(t *testing.T) {
+	m := NewSidebar(styles.DefaultTheme())
+	v := m.View()
+	for _, token := range []string{"发现", "整理", "处理", "系统"} {
+		if !strings.Contains(v, token) {
+			t.Fatalf("missing group %s", token)
 		}
 	}
 }

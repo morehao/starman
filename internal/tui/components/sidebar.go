@@ -14,26 +14,53 @@ type menuItem struct {
 	page     types.PageID
 }
 
-var menuItems = []menuItem{
-	{"Dashboard", "1", types.PageDashboard},
-	{"Search", "/", types.PageSearch},
-	{"Repo List", "r", types.PageRepoList},
-	{"Trending", "t", types.PageTrending},
-	{"—", "", -1},
-	{"Sync", "s", types.PageSync},
-	{"Analyze", "a", types.PageAnalyze},
-	{"—", "", -1},
-	{"Tag", "g", types.PageTag},
-	{"Categorize", "c", types.PageCategorize},
-	{"Stats", "S", types.PageStats},
-	{"—", "", -1},
-	{"Release", "R", types.PageRelease},
-	{"Generate", "G", types.PageGenerate},
-	{"Backup", "b", types.PageBackup},
-	{"Config", "C", types.PageConfig},
-	{"—", "", -1},
-	{"Help", "?", types.PageDashboard},
-	{"Quit", "q", types.PageDashboard},
+type menuGroup struct {
+	title string
+	items []menuItem
+}
+
+var groups = []menuGroup{
+	{title: "发现", items: []menuItem{
+		{"Search", "/", types.PageSearch},
+		{"Trending", "t", types.PageTrending},
+	}},
+	{title: "整理", items: []menuItem{
+		{"Repo List", "r", types.PageRepoList},
+		{"Tag", "g", types.PageTag},
+		{"Categorize", "c", types.PageCategorize},
+		{"Stats", "S", types.PageStats},
+	}},
+	{title: "处理", items: []menuItem{
+		{"Sync", "s", types.PageSync},
+		{"Analyze", "a", types.PageAnalyze},
+		{"Generate", "G", types.PageGenerate},
+		{"Release", "R", types.PageRelease},
+		{"Backup", "b", types.PageBackup},
+	}},
+	{title: "系统", items: []menuItem{
+		{"Dashboard", "1", types.PageDashboard},
+		{"Config", "C", types.PageConfig},
+		{"Help", "?", types.PageDashboard},
+		{"Quit", "q", types.PageDashboard},
+	}},
+}
+
+func totalItems() int {
+	n := 0
+	for _, g := range groups {
+		n += len(g.items)
+	}
+	return n
+}
+
+func itemAt(index int) *menuItem {
+	for _, g := range groups {
+		if index < len(g.items) {
+			return &g.items[index]
+		}
+		index -= len(g.items)
+	}
+	return nil
 }
 
 type SidebarModel struct {
@@ -62,16 +89,10 @@ func (m *SidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key {
 		case "up", "k":
 			m.cursor = max(m.cursor-1, 0)
-			if menuItems[m.cursor].page == -1 {
-				m.cursor = max(m.cursor-1, 0)
-			}
 		case "down", "j":
-			m.cursor = min(m.cursor+1, len(menuItems)-1)
-			if menuItems[m.cursor].page == -1 {
-				m.cursor = min(m.cursor+1, len(menuItems)-1)
-			}
+			m.cursor = min(m.cursor+1, totalItems()-1)
 		case "enter":
-			if item := menuItems[m.cursor]; item.page >= 0 && item.label != "Quit" {
+			if item := itemAt(m.cursor); item != nil && item.label != "Quit" && item.page >= 0 {
 				return m, func() tea.Msg { return types.NavigatedMsg{Page: item.page} }
 			}
 		}
@@ -80,9 +101,11 @@ func (m *SidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func ShortcutPage(key string) (types.PageID, bool) {
-	for i := range menuItems {
-		if menuItems[i].shortcut == key && menuItems[i].page >= 0 {
-			return menuItems[i].page, true
+	for _, g := range groups {
+		for _, item := range g.items {
+			if item.shortcut == key && item.page >= 0 {
+				return item.page, true
+			}
 		}
 	}
 	return 0, false
@@ -91,16 +114,18 @@ func ShortcutPage(key string) (types.PageID, bool) {
 func (m *SidebarModel) View() string {
 	var s string
 	s += m.theme.PageTitle.Render("STARMAN") + "\n\n"
-	for i, item := range menuItems {
-		if item.label == "—" {
+	idx := 0
+	for _, g := range groups {
+		s += m.theme.CardTitle.Render(g.title) + "\n"
+		for _, item := range g.items {
+			line := fmt.Sprintf(" %-14s %2s", item.label, item.shortcut)
+			if idx == m.cursor {
+				s += m.theme.SidebarActive.Render(line)
+			} else {
+				s += m.theme.HelpText.Render(line)
+			}
 			s += "\n"
-			continue
-		}
-		line := fmt.Sprintf(" %-14s %2s", item.label, item.shortcut)
-		if i == m.cursor {
-			s += m.theme.SidebarActive.Render(line)
-		} else {
-			s += m.theme.HelpText.Render(line)
+			idx++
 		}
 		s += "\n"
 	}
