@@ -84,8 +84,6 @@ brews:
     license: Apache-2.0
     test: |
       system "#{bin}/starman --version"
-    install: |
-      bin.install "starman"
 
 scoops:
   - name: starman
