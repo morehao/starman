@@ -55,3 +55,23 @@ func TestParseCommandQuit(t *testing.T) {
 		}
 	}
 }
+
+func TestParseCommandSyncFull(t *testing.T) {
+	cmd := parseCommand("sync --full")
+	if cmd.Name != "sync" {
+		t.Fatalf("expected sync, got %q", cmd.Name)
+	}
+	if cmd.Flags["full"] != "true" {
+		t.Fatalf("expected full=true, got %q", cmd.Flags["full"])
+	}
+}
+
+func TestParseCommandSyncFullWithMore(t *testing.T) {
+	cmd := parseCommand("sync --full --limit 50")
+	if cmd.Flags["full"] != "true" {
+		t.Fatalf("expected full=true, got %q", cmd.Flags["full"])
+	}
+	if len(cmd.Args) != 1 || cmd.Args[0] != "50" {
+		t.Fatalf("expected arg 50, got %v", cmd.Args)
+	}
+}

@@ -66,7 +66,7 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 	releasesModel := releasessection.NewModel(3, ctx, section.SectionConfig{Title: "Releases"}, releasessection.ShowUnread)
 	statsModel := statssection.NewModel(4, ctx, section.SectionConfig{Title: "Stats"})
 
-	return Model{
+	m := Model{
 		ctx:         ctx,
 		keys:        &keyMap,
 		tabs:        tabModel,
@@ -79,8 +79,21 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		currSection: starsModel,
 		repo:        repoview.NewModel(),
 		tasks:       newTasksHolder(),
-		showSidebar: true,
+		showSidebar: ctx.SidebarOpen,
 	}
+
+	switch ctx.View {
+	case tuicontext.StarsView:
+		m.currSection = m.stars
+	case tuicontext.TrendingView:
+		m.currSection = m.trending
+	case tuicontext.ReleasesView:
+		m.currSection = m.releases
+	case tuicontext.StatsView:
+		m.currSection = m.stats
+		m.showSidebar = false
+	}
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
@@ -458,7 +471,11 @@ func (m *Model) recalcLayout() {
 	m.ctx.MainContentHeight = mainHeight
 
 	if m.showSidebar && m.ctx.PreviewPosition == "right" {
-		sidebarWidth := int(float64(w) * 0.38)
+		ratio := 0.38
+		if m.ctx.TUICfg != nil && m.ctx.TUICfg.Preview.Width > 0 {
+			ratio = m.ctx.TUICfg.Preview.Width
+		}
+		sidebarWidth := int(float64(w) * ratio)
 		if sidebarWidth < 20 {
 			sidebarWidth = 20
 		}

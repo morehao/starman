@@ -18,6 +18,7 @@ const (
 
 type ProgramContext struct {
 	Config               *config.Config
+	TUICfg               *config.TUIConfig
 	Store                store.Store
 	Version              string
 	ScreenWidth          int
@@ -35,7 +36,7 @@ type ProgramContext struct {
 
 func NewContext(cfg *config.Config, s store.Store, ver string) *ProgramContext {
 	t := theme.DefaultTheme()
-	return &ProgramContext{
+	ctx := &ProgramContext{
 		Config:          cfg,
 		Store:           s,
 		Version:         ver,
@@ -45,4 +46,18 @@ func NewContext(cfg *config.Config, s store.Store, ver string) *ProgramContext {
 		Theme:           t,
 		Styles:          common.BuildStyles(t),
 	}
+
+	if cfg != nil {
+		ctx.TUICfg = &cfg.TUI
+		ctx.SidebarOpen = cfg.TUI.Preview.Open
+		ctx.PreviewPosition = cfg.TUI.Preview.Position
+		ctx.View = ViewType(cfg.TUI.DefaultView)
+		if ctx.View == "" {
+			ctx.View = StarsView
+		}
+		if ctx.PreviewPosition == "" {
+			ctx.PreviewPosition = "right"
+		}
+	}
+	return ctx
 }
