@@ -21,6 +21,9 @@ type KeyMap struct {
 	Command       key.Binding
 	Escape        key.Binding
 	Enter         key.Binding
+	ToggleStar    key.Binding
+	EditCategory  key.Binding
+	EditTag       key.Binding
 }
 
 var Keys = KeyMap{
@@ -42,4 +45,7 @@ var Keys = KeyMap{
 	Command:       key.NewBinding(key.WithKeys(":")),
 	Escape:        key.NewBinding(key.WithKeys("esc")),
 	Enter:         key.NewBinding(key.WithKeys("enter")),
+	ToggleStar:    key.NewBinding(key.WithKeys("x")),
+	EditCategory:  key.NewBinding(key.WithKeys("c")),
+	EditTag:       key.NewBinding(key.WithKeys("t")),
 }
