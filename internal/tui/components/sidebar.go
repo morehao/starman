@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/morehao/starman/internal/tui/styles"
 	"github.com/morehao/starman/internal/tui/types"
 )
@@ -16,13 +17,14 @@ type sidebarEntry struct {
 }
 
 type SidebarModel struct {
-	theme     *styles.Theme
-	cursor    int
-	width     int
-	height    int
-	recentIDs []string
-	pinnedIDs []string
-	catalog   []CommandNode
+	theme      *styles.Theme
+	cursor     int
+	width      int
+	height     int
+	recentIDs  []string
+	pinnedIDs  []string
+	catalog    []CommandNode
+	runningIDs map[string]bool
 }
 
 func NewSidebar(theme *styles.Theme) *SidebarModel {
@@ -36,6 +38,17 @@ func NewSidebar(theme *styles.Theme) *SidebarModel {
 
 func (m *SidebarModel) SetRecent(ids []string) {
 	m.recentIDs = append([]string(nil), ids...)
+}
+
+func (m *SidebarModel) SetRunning(id string, running bool) {
+	if m.runningIDs == nil {
+		m.runningIDs = make(map[string]bool)
+	}
+	if running {
+		m.runningIDs[id] = true
+	} else {
+		delete(m.runningIDs, id)
+	}
 }
 
 func (m *SidebarModel) Init() tea.Cmd { return nil }
@@ -134,7 +147,12 @@ func (m *SidebarModel) View() string {
 			if i >= recentCount {
 				break
 			}
-			line := fmt.Sprintf(" %-14s %2s", e.label, e.shortcut)
+			status := "  "
+			if m.runningIDs[e.id] {
+				runningStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
+				status = runningStyle.Render(" ●")
+			}
+			line := fmt.Sprintf(" %-14s %2s%s", e.label, e.shortcut, status)
 			if idx == m.cursor {
 				s += m.theme.SidebarActive.Render(line)
 			} else {

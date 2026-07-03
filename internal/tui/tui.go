@@ -147,15 +147,22 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TaskStartedMsg:
 		m.taskCenter.MarkRunning(msg.ID)
 		m.statusbar.SetTaskSummary(m.taskCenter.Summary())
+		if m.workspace.SelectedID() != "" {
+			m.sidebar.SetRunning(m.workspace.SelectedID(), true)
+		}
 		return m, nil
 
 	case TaskProgressMsg:
 		m.statusbar.SetTaskSummary(m.taskCenter.Summary())
+		_, _ = m.workspace.Update(msg)
 		return m, nil
 
 	case TaskDoneMsg:
 		m.taskCenter.MarkDone(msg.ID, msg.Err)
 		m.statusbar.SetTaskSummary(m.taskCenter.Summary())
+		if m.workspace.SelectedID() != "" {
+			m.sidebar.SetRunning(m.workspace.SelectedID(), false)
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -228,11 +235,13 @@ func (m *TuiModel) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				return types.StatusMsg{Text: err.Error(), Level: types.LevelError, Timeout: 4 * time.Second}
 			}, true
 		}
-		taskID := m.taskCenter.Enqueue("execute " + m.workspace.SelectedID())
-		m.workspace.AppendOutput("task " + taskID + " started")
+		id := m.workspace.SelectedID()
+		taskID := m.taskCenter.Enqueue("execute " + id)
+		m.workspace.AppendOutput("executing " + id + "...")
 		m.statusbar.SetTaskSummary(m.taskCenter.Summary())
+		m.sidebar.SetRunning(id, true)
 		return m, tea.Batch(
-			func() tea.Msg { return TaskStartedMsg{ID: taskID, Label: "execute"} },
+			func() tea.Msg { return TaskStartedMsg{ID: taskID, Label: "execute " + id} },
 			func() tea.Msg { return TaskDoneMsg{ID: taskID, Err: nil} },
 			func() tea.Msg {
 				return types.StatusMsg{Text: "executed successfully", Level: types.LevelSuccess, Timeout: 2 * time.Second}
