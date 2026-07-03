@@ -98,3 +98,12 @@ func FindByShortcut(nodes []CommandNode, key string) (CommandNode, bool) {
 	}
 	return CommandNode{}, false
 }
+
+func CommandByPage(page types.PageID) (CommandNode, bool) {
+	for _, n := range DefaultCommandCatalog() {
+		if n.Page == page {
+			return n, true
+		}
+	}
+	return CommandNode{}, false
+}

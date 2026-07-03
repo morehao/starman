@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/morehao/starman/internal/tui/styles"
+	"github.com/morehao/starman/internal/tui/types"
 )
 
 type CommandWorkspaceModel struct {
@@ -15,6 +17,8 @@ type CommandWorkspaceModel struct {
 	selected *CommandNode
 	params   map[string]string
 	output   []string
+	width    int
+	height   int
 }
 
 func NewCommandWorkspace(theme *styles.Theme) *CommandWorkspaceModel {
@@ -65,17 +69,41 @@ func (m *CommandWorkspaceModel) Validate() error {
 func (m *CommandWorkspaceModel) Init() tea.Cmd { return nil }
 
 func (m *CommandWorkspaceModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+	case types.TaskProgressMsg:
+		pct := 100
+		if msg.Total > 0 {
+			pct = msg.Current * 100 / msg.Total
+		}
+		bar := fmt.Sprintf("  ██████████████████░░░░░░░░░░░░░░  %d%%", pct)
+		if len(m.output) > 0 && strings.HasPrefix(m.output[len(m.output)-1], "  ██") {
+			m.output[len(m.output)-1] = bar
+		} else {
+			m.output = append(m.output, bar)
+		}
+	}
 	return m, nil
 }
 
 func (m *CommandWorkspaceModel) View() string {
 	var b strings.Builder
-
 	b.WriteString(m.renderDetail())
-	b.WriteString(m.renderForm())
+	if m.selected != nil && len(m.selected.Params) > 0 {
+		b.WriteString(m.sectionSep())
+		b.WriteString(m.renderForm())
+	}
+	b.WriteString(m.sectionSep())
 	b.WriteString(m.renderOutput())
-
 	return b.String()
+}
+
+func (m *CommandWorkspaceModel) sectionSep() string {
+	sepStyle := lipgloss.NewStyle().
+		Foreground(m.theme.Muted)
+	return sepStyle.Render("\n") + sepStyle.Render(strings.Repeat("─", max(m.width-42, 10))) + "\n"
 }
 
 func (m *CommandWorkspaceModel) renderDetail() string {
@@ -85,16 +113,6 @@ func (m *CommandWorkspaceModel) renderDetail() string {
 		Bold(true).
 		Foreground(m.theme.Primary).
 		MarginBottom(1)
-
-	b.WriteString(titleStyle.Render("Command Detail") + "\n")
-
-	if m.selected == nil {
-		b.WriteString(lipgloss.NewStyle().
-			Foreground(m.theme.Subtle).
-			Render("No command selected"))
-		b.WriteString("\n\n")
-		return b.String()
-	}
 
 	labelStyle := lipgloss.NewStyle().
 		Bold(true).
@@ -106,15 +124,21 @@ func (m *CommandWorkspaceModel) renderDetail() string {
 	shortcutStyle := lipgloss.NewStyle().
 		Foreground(m.theme.Secondary)
 
-	b.WriteString(labelStyle.Render(m.selected.Label) + "\n")
+	if m.selected == nil {
+		b.WriteString(titleStyle.Render("Command Detail") + "\n")
+		b.WriteString(lipgloss.NewStyle().
+			Foreground(m.theme.Subtle).
+			Render("  Ctrl+K to select a command"))
+		b.WriteString("\n")
+		return b.String()
+	}
+
+	b.WriteString(labelStyle.Render("▍" + m.selected.Label))
+	b.WriteString(shortcutStyle.Render("  ["+m.selected.Shortcut+"]"))
+	b.WriteString("\n")
 	if m.selected.Description != "" {
 		b.WriteString(descStyle.Render("  "+m.selected.Description) + "\n")
 	}
-	if m.selected.Shortcut != "" {
-		b.WriteString(shortcutStyle.Render("  Shortcut: "+m.selected.Shortcut) + "\n")
-	}
-
-	b.WriteString("\n")
 	return b.String()
 }
 
@@ -131,21 +155,24 @@ func (m *CommandWorkspaceModel) renderForm() string {
 	if m.selected == nil || len(m.selected.Params) == 0 {
 		b.WriteString(lipgloss.NewStyle().
 			Foreground(m.theme.Subtle).
-			Render("No parameters"))
-		b.WriteString("\n\n")
+			Render("  No parameters"))
 		return b.String()
 	}
 
-	for i, p := range m.selected.Params {
-		b.WriteString(m.renderParamField(p, i))
+	for _, p := range m.selected.Params {
+		b.WriteString(m.renderParamField(p))
 		b.WriteString("\n")
 	}
 
-	b.WriteString("\n")
+	ctrlHint := lipgloss.NewStyle().
+		Foreground(m.theme.Muted).
+		Render("  [Ctrl+Enter: Execute] [Esc: Back]")
+	b.WriteString(ctrlHint + "\n")
+
 	return b.String()
 }
 
-func (m *CommandWorkspaceModel) renderParamField(p CommandParamSpec, index int) string {
+func (m *CommandWorkspaceModel) renderParamField(p CommandParamSpec) string {
 	var b strings.Builder
 
 	label := p.Label
@@ -155,9 +182,9 @@ func (m *CommandWorkspaceModel) renderParamField(p CommandParamSpec, index int) 
 
 	labelStyle := lipgloss.NewStyle().
 		Width(14).
-		Foreground(m.theme.Text)
-
-	labelStyle = labelStyle.Foreground(m.theme.Primary).Bold(true)
+		Foreground(m.theme.Text).
+		Bold(true).
+		Foreground(m.theme.Primary)
 
 	value := m.params[p.Key]
 	if value == "" {
@@ -187,20 +214,37 @@ func (m *CommandWorkspaceModel) renderOutput() string {
 		Foreground(m.theme.Primary).
 		MarginBottom(1)
 
-	b.WriteString(titleStyle.Render("Task / Output") + "\n")
+	b.WriteString(titleStyle.Render("Output") + "\n")
 
 	if len(m.output) == 0 {
 		b.WriteString(lipgloss.NewStyle().
 			Foreground(m.theme.Subtle).
-			Render("No output yet"))
-	} else {
-		outputStyle := lipgloss.NewStyle().
-			Foreground(m.theme.Subtle)
-		for _, line := range m.output {
-			b.WriteString(outputStyle.Render("  "+line) + "\n")
-		}
+			Render("  No output yet"))
+		return b.String()
 	}
 
-	b.WriteString("\n")
+	outputStyle := lipgloss.NewStyle().
+		Foreground(m.theme.Subtle)
+
+	now := time.Now().Format("15:04:05")
+	timestampStyle := lipgloss.NewStyle().
+		Foreground(m.theme.Muted)
+
+	for i, line := range m.output {
+		prefix := "  "
+		if strings.HasPrefix(line, "✓") {
+			prefix += lipgloss.NewStyle().Foreground(m.theme.Success).Render(line)
+		} else if strings.HasPrefix(line, "✗") {
+			prefix += lipgloss.NewStyle().Foreground(m.theme.Error).Render(line)
+		} else {
+			prefix += outputStyle.Render(line)
+		}
+
+		if i == 0 {
+			prefix += timestampStyle.Render("  "+now)
+		}
+		b.WriteString(prefix + "\n")
+	}
+
 	return b.String()
 }

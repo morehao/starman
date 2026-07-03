@@ -133,6 +133,7 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, p := range m.pages {
 			_, _ = p.Update(msg)
 		}
+		_, _ = m.workspace.Update(msg)
 		return m, nil
 
 	case NavigatedMsg:
@@ -277,17 +278,20 @@ func (m *TuiModel) View() string {
 			lipgloss.Center, lipgloss.Center, help)
 	}
 
+	topbar := m.renderTopBar()
 	sidebar := m.theme.Sidebar.Render(m.sidebar.View())
-	workspace := m.workspace.View()
-	content := m.renderContent()
-	body := lipgloss.JoinHorizontal(lipgloss.Top, workspace, content)
 
-	main := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, body)
+	rightPane := m.renderContent()
+	if m.workspace.SelectedID() != "" {
+		rightPane = m.workspace.View()
+	}
+
+	main := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, rightPane)
 	if m.width < 90 {
-		main = lipgloss.JoinVertical(lipgloss.Left, sidebar, body)
+		main = lipgloss.JoinVertical(lipgloss.Left, sidebar, rightPane)
 	}
 	status := m.statusbar.View()
-	view := lipgloss.JoinVertical(lipgloss.Left, main, status)
+	view := lipgloss.JoinVertical(lipgloss.Left, topbar, main, status)
 
 	if m.uiState == StatePalette {
 		paletteView := m.palette.View(m.width, m.height)
@@ -317,6 +321,36 @@ func (m *TuiModel) renderHelp() string {
 		m.theme.PageTitle.Render("Keyboard Shortcuts") + "\n\n" +
 			lipgloss.JoinVertical(lipgloss.Left, lines...),
 	)
+}
+
+func (m *TuiModel) renderTopBar() string {
+	breadcrumb := ""
+	breadcrumbStyle := m.theme.CardTitle
+	sepStyle := lipgloss.NewStyle().Foreground(m.theme.Subtle)
+	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+	titleStyle := lipgloss.NewStyle().Foreground(m.theme.Primary).Bold(true)
+
+	if node, ok := components.CommandByPage(m.currentPage); ok {
+		breadcrumb = breadcrumbStyle.Render(node.Group) + sepStyle.Render(" ▸ ") + labelStyle.Render(node.Label)
+	} else {
+		breadcrumb = titleStyle.Render("STARMAN")
+	}
+
+	running := ""
+	if summary := m.taskCenter.Summary(); summary != "" {
+		runningStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
+		running = "  " + runningStyle.Render("["+summary+"]")
+	}
+
+	now := time.Now().Format("15:04")
+	right := lipgloss.NewStyle().Foreground(m.theme.Subtle).Render(now)
+	available := m.width - lipgloss.Width(right) - 2
+
+	topLine := lipgloss.NewStyle().
+		Width(available).
+		Render(breadcrumb + running) + right
+
+	return m.theme.StatusBar.Width(m.width).Render(topLine)
 }
 
 func (m *TuiModel) renderContent() string {

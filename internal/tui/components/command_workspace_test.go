@@ -40,7 +40,7 @@ func TestCommandWorkspaceViewIncludesSections(t *testing.T) {
 	w := NewCommandWorkspace(styles.DefaultTheme())
 	w.SelectCommand(CommandNode{ID: "sync", Label: "Sync", Description: "同步"})
 	v := w.View()
-	for _, token := range []string{"Command Detail", "Params", "Task / Output"} {
+	for _, token := range []string{"Sync", "Output"} {
 		if !strings.Contains(v, token) {
 			t.Fatalf("view missing section %s", token)
 		}
