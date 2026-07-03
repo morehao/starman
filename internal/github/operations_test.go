@@ -223,6 +223,23 @@ func TestCommitFile_RepoNotFound(t *testing.T) {
 	}
 }
 
+func TestCommitFile_TooLarge(t *testing.T) {
+	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("should not make any API call for oversized content: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	// 1MB + 1 byte
+	content := make([]byte, 1*1024*1024+1)
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/test.json", content, "test")
+	if err == nil {
+		t.Fatal("expected error for file exceeding 1MB limit")
+	}
+	if !strings.Contains(err.Error(), "1MB") {
+		t.Fatalf("expected error mentioning 1MB limit, got: %v", err)
+	}
+}
+
 func TestSearchRepositories(t *testing.T) {
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/search/repositories") {
