@@ -42,7 +42,7 @@ func TestSearch(t *testing.T) {
 	}
 	svc.SetSearchIndex(searchIndex)
 
-	result, err := svc.Search(context.Background(), "终端工具", &st, SearchOpts{EnableRerank: true})
+	result, err := svc.Search(context.Background(), "终端工具", &st, SearchOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -159,7 +159,7 @@ func (s *sqliteStore) createFTSIndex(ctx context.Context) error {
 }
 
 const vec0DimensionKey = "vec0_dimension"
-const defaultVec0Dimension = 1536
+const defaultVec0Dimension = 1024
 
 func (s *sqliteStore) createVec0Index(ctx context.Context) error {
 	dim := s.readVec0Dimension(ctx)
