@@ -8,7 +8,6 @@ import (
 	"math"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/morehao/starman/internal/store"
 )
@@ -52,9 +51,6 @@ type SearchOpts struct {
 	Limit          int
 	Analyzed       *bool
 	AnalysisFailed *bool
-	EnableHyDE     bool
-	EnableRerank   bool
-	RerankTopK     int
 }
 
 func (s *Service) Search(ctx context.Context, query string, st store.Store, opts SearchOpts) (*SearchResult, error) {
@@ -105,30 +101,12 @@ func (s *Service) aiSearch(
 	ctx context.Context, query string, st store.Store, opts SearchOpts,
 ) (*SearchResult, error) {
 
-	searchText := query
-	var intent *QueryIntent
-	var intentErr error
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		searchText = hydeEnhance(ctx, s, query, opts.EnableHyDE)
-	}()
-
-	go func() {
-		defer wg.Done()
-		intent, intentErr = s.understandQuery(ctx, query)
-	}()
-
-	wg.Wait()
-
+	intent, intentErr := s.understandQuery(ctx, query)
 	if intentErr != nil {
 		intent = &QueryIntent{}
 	}
 	if intent.FTSQuery == "" {
-		intent.FTSQuery = searchText
+		intent.FTSQuery = query
 	}
 
 	if err := s.searchIndex.ensureLoaded(ctx, st); err != nil {
@@ -140,18 +118,6 @@ func (s *Service) aiSearch(
 
 	if len(hits) == 0 {
 		return &SearchResult{Hits: []*SearchHit{}}, nil
-	}
-
-	if opts.EnableRerank && s.hasAIConfig() {
-		topK := opts.RerankTopK
-		if topK <= 0 {
-			topK = 30
-		}
-		topK = min(topK, len(hits))
-		reranked, err := s.rerank(ctx, query, hits[:topK])
-		if err == nil {
-			hits = reranked
-		}
 	}
 
 	sortHits(hits, opts.Sort)
@@ -220,111 +186,6 @@ func keywordMatchScore(repo *store.Repository, keywords []string) float64 {
 		}
 	}
 	return score
-}
-
-type rerankCandidate struct {
-	Index      int    `json:"index"`
-	FullName   string `json:"full_name"`
-	Summary    string `json:"summary"`
-	SearchText string `json:"search_text"`
-}
-
-type rerankResult struct {
-	Rankings []struct {
-		Index int     `json:"index"`
-		Score float64 `json:"score"`
-	} `json:"rankings"`
-}
-
-func (s *Service) rerank(ctx context.Context, query string, hits []*SearchHit) ([]*SearchHit, error) {
-	if len(hits) == 0 {
-		return hits, nil
-	}
-	topK := min(len(hits), 50)
-	candidates := hits[:topK]
-
-	batchSize := 10
-	allScores := make(map[int]float64, len(candidates))
-	var mu sync.Mutex
-	var firstErr error
-
-	var wg sync.WaitGroup
-	for i := 0; i < len(candidates); i += batchSize {
-		end := min(i+batchSize, len(candidates))
-		wg.Add(1)
-		go func(start, end int) {
-			defer wg.Done()
-			scores, err := s.rerankBatch(ctx, query, candidates[start:end], start)
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil && firstErr == nil {
-				firstErr = err
-			}
-			if firstErr == nil {
-				for idx, score := range scores {
-					allScores[idx] = score
-				}
-			}
-		}(i, end)
-	}
-
-	wg.Wait()
-	if firstErr != nil {
-		return nil, firstErr
-	}
-
-	reranked := make([]*SearchHit, len(hits))
-	copy(reranked, hits)
-	sort.SliceStable(reranked[:len(candidates)], func(i, j int) bool {
-		return allScores[i] > allScores[j]
-	})
-
-	return reranked, nil
-}
-
-func (s *Service) rerankBatch(ctx context.Context, query string, candidates []*SearchHit, offset int) (map[int]float64, error) {
-	type candidateInfo struct {
-		Index      int    `json:"index"`
-		FullName   string `json:"full_name"`
-		Summary    string `json:"summary"`
-		SearchText string `json:"search_text"`
-	}
-	infos := make([]candidateInfo, len(candidates))
-	for i, h := range candidates {
-		infos[i] = candidateInfo{
-			Index:      offset + i,
-			FullName:   h.Repo.FullName,
-			Summary:    h.Repo.AISummary,
-			SearchText: h.Repo.AISearchText,
-		}
-	}
-	candJSON, _ := json.Marshal(infos)
-
-	msgs := []Message{
-		{Role: "system", Content: fmt.Sprintf(
-			`对候选仓库按查询相关性评分(0-10)，输出 JSON。
-查询："%s"
-候选仓库列表：
-%s
-输出格式：{"rankings":[{"index":%d,"score":8.5}]}`,
-			query, string(candJSON), offset)},
-	}
-
-	resp, err := s.client.Complete(ctx, msgs)
-	if err != nil {
-		return nil, err
-	}
-
-	var result rerankResult
-	if err := json.Unmarshal([]byte(resp), &result); err != nil {
-		return nil, fmt.Errorf("parse rerank: %w", err)
-	}
-
-	scores := make(map[int]float64, len(result.Rankings))
-	for _, r := range result.Rankings {
-		scores[r.Index] = r.Score
-	}
-	return scores, nil
 }
 
 func sortHits(hits []*SearchHit, sortBy string) {
