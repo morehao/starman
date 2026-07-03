@@ -61,7 +61,7 @@ nfpms:
       {{- .Arch }}
     vendor: morehao
     homepage: https://github.com/morehao/starman
-    maintainer: morehao <morehao@users.noreply.github.com>
+    maintainer: morehao <morehao@qq.com>
     description: >-
       CLI tool for managing GitHub starred repositories with AI —
       sync, analyze, categorize, search, and generate awesome lists
@@ -97,4 +97,4 @@ scoops:
     license: Apache-2.0
     commit_author:
       name: morehao
-      email: morehao@users.noreply.github.com
+      email: morehao@qq.com
