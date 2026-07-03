@@ -71,12 +71,10 @@ starman
 
 ```
 starman                    启动交互式 TUI（默认）
-
-starman config init        交互式创建配置文件
-starman config show        显示当前配置（敏感字段脱敏）
-starman completion <shell> 生成 Shell 补全（bash|zsh|fish|powershell）
-starman --help             显示帮助
-starman --version          显示版本
+starman sync               同步星标仓库
+starman search <query>     搜索仓库
+starman config init|show   管理配置
+starman completion <shell> 生成 Shell 补全
 ```
 
 ### config

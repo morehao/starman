@@ -71,12 +71,10 @@ This opens the interactive terminal UI. From here you can sync your stars, analy
 
 ```
 starman                    Launch the interactive TUI (default)
-
-starman config init        Create config file interactively
-starman config show        Show current config (sensitive fields masked)
-starman completion <shell> Generate shell completion (bash|zsh|fish|powershell)
-starman --help             Show help
-starman --version          Show version
+starman sync               Sync starred repositories
+starman search <query>     Search repositories
+starman config init|show   Manage config
+starman completion <shell> Generate shell completion
 ```
 
 ### config
