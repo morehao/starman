@@ -17,22 +17,24 @@ type sidebarEntry struct {
 }
 
 type SidebarModel struct {
-	theme      *styles.Theme
-	cursor     int
-	width      int
-	height     int
-	recentIDs  []string
-	pinnedIDs  []string
-	catalog    []CommandNode
-	runningIDs map[string]bool
+	theme       *styles.Theme
+	cursor      int
+	width       int
+	height      int
+	renderWidth int
+	recentIDs   []string
+	pinnedIDs   []string
+	catalog     []CommandNode
+	runningIDs  map[string]bool
 }
 
 func NewSidebar(theme *styles.Theme) *SidebarModel {
 	return &SidebarModel{
-		theme:     theme,
-		cursor:    0,
-		catalog:   DefaultCommandCatalog(),
-		pinnedIDs: DefaultPinnedCommandIDs(),
+		theme:       theme,
+		cursor:      0,
+		renderWidth: 30,
+		catalog:     DefaultCommandCatalog(),
+		pinnedIDs:   DefaultPinnedCommandIDs(),
 	}
 }
 
@@ -49,6 +51,10 @@ func (m *SidebarModel) SetRunning(id string, running bool) {
 	} else {
 		delete(m.runningIDs, id)
 	}
+}
+
+func (m *SidebarModel) SetRenderWidth(w int) {
+	m.renderWidth = w
 }
 
 func (m *SidebarModel) Init() tea.Cmd { return nil }
@@ -92,7 +98,7 @@ func (m *SidebarModel) SelectedCommandID() (string, bool) {
 func (m *SidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = m.theme.Sidebar.GetWidth()
+		m.width = msg.Width
 		m.height = msg.Height
 	case tea.KeyMsg:
 		key := msg.String()
@@ -129,7 +135,11 @@ func ShortcutPage(key string) (types.PageID, bool) {
 
 func (m *SidebarModel) View() string {
 	var s string
-	s += m.theme.PageTitle.Render("STARMAN") + "\n\n"
+
+	labelW := m.renderWidth - 8
+	if labelW < 8 {
+		labelW = 8
+	}
 
 	idx := 0
 	entries := m.entries()
@@ -152,7 +162,7 @@ func (m *SidebarModel) View() string {
 				runningStyle := lipgloss.NewStyle().Foreground(m.theme.Success)
 				status = runningStyle.Render(" ●")
 			}
-			line := fmt.Sprintf(" %-14s %2s%s", e.label, e.shortcut, status)
+			line := fmt.Sprintf(" %2s %-*s%s", e.shortcut, labelW, e.label, status)
 			if idx == m.cursor {
 				s += m.theme.SidebarActive.Render(line)
 			} else {
@@ -169,7 +179,7 @@ func (m *SidebarModel) View() string {
 		if i < recentCount {
 			continue
 		}
-		line := fmt.Sprintf(" %-14s %2s", e.label, e.shortcut)
+		line := fmt.Sprintf(" %2s %-*s", e.shortcut, labelW, e.label)
 		if idx == m.cursor {
 			s += m.theme.SidebarActive.Render(line)
 		} else {

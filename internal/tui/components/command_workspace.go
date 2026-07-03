@@ -68,6 +68,14 @@ func (m *CommandWorkspaceModel) Validate() error {
 
 func (m *CommandWorkspaceModel) Init() tea.Cmd { return nil }
 
+func (m *CommandWorkspaceModel) contentWidth() int {
+	cw := m.width*7/10 - 5
+	if cw < 30 {
+		cw = 30
+	}
+	return cw
+}
+
 func (m *CommandWorkspaceModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -103,7 +111,11 @@ func (m *CommandWorkspaceModel) View() string {
 func (m *CommandWorkspaceModel) sectionSep() string {
 	sepStyle := lipgloss.NewStyle().
 		Foreground(m.theme.Muted)
-	return sepStyle.Render("\n") + sepStyle.Render(strings.Repeat("─", max(m.width-42, 10))) + "\n"
+	innerW := m.width - 35
+	if innerW < 10 {
+		innerW = 10
+	}
+	return sepStyle.Render("\n" + strings.Repeat("─", innerW) + "\n")
 }
 
 func (m *CommandWorkspaceModel) renderDetail() string {
@@ -133,11 +145,23 @@ func (m *CommandWorkspaceModel) renderDetail() string {
 		return b.String()
 	}
 
-	b.WriteString(labelStyle.Render("▍" + m.selected.Label))
-	b.WriteString(shortcutStyle.Render("  ["+m.selected.Shortcut+"]"))
+	innerW := m.contentWidth()
+
+	title := labelStyle.Render("▍" + m.selected.Label)
+	shortcut := shortcutStyle.Render("[" + m.selected.Shortcut + "]")
+	titleW := lipgloss.Width(title)
+	shortcutW := lipgloss.Width(shortcut)
+	padding := innerW - titleW - shortcutW - 2
+	if padding < 1 {
+		padding = 1
+	}
+
+	b.WriteString(title)
+	b.WriteString(strings.Repeat(" ", padding))
+	b.WriteString(shortcut)
 	b.WriteString("\n")
 	if m.selected.Description != "" {
-		b.WriteString(descStyle.Render("  "+m.selected.Description) + "\n")
+		b.WriteString(descStyle.Render("  " + m.selected.Description) + "\n")
 	}
 	return b.String()
 }
@@ -163,11 +187,6 @@ func (m *CommandWorkspaceModel) renderForm() string {
 		b.WriteString(m.renderParamField(p))
 		b.WriteString("\n")
 	}
-
-	ctrlHint := lipgloss.NewStyle().
-		Foreground(m.theme.Muted).
-		Render("  [Ctrl+Enter: Execute] [Esc: Back]")
-	b.WriteString(ctrlHint + "\n")
 
 	return b.String()
 }
@@ -211,7 +230,16 @@ func (m *CommandWorkspaceModel) renderOutput() string {
 		Foreground(m.theme.Primary).
 		MarginBottom(1)
 
-	b.WriteString(titleStyle.Render("Output") + "\n")
+	scrollStyle := lipgloss.NewStyle().
+		Foreground(m.theme.Muted)
+
+	outputStyle := lipgloss.NewStyle().
+		Foreground(m.theme.Subtle)
+
+	timestampStyle := lipgloss.NewStyle().
+		Foreground(m.theme.Muted)
+
+	b.WriteString(titleStyle.Render("Output") + scrollStyle.Render("  ▲ ▼") + "\n")
 
 	if len(m.output) == 0 {
 		b.WriteString(lipgloss.NewStyle().
@@ -220,15 +248,11 @@ func (m *CommandWorkspaceModel) renderOutput() string {
 		return b.String()
 	}
 
-	outputStyle := lipgloss.NewStyle().
-		Foreground(m.theme.Subtle)
-
 	now := time.Now().Format("15:04:05")
-	timestampStyle := lipgloss.NewStyle().
-		Foreground(m.theme.Muted)
 
 	for i, line := range m.output {
-		prefix := "  "
+		prefix := timestampStyle.Render("[" + now + "] ")
+
 		if strings.HasPrefix(line, "✓") {
 			prefix += lipgloss.NewStyle().Foreground(m.theme.Success).Render(line)
 		} else if strings.HasPrefix(line, "✗") {
@@ -238,9 +262,10 @@ func (m *CommandWorkspaceModel) renderOutput() string {
 		}
 
 		if i == 0 {
-			prefix += timestampStyle.Render("  "+now)
+			b.WriteString(prefix + "\n")
+		} else {
+			b.WriteString(prefix + "\n")
 		}
-		b.WriteString(prefix + "\n")
 	}
 
 	return b.String()

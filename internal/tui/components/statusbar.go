@@ -1,7 +1,7 @@
 package components
 
 import (
-	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
@@ -54,41 +54,22 @@ func (m *StatusBarModel) SetTaskSummary(summary string) {
 }
 
 func (m *StatusBarModel) View() string {
-	left := fmt.Sprintf("⭐ %d repos | 🔄 %s", m.repoCount, m.lastSync)
-	if m.taskSummary != "" {
-		left += " | 📋 " + m.taskSummary
-	}
-	var mid string
+	var parts []string
 	if m.message != "" {
 		switch m.msgLevel {
 		case types.LevelError:
-			mid = m.theme.CardTitle.Foreground(m.theme.Error).Render(m.message)
+			parts = append(parts, m.theme.CardTitle.Foreground(m.theme.Error).Render(m.message))
 		case types.LevelSuccess:
-			mid = m.theme.CardTitle.Foreground(m.theme.Success).Render(m.message)
+			parts = append(parts, m.theme.CardTitle.Foreground(m.theme.Success).Render(m.message))
 		default:
-			mid = m.message
+			parts = append(parts, m.message)
 		}
 	}
-	right := "q Quit  Ctrl+K 命令面板  Tab 切换面板  Ctrl+Enter 执行  ? 帮助"
+	parts = append(parts, "q Quit  Ctrl+K 命令面板  Tab 切换面板  Ctrl+Enter 执行  ? 帮助")
 
-	leftW := len(left)
-	midW := len(mid)
-	rightW := len(right)
-	available := m.width - leftW - rightW - 4
-	if midW > available {
-		mid = mid[:max(available-1, 0)]
-	}
-	padding := max(available-midW, 0) / 2
+	separator := "   "
+	joined := strings.Join(parts, separator)
 
-	return m.theme.StatusBar.Width(m.width).Render(
-		left + repeat(" ", padding) + mid + repeat(" ", padding) + right,
-	)
+	return joined
 }
 
-func repeat(s string, n int) string {
-	result := ""
-	for i := 0; i < n; i++ {
-		result += s
-	}
-	return result
-}

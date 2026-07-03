@@ -46,7 +46,10 @@ func NewSearch(s store.Store, theme *styles.Theme, searchAction app.SearchAction
 	return &SearchModel{store: s, theme: theme, searchAction: searchAction, input: ti}
 }
 
-func (m *SearchModel) Init() tea.Cmd { return textinput.Blink }
+func (m *SearchModel) Init() tea.Cmd {
+	m.input.Focus()
+	return textinput.Blink
+}
 
 func (m *SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -75,6 +78,10 @@ func (m *SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.input, cmd = m.input.Update(msg)
 	m.doSearch()
 	return m, cmd
+}
+
+func (m *SearchModel) InputValue() string {
+	return m.input.Value()
 }
 
 func (m *SearchModel) doSearch() {

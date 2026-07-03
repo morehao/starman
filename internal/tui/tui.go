@@ -169,6 +169,28 @@ func (m *TuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.uiState == StatePalette {
 			return m.handlePaletteKey(msg)
 		}
+
+		if m.currentPage == PageSearch {
+			switch msg.String() {
+			case "ctrl+c", "q":
+				return m, tea.Quit
+			case "ctrl+k":
+				m.openPalette()
+				return m, nil
+			case "/":
+				m.showHelp = false
+				return m, func() tea.Msg { return NavigatedMsg{Page: PageSearch} }
+			case "?":
+				m.showHelp = !m.showHelp
+				return m, nil
+			}
+			if p, ok := m.pages[PageSearch]; ok {
+				_, pageCmd := p.Update(msg)
+				_, _ = m.statusbar.Update(msg)
+				return m, pageCmd
+			}
+		}
+
 		model, handledCmd, consumed := m.handleNormalKey(msg)
 		if consumed {
 			return model, handledCmd
@@ -255,9 +277,11 @@ func (m *TuiModel) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	default:
-		if page, ok := components.ShortcutPage(msg.String()); ok {
-			m.showHelp = false
-			return m, func() tea.Msg { return NavigatedMsg{Page: page} }, true
+		if m.currentPage != PageSearch {
+			if page, ok := components.ShortcutPage(msg.String()); ok {
+				m.showHelp = false
+				return m, func() tea.Msg { return NavigatedMsg{Page: page} }, true
+			}
 		}
 	}
 	return m, nil, false
@@ -287,20 +311,51 @@ func (m *TuiModel) View() string {
 			lipgloss.Center, lipgloss.Center, help)
 	}
 
-	topbar := m.renderTopBar()
-	sidebar := m.theme.Sidebar.Render(m.sidebar.View())
+	w := m.width
+	contentHeight := m.height - 5
+
+	sbw := w * 3 / 10
+	if sbw < 24 {
+		sbw = 24
+	}
+
+	m.sidebar.SetRenderWidth(sbw)
+	sidebar := m.theme.Sidebar.Width(sbw).Height(contentHeight).Render(m.sidebar.View())
 
 	rightPane := m.renderContent()
 	if m.workspace.SelectedID() != "" {
 		rightPane = m.workspace.View()
 	}
+	contentStyle := lipgloss.NewStyle().
+		Width(w - sbw - 3).
+		Height(contentHeight).
+		Padding(0, 1)
+	rightPane = contentStyle.Render(rightPane)
 
-	main := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, rightPane)
-	if m.width < 90 {
-		main = lipgloss.JoinVertical(lipgloss.Left, sidebar, rightPane)
+	sbLines := splitLines(sidebar)
+	ctLines := splitLines(rightPane)
+	padLines(&sbLines, &ctLines, contentHeight)
+
+	var lines []string
+	lines = append(lines, renderTopBorder(w))
+	lines = append(lines, m.renderHeaderLine(w))
+	lines = append(lines, renderSep(w, sbw))
+
+	for i := range sbLines {
+		lines = append(lines, "│"+sbLines[i]+"│"+ctLines[i]+"│")
 	}
-	status := m.statusbar.View()
-	view := lipgloss.JoinVertical(lipgloss.Left, topbar, main, status)
+	lines = append(lines, renderSep(w, -1))
+
+	statusContent := m.statusbar.View()
+	statusW := lipgloss.Width(statusContent)
+	statusPad := w - 4 - statusW
+	if statusPad < 0 {
+		statusPad = 0
+	}
+	lines = append(lines, "│ "+statusContent+strings.Repeat(" ", statusPad)+" │")
+	lines = append(lines, renderBottomBorder(w, sbw))
+
+	view := strings.Join(lines, "\n")
 
 	if m.uiState == StatePalette {
 		paletteView := m.palette.View(m.width, m.height)
@@ -310,6 +365,42 @@ func (m *TuiModel) View() string {
 	}
 
 	return view
+}
+
+func splitLines(s string) []string {
+	return strings.Split(strings.TrimRight(s, "\n"), "\n")
+}
+
+func padLines(a, b *[]string, target int) {
+	for len(*a) < target {
+		*a = append(*a, "")
+	}
+	for len(*b) < target {
+		*b = append(*b, "")
+	}
+}
+
+func renderTopBorder(w int) string {
+	title := "STARMAN TUI"
+	return "┌─ " + title + " ─" + strings.Repeat("─", w-len(title)-6) + "┐"
+}
+
+func renderSep(w int, sbw int) string {
+	if sbw < 0 {
+		return "├" + strings.Repeat("─", w-2) + "┤"
+	}
+	left := strings.Repeat("─", sbw)
+	right := strings.Repeat("─", w-sbw-3)
+	return "├" + left + "┬" + right + "┤"
+}
+
+func renderBottomBorder(w int, sbw int) string {
+	if sbw < 0 {
+		return "└" + strings.Repeat("─", w-2) + "┘"
+	}
+	left := strings.Repeat("─", sbw)
+	right := strings.Repeat("─", w-sbw-3)
+	return "└" + left + "┴" + right + "┘"
 }
 
 func (m *TuiModel) renderHelp() string {
@@ -332,34 +423,30 @@ func (m *TuiModel) renderHelp() string {
 	)
 }
 
-func (m *TuiModel) renderTopBar() string {
-	breadcrumb := ""
-	breadcrumbStyle := m.theme.CardTitle
-	sepStyle := lipgloss.NewStyle().Foreground(m.theme.Subtle)
-	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
-	titleStyle := lipgloss.NewStyle().Foreground(m.theme.Primary).Bold(true)
-
+func (m *TuiModel) renderHeaderLine(w int) string {
+	var leftContent string
 	if node, ok := components.CommandByPage(m.currentPage); ok {
-		breadcrumb = breadcrumbStyle.Render(node.Group) + sepStyle.Render(" ▸ ") + labelStyle.Render(node.Label)
+		leftContent = m.theme.CardTitle.Render(node.Group) +
+			lipgloss.NewStyle().Foreground(m.theme.Subtle).Render(" ▸ ") +
+			lipgloss.NewStyle().Foreground(m.theme.Text).Render(node.Label)
 	} else {
-		breadcrumb = titleStyle.Render("STARMAN")
+		leftContent = lipgloss.NewStyle().Foreground(m.theme.Primary).Bold(true).Render("STARMAN")
 	}
 
-	running := ""
+	rightContent := ""
 	if summary := m.taskCenter.Summary(); summary != "" {
-		runningStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
-		running = "  " + runningStyle.Render("["+summary+"]")
+		rightContent += lipgloss.NewStyle().Foreground(m.theme.Warning).Render("[" + summary + "] ")
+	}
+	rightContent += lipgloss.NewStyle().Foreground(m.theme.Subtle).Render(time.Now().Format("15:04"))
+
+	leftW := lipgloss.Width(leftContent)
+	rightW := lipgloss.Width(rightContent)
+	filler := w - 4 - leftW - rightW
+	if filler < 0 {
+		filler = 0
 	}
 
-	now := time.Now().Format("15:04")
-	right := lipgloss.NewStyle().Foreground(m.theme.Subtle).Render(now)
-	available := m.width - lipgloss.Width(right) - 2
-
-	topLine := lipgloss.NewStyle().
-		Width(available).
-		Render(breadcrumb + running) + right
-
-	return m.theme.StatusBar.Width(m.width).Render(topLine)
+	return "│ " + leftContent + strings.Repeat(" ", filler) + rightContent + " │"
 }
 
 func (m *TuiModel) renderContent() string {

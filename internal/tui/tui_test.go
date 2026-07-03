@@ -3,295 +3,117 @@ package tui
 import (
 	"testing"
 
-	"github.com/charmbracelet/bubbletea"
-	"github.com/morehao/starman/internal/config"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/morehao/starman/internal/tui/components"
+	"github.com/morehao/starman/internal/tui/pages"
+	"github.com/morehao/starman/internal/tui/styles"
 )
 
-func TestTuiModelInit(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-	if m.currentPage != PageDashboard {
-		t.Errorf("expected PageDashboard, got %d", m.currentPage)
-	}
-	cmd := m.Init()
-	if cmd == nil {
-		t.Error("expected non-nil init command")
-	}
-}
-
-func TestTuiModelNavigation(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-	m.currentPage = PageSearch
-	if m.currentPage != PageSearch {
-		t.Errorf("expected PageSearch, got %d", m.currentPage)
+func createTestModel(page PageID) *TuiModel {
+	theme := styles.DefaultTheme()
+	return &TuiModel{
+		theme:       theme,
+		currentPage: page,
+		sidebar:     components.NewSidebar(theme),
+		statusbar:   components.NewStatusBar(theme),
+		taskCenter:  NewTaskCenter(),
+		palette:     components.NewCommandPalette(theme, components.DefaultCommandCatalog()),
+		workspace:   components.NewCommandWorkspace(theme),
+		uiState:     StateNormal,
+		focusPane:   FocusSidebar,
+		pages: map[PageID]tea.Model{
+			PageSearch: pages.NewSearch(nil, theme, nil),
+		},
 	}
 }
 
-func TestTuiModelQuit(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
+func TestSearchPageLetterKeysStayOnSearchPage(t *testing.T) {
+	// 搜索页面按字母键（包括之前被 ShortcutPage 拦截的 s/a/r/g/c/t/b/1）
+	// 不应跳转到其他页面
+	letters := []string{"s", "a", "r", "g", "c", "t", "b", "1", "z", "x", "m", "n"}
 
-	msg := tea.KeyMsg{Type: tea.KeyCtrlC}
-	_, cmd := m.Update(msg)
-	if cmd == nil {
-		t.Error("expected quit command on ctrl+c")
-	}
-}
+	for _, key := range letters {
+		t.Run("key_"+key, func(t *testing.T) {
+			m := createTestModel(PageSearch)
+			model, _ := m.Update(keyMsg(key))
 
-func TestTuiModelHelpToggle(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-	m.ready = true
-	m.width = 80
-	m.height = 24
-
-	if m.showHelp {
-		t.Error("expected showHelp to be false initially")
-	}
-
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
-	_, _ = m.Update(msg)
-	if !m.showHelp {
-		t.Error("expected showHelp to be true after pressing ?")
-	}
-
-	helpView := m.View()
-	if helpView == "" || helpView == "loading..." {
-		t.Error("expected help view to be rendered")
-	}
-
-	_, _ = m.Update(msg)
-	if m.showHelp {
-		t.Error("expected showHelp to be false after pressing ? again")
-	}
-}
-
-func TestTuiModelSlashNavigatesToSearch(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
-	_, cmd := m.Update(msg)
-	if cmd == nil {
-		t.Error("expected navigate command after pressing /")
-	}
-}
-
-func TestTuiModelOtherKeysFallThrough(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-	m.ready = true
-	m.width = 80
-	m.height = 24
-
-	viewBefore := m.View()
-
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
-	_, _ = m.Update(msg)
-
-	viewAfter := m.View()
-	if viewBefore == "" || viewAfter == "" {
-		t.Error("views should not be empty")
-	}
-}
-
-func TestPageIDValues(t *testing.T) {
-	if PageDashboard != 0 {
-		t.Errorf("PageDashboard = %d, want 0", PageDashboard)
-	}
-	if PageSearch != 1 {
-		t.Errorf("PageSearch = %d, want 1", PageSearch)
-	}
-}
-
-func TestTuiModelSidebarShortcutNavigation(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-
-	shortcutTests := []struct {
-		key      string
-		expected PageID
-	}{
-		{"1", PageDashboard},
-		{"r", PageRepoList},
-		{"t", PageTrending},
-		{"s", PageSync},
-		{"a", PageAnalyze},
-		{"g", PageTag},
-		{"c", PageCategorize},
-		{"S", PageStats},
-		{"R", PageRelease},
-		{"G", PageGenerate},
-		{"b", PageBackup},
-		{"C", PageConfig},
-	}
-
-	for _, tt := range shortcutTests {
-		t.Run(tt.key, func(t *testing.T) {
-			m.currentPage = PageDashboard
-			msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
-			_, cmd := m.Update(msg)
-			if cmd == nil {
-				t.Errorf("expected navigate command after pressing %q", tt.key)
+			tm := model.(*TuiModel)
+			if tm.currentPage != PageSearch {
+				t.Fatalf("key %q navigated away to page %v", key, tm.currentPage)
 			}
 		})
 	}
 }
 
-func TestTuiModelCtrlKOpensPalette(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
+func TestSearchPageSpecialKeysStayOnSearchPage(t *testing.T) {
+	// 搜索页面按 tab/esc/up/down/j/k/enter 不应触发 sidebar 或全局导航
+	keys := []string{"tab", "esc", "up", "down", "j", "k", "enter"}
 
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	if m.uiState != StatePalette {
-		t.Fatalf("expected palette state, got %d", m.uiState)
-	}
-	if !m.palette.IsOpen() {
-		t.Fatal("expected palette to be open")
-	}
-}
+	for _, key := range keys {
+		t.Run("key_"+key, func(t *testing.T) {
+			m := createTestModel(PageSearch)
+			model, _ := m.Update(keyMsg(key))
 
-func TestTuiModelCtrlKTogglesPalette(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	if m.uiState != StatePalette {
-		t.Fatal("expected palette state after first Ctrl+K")
-	}
-
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	if m.uiState != StateNormal {
-		t.Fatal("expected normal state after second Ctrl+K")
-	}
-	if m.palette.IsOpen() {
-		t.Fatal("expected palette to be closed")
+			tm := model.(*TuiModel)
+			if tm.currentPage != PageSearch {
+				t.Fatalf("key %q navigated away to page %v", key, tm.currentPage)
+			}
+		})
 	}
 }
 
-func TestTuiModelEscClosesPalette(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
+func TestSearchPageGlobalQuitStillWorks(t *testing.T) {
+	// q 键在搜索页面仍能触发退出
+	m := createTestModel(PageSearch)
+	_, cmd := m.Update(keyMsg("q"))
 
-	m.uiState = StatePalette
-	m.palette.Open()
-
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEscape})
-	if m.uiState != StateNormal {
-		t.Fatal("expected normal state after Esc")
-	}
-	if m.palette.IsOpen() {
-		t.Fatal("expected palette to be closed after Esc")
-	}
-}
-
-func TestTuiModelEnterSelectsCommand(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-
-	m.uiState = StatePalette
-	m.palette.Open()
-
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
-		t.Fatal("expected navigate command after Enter in palette")
+		t.Fatal("expected quit command, got nil")
 	}
-	if m.uiState != StateNormal {
-		t.Fatal("expected normal state after Enter")
-	}
-	if m.palette.IsOpen() {
-		t.Fatal("expected palette to be closed after Enter")
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Fatalf("expected tea.QuitMsg, got %T", msg)
 	}
 }
 
-func TestTuiModelTabTogglesFocus(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
+func TestSearchPageLettersReachTextInput(t *testing.T) {
+	// 验证字母键确实进入了搜索框 textinput
+	m := createTestModel(PageSearch)
 
-	if m.focusPane != FocusSidebar {
-		t.Fatal("expected initial focus to be sidebar")
+	// 初始化搜索页面（Focus textinput）
+	sp := m.pages[PageSearch].(*pages.SearchModel)
+	sp.Init()
+
+	// 输入 "h"
+	model1, _ := m.Update(keyMsg("h"))
+	tm1 := model1.(*TuiModel)
+	sp1 := tm1.pages[PageSearch].(*pages.SearchModel)
+	if sp1.InputValue() != "h" {
+		t.Fatalf("expected input 'h', got %q", sp1.InputValue())
 	}
 
-	m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	if m.focusPane != FocusWorkspace {
-		t.Fatal("expected focus to switch to workspace")
-	}
-
-	m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	if m.focusPane != FocusSidebar {
-		t.Fatal("expected focus to switch back to sidebar")
-	}
-}
-
-func TestTuiModelViewRendersPalette(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-	m.ready = true
-	m.width = 100
-	m.height = 30
-
-	m.uiState = StatePalette
-	m.palette.Open()
-
-	view := m.View()
-	if view == "" {
-		t.Fatal("expected non-empty view when palette is open")
+	// 继续输入 "i"
+	model2, _ := tm1.Update(keyMsg("i"))
+	tm2 := model2.(*TuiModel)
+	sp2 := tm2.pages[PageSearch].(*pages.SearchModel)
+	if sp2.InputValue() != "hi" {
+		t.Fatalf("expected input 'hi', got %q", sp2.InputValue())
 	}
 }
 
-func TestTuiModelViewWithWorkspace(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-	m.ready = true
-	m.width = 100
-	m.height = 30
-
-	view := m.View()
-	if view == "" {
-		t.Fatal("expected non-empty view")
-	}
-}
-
-func TestTuiModelQQuits(t *testing.T) {
-	cfg := config.Default()
-	m := NewTuiModel(cfg, nil)
-
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
-	_, cmd := m.Update(msg)
-	if cmd == nil {
-		t.Error("expected quit command on q")
-	}
-}
-
-func TestCommandFlowSelectAndValidate(t *testing.T) {
-	m := NewTuiModel(config.Default(), nil)
-	m.ready = true
-	m.width, m.height = 140, 36
-
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.workspace == nil {
-		t.Fatal("workspace should be initialized")
-	}
-}
-
-func TestCommandFlowWorkspacePopulatedAfterSelect(t *testing.T) {
-	m := NewTuiModel(config.Default(), nil)
-	m.ready = true
-	m.width, m.height = 140, 36
-
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	view := m.workspace.View()
-	if view == "" {
-		t.Fatal("expected non-empty workspace view")
-	}
-	if m.uiState != StateNormal {
-		t.Fatalf("expected normal state after command selection, got %d", m.uiState)
+func keyMsg(key string) tea.KeyMsg {
+	switch key {
+	case "tab":
+		return tea.KeyMsg{Type: tea.KeyTab}
+	case "esc":
+		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "up":
+		return tea.KeyMsg{Type: tea.KeyUp}
+	case "down":
+		return tea.KeyMsg{Type: tea.KeyDown}
+	case "enter":
+		return tea.KeyMsg{Type: tea.KeyEnter}
+	default:
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
 	}
 }

@@ -90,54 +90,64 @@ func (m *CommandPaletteModel) View(width, height int) string {
 		return ""
 	}
 
-	overlayWidth := min(width-10, 64)
-	overlayHeight := min(height-4, 20)
+	overlayWidth := min(width-8, width*3/4)
+	if overlayWidth < 40 {
+		overlayWidth = 40
+	}
+	innerW := overlayWidth - 4
 
-	var b strings.Builder
+	searchBar := m.renderSearchBar(innerW)
+	groups := m.renderGroups(innerW)
+	footer := m.renderFooter(innerW, len(m.catalog))
 
-	b.WriteString(m.renderHeader(overlayWidth) + "\n")
-	b.WriteString(m.renderSearchBar(overlayWidth) + "\n")
-	b.WriteString(m.renderGroups(overlayWidth, overlayHeight) + "\n")
-	b.WriteString(m.renderFooter(overlayWidth))
+	title := "Command Palette"
+	topBorder := "┌─ " + title + " ─" + strings.Repeat("─", overlayWidth-len(title)-6) + "┐"
+	sep := "├" + strings.Repeat("─", overlayWidth-2) + "┤"
+	bottomBorder := "└" + strings.Repeat("─", overlayWidth-2) + "┘"
 
-	overlayStyle := lipgloss.NewStyle().
-		Width(overlayWidth).
-		Height(overlayHeight).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(m.theme.Primary).
-		Padding(1)
+	padToW := func(s string) string {
+		w := lipgloss.Width(s)
+		if w < innerW {
+			s += strings.Repeat(" ", innerW-w)
+		}
+		return "│ " + s + " │"
+	}
 
-	return lipgloss.Place(width, height,
-		lipgloss.Center, lipgloss.Center,
-		overlayStyle.Render(b.String()),
-	)
+	contentLines := []string{
+		topBorder,
+		padToW(searchBar),
+		sep,
+	}
+
+	groupLines := strings.Split(groups, "\n")
+	for _, l := range groupLines {
+		contentLines = append(contentLines, padToW(l))
+	}
+
+	contentLines = append(contentLines, padToW(footer))
+	contentLines = append(contentLines, bottomBorder)
+
+	content := strings.Join(contentLines, "\n")
+
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, content)
 }
 
-func (m *CommandPaletteModel) renderHeader(w int) string {
-	return lipgloss.NewStyle().
-		Bold(true).
-		Foreground(m.theme.Primary).
-		Width(w - 4).
-		Render("Command Palette")
-}
 
 func (m *CommandPaletteModel) renderSearchBar(w int) string {
-	display := "> " + m.query
-	cursor := " "
-	if m.query == "" {
-		cursor = "|"
+	prefix := "> " + m.query
+	suffix := fmt.Sprintf("%d found", len(m.filtered))
+	underscoreW := w - lipgloss.Width(prefix) - lipgloss.Width(suffix) - 2
+	if underscoreW < 1 {
+		underscoreW = 1
 	}
-	return lipgloss.NewStyle().
-		Foreground(m.theme.Text).
-		Width(w - 4).
-		Render(display + cursor)
+	line := prefix + strings.Repeat("_", underscoreW) + "  " + suffix
+	return lipgloss.NewStyle().Foreground(m.theme.Subtle).Render(line)
 }
 
-func (m *CommandPaletteModel) renderGroups(w, maxH int) string {
+func (m *CommandPaletteModel) renderGroups(w int) string {
 	if len(m.filtered) == 0 {
 		return lipgloss.NewStyle().
 			Foreground(m.theme.Subtle).
-			Width(w - 4).
 			Render("No commands found")
 	}
 
@@ -162,37 +172,46 @@ func (m *CommandPaletteModel) renderGroups(w, maxH int) string {
 func (m *CommandPaletteModel) renderGroup(name string, nodes []CommandNode, offset, w int) string {
 	var b strings.Builder
 
-	separator := strings.Repeat("─", w-6)
-	b.WriteString(lipgloss.NewStyle().
-		Foreground(m.theme.Subtle).
-		Render("─ " + name + " " + separator[len(name)+4:]) + "\n")
+	groupStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.theme.Primary)
+	b.WriteString(groupStyle.Render(strings.ToUpper(name)) + "\n")
+
+	normalStyle := lipgloss.NewStyle().Foreground(m.theme.Subtle)
+	selectedStyle := lipgloss.NewStyle().
+		Foreground(m.theme.Text).
+		Bold(true)
+	cursorStyle := lipgloss.NewStyle().Foreground(m.theme.Primary)
 
 	for i, n := range nodes {
 		idx := offset + i
-		line := fmt.Sprintf("  %-16s %-4s  %s", n.Label, n.Shortcut, n.Description)
-		lineStyle := lipgloss.NewStyle().Foreground(m.theme.Subtle)
+		prefix := "  "
 		if idx == m.cursor {
-			lineStyle = lipgloss.NewStyle().
-				Foreground(m.theme.Text).
-				Background(m.theme.Primary).
-				Bold(true)
+			prefix = cursorStyle.Render(" ▸")
 		}
-		b.WriteString(lineStyle.Width(w - 6).Render(line) + "\n")
+		line := fmt.Sprintf("%s %-2s %-16s %s", prefix, n.Shortcut, n.Label, n.Description)
+		if idx == m.cursor {
+			b.WriteString(selectedStyle.Render(line) + "\n")
+		} else {
+			b.WriteString(normalStyle.Render(line) + "\n")
+		}
 	}
 
 	return b.String()
 }
 
-func (m *CommandPaletteModel) renderFooter(w int) string {
-	count := len(m.filtered)
-	if count == 0 {
-		return lipgloss.NewStyle().
-			Foreground(m.theme.Subtle).
-			Width(w - 4).
-			Render("Press Esc to close")
+func (m *CommandPaletteModel) renderFooter(w int, total int) string {
+	footerStyle := lipgloss.NewStyle().Foreground(m.theme.Subtle)
+	if len(m.filtered) == 0 {
+		return footerStyle.Render("Esc 关闭")
 	}
-	return lipgloss.NewStyle().
-		Foreground(m.theme.Subtle).
-		Width(w - 4).
-		Render(fmt.Sprintf("%d commands found  ·  Tab: next group  ·  Esc: close", count))
+	nav := "↑↓ 选择   Enter 进入   Tab 切组   Esc 关闭"
+	count := fmt.Sprintf("(%d/%d 全部)", m.cursor+1, total)
+	navW := lipgloss.Width(nav)
+	countW := lipgloss.Width(count)
+	padding := w - navW - countW - 2
+	if padding < 2 {
+		padding = 2
+	}
+	return footerStyle.Render(nav + strings.Repeat(" ", padding) + count)
 }
