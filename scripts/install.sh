@@ -63,12 +63,20 @@ install() {
 
   TARBALL="${BIN}_${VERSION}_${OS}_${ARCH}.tar.gz"
   URL="https://github.com/${REPO}/releases/download/${VERSION}/${TARBALL}"
+  CHECKSUM_FILE="${BIN}_${VERSION}_checksums.txt"
+  CHECKSUM_URL="https://github.com/${REPO}/releases/download/${VERSION}/${CHECKSUM_FILE}"
 
   TMPDIR=$(mktemp -d)
   trap 'rm -rf "$TMPDIR"' EXIT
 
   info "Downloading ${TARBALL}..."
   curl -sL "$URL" -o "$TMPDIR/$TARBALL" || error "Download failed"
+
+  info "Downloading checksums..."
+  curl -sL "$CHECKSUM_URL" -o "$TMPDIR/$CHECKSUM_FILE" || error "Checksum download failed"
+
+  info "Verifying checksum..."
+  grep "${TARBALL}" "$TMPDIR/$CHECKSUM_FILE" | shasum -a 256 -c || error "Checksum verification failed"
 
   tar xzf "$TMPDIR/$TARBALL" -C "$TMPDIR"
 

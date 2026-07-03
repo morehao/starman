@@ -32,6 +32,9 @@ archives:
       {{- .Os }}_
       {{- .Arch }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - src: scripts/install.sh
+        dst: .
   - id: binary
     format: binary
 
