@@ -52,6 +52,11 @@ type Model struct {
 	commandMode  bool
 	errorMsg     string
 	errorTimer   *time.Timer
+
+	editingMode      string
+	editingCats      []*store.Category
+	editingCatCursor int
+	editingQuery     string
 }
 
 func NewModel(ctx *tuicontext.ProgramContext) Model {
@@ -201,6 +206,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(typed, m.keys.Escape):
+		if m.editingMode != "" {
+			m.editingMode = ""
+			m.editingCats = nil
+			m.editingCatCursor = 0
+			m.editingQuery = ""
+			return nil
+		}
 		if m.searching || m.commandMode {
 			m.searching = false
 			m.commandMode = false
@@ -239,6 +251,45 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 
 	case key.Matches(typed, m.keys.Sync):
 		return m.startSync()
+
+	case key.Matches(typed, m.keys.ToggleStar):
+		if m.editingMode != "" || m.ctx.View != tuicontext.StarsView {
+			return nil
+		}
+		return m.toggleStar()
+
+	case key.Matches(typed, m.keys.EditCategory):
+		if m.editingMode != "" || m.ctx.View != tuicontext.StarsView {
+			return nil
+		}
+		return m.startEditCategory()
+
+	case key.Matches(typed, m.keys.EditTag):
+		if m.editingMode != "" || m.ctx.View != tuicontext.StarsView {
+			return nil
+		}
+		return m.startEditTag()
+
+	case m.editingMode == "category" && key.Matches(typed, m.keys.Enter):
+		return m.finishEditCategory()
+
+	case m.editingMode == "category" && key.Matches(typed, m.keys.Down):
+		if m.editingCatCursor < len(m.editingCats)-1 {
+			m.editingCatCursor++
+		}
+		return nil
+
+	case m.editingMode == "category" && key.Matches(typed, m.keys.Up):
+		if m.editingCatCursor > 0 {
+			m.editingCatCursor--
+		}
+		return nil
+
+	case m.editingMode == "tag" && key.Matches(typed, m.keys.Enter):
+		return m.finishEditTag()
+
+	case m.editingMode == "tag":
+		return m.handleEditingInput(typed)
 
 	case key.Matches(typed, m.keys.NextView):
 		m.switchView(1)
@@ -536,6 +587,13 @@ func (m Model) View() tea.View {
 
 	tabsView := m.tabs.View()
 
+	editLine := ""
+	if m.editingMode == "category" {
+		editLine = m.renderEditCategoryLine()
+	} else if m.editingMode == "tag" {
+		editLine = m.renderEditTagLine()
+	}
+
 	searchLine := ""
 	if m.commandMode {
 		searchLine = m.renderInputLine(":", m.searchQuery)
@@ -556,7 +614,7 @@ func (m Model) View() tea.View {
 			lipgloss.Left,
 			tabsView,
 			content,
-		) + searchLine + m.renderErrorBar() + helpLine + "\n" + footerView,
+		) + editLine + searchLine + m.renderErrorBar() + helpLine + "\n" + footerView,
 	)
 	v.AltScreen = true
 	return v
@@ -711,4 +769,224 @@ func (m Model) renderErrorBar() string {
 		Foreground(theme.ErrorText).
 		Bold(true).
 		Render("✖ "+m.errorMsg)
+}
+
+func (m *Model) toggleStar() tea.Cmd {
+	row := m.currSection.CurrRow()
+	repoRow, ok := row.(starssection.RepoRow)
+	if !ok || repoRow.Repo == nil {
+		return nil
+	}
+	repo := repoRow.Repo
+	parts := strings.SplitN(repo.FullName, "/", 2)
+	if len(parts) != 2 {
+		m.setError("invalid repo full name: " + repo.FullName)
+		return nil
+	}
+	cfg := m.ctx.Config
+	token := config.ResolveToken(cfg, "")
+	if token == "" {
+		m.setError("GitHub token required for starring")
+		return nil
+	}
+
+	taskID := "star-" + time.Now().Format("150405")
+	isStarred := repo.StarredAt != ""
+	action := "star"
+	if isStarred {
+		action = "unstar"
+	}
+	m.tasks.start(taskID, action+" "+repo.FullName)
+
+	return tea.Batch(
+		func() tea.Msg { return TaskStartedMsg{TaskID: taskID, Name: action + " " + repo.FullName} },
+		func() tea.Msg {
+			gh := github.New(token)
+			ctx := context.Background()
+			if isStarred {
+				if err := gh.Unstar(ctx, parts[0], parts[1]); err != nil {
+					return TaskFinishedMsg{TaskID: taskID, Name: action, Message: "unstar failed", Err: err}
+				}
+				repo.StarredAt = ""
+			} else {
+				if err := gh.Star(ctx, parts[0], parts[1]); err != nil {
+					return TaskFinishedMsg{TaskID: taskID, Name: action, Message: "star failed", Err: err}
+				}
+				repo.StarredAt = time.Now().Format(time.RFC3339)
+			}
+			_ = m.ctx.Store.UpsertRepository(ctx, repo)
+			return TaskFinishedMsg{
+				TaskID:  taskID,
+				Name:    action,
+				Message: fmt.Sprintf("%s %s", action, repo.FullName),
+			}
+		},
+	)
+}
+
+func (m *Model) startEditCategory() tea.Cmd {
+	ctx := context.Background()
+	cats, err := m.ctx.Store.ListCategories(ctx, true)
+	if err != nil {
+		m.setError("Failed to list categories: " + err.Error())
+		return nil
+	}
+	m.editingMode = "category"
+	m.editingCats = cats
+	m.editingCatCursor = 0
+	row := m.currSection.CurrRow()
+	if repoRow, ok := row.(starssection.RepoRow); ok && repoRow.Repo != nil {
+		currentCat := repoRow.Repo.CustomCategory
+		if currentCat == "" {
+			currentCat = repoRow.Repo.AICategory
+		}
+		for i, c := range cats {
+			if c.ID == currentCat {
+				m.editingCatCursor = i
+				break
+			}
+		}
+	}
+	return nil
+}
+
+func (m *Model) finishEditCategory() tea.Cmd {
+	m.editingMode = ""
+	if m.editingCatCursor < 0 || m.editingCatCursor >= len(m.editingCats) {
+		m.editingCats = nil
+		return nil
+	}
+	selected := m.editingCats[m.editingCatCursor]
+	m.editingCats = nil
+
+	row := m.currSection.CurrRow()
+	repoRow, ok := row.(starssection.RepoRow)
+	if !ok || repoRow.Repo == nil {
+		return nil
+	}
+
+	taskID := "cat-" + time.Now().Format("150405")
+	m.tasks.start(taskID, "categorize "+repoRow.Repo.FullName)
+
+	return tea.Batch(
+		func() tea.Msg { return TaskStartedMsg{TaskID: taskID, Name: "categorize " + repoRow.Repo.FullName} },
+		func() tea.Msg {
+			if err := m.ctx.Store.UpdateCustomFields(context.Background(), repoRow.Repo.ID, &store.CustomFields{
+				Description:    repoRow.Repo.CustomDescription,
+				Tags:           repoRow.Repo.CustomTags,
+				Category:       selected.ID,
+				CategoryLocked: repoRow.Repo.CategoryLocked,
+			}); err != nil {
+				return TaskFinishedMsg{TaskID: taskID, Name: "categorize", Message: "categorize failed", Err: err}
+			}
+			repoRow.Repo.CustomCategory = selected.ID
+			return TaskFinishedMsg{
+				TaskID:  taskID,
+				Name:    "categorize",
+				Message: fmt.Sprintf("category set to %s for %s", selected.ID, repoRow.Repo.FullName),
+			}
+		},
+	)
+}
+
+func (m *Model) startEditTag() tea.Cmd {
+	row := m.currSection.CurrRow()
+	repoRow, ok := row.(starssection.RepoRow)
+	if !ok || repoRow.Repo == nil {
+		return nil
+	}
+	m.editingMode = "tag"
+	m.editingQuery = strings.Join(repoRow.Repo.CustomTags, ", ")
+	return nil
+}
+
+func (m *Model) finishEditTag() tea.Cmd {
+	m.editingMode = ""
+	query := strings.TrimSpace(m.editingQuery)
+	m.editingQuery = ""
+
+	row := m.currSection.CurrRow()
+	repoRow, ok := row.(starssection.RepoRow)
+	if !ok || repoRow.Repo == nil {
+		return nil
+	}
+
+	var addTags, removeTags []string
+	if query != "" {
+		addTags, removeTags = store.ParseTagExpr(query)
+	}
+	newTags := store.ApplyTags(repoRow.Repo.CustomTags, addTags, removeTags)
+
+	taskID := "tag-" + time.Now().Format("150405")
+	m.tasks.start(taskID, "tag "+repoRow.Repo.FullName)
+
+	return tea.Batch(
+		func() tea.Msg { return TaskStartedMsg{TaskID: taskID, Name: "tag " + repoRow.Repo.FullName} },
+		func() tea.Msg {
+			if err := m.ctx.Store.UpdateCustomFields(context.Background(), repoRow.Repo.ID, &store.CustomFields{
+				Description:    repoRow.Repo.CustomDescription,
+				Tags:           newTags,
+				Category:       repoRow.Repo.CustomCategory,
+				CategoryLocked: repoRow.Repo.CategoryLocked,
+			}); err != nil {
+				return TaskFinishedMsg{TaskID: taskID, Name: "tag", Message: "tag update failed", Err: err}
+			}
+			repoRow.Repo.CustomTags = newTags
+			return TaskFinishedMsg{
+				TaskID:  taskID,
+				Name:    "tag",
+				Message: fmt.Sprintf("tags updated for %s", repoRow.Repo.FullName),
+			}
+		},
+	)
+}
+
+func (m *Model) handleEditingInput(typed tea.KeyMsg) tea.Cmd {
+	k := typed.Key()
+	switch k.String() {
+	case "backspace":
+		if len(m.editingQuery) > 0 {
+			m.editingQuery = m.editingQuery[:len(m.editingQuery)-1]
+		}
+	default:
+		if k.Text != "" {
+			m.editingQuery += k.Text
+		} else if k.Code >= 32 && k.Code < 127 {
+			m.editingQuery += string(k.Code)
+		}
+	}
+	return nil
+}
+
+func (m Model) renderEditCategoryLine() string {
+	theme := m.ctx.Theme
+	var lines []string
+	lines = append(lines, "")
+	lines = append(lines, lipgloss.NewStyle().
+		Foreground(theme.WarningText).Bold(true).
+		Render("Select category (j/k move, enter confirm, esc cancel):"))
+	for i, c := range m.editingCats {
+		prefix := "  "
+		if i == m.editingCatCursor {
+			prefix = "> "
+		}
+		style := lipgloss.NewStyle().Foreground(theme.PrimaryText)
+		if i == m.editingCatCursor {
+			style = style.Bold(true).Foreground(theme.SuccessText)
+		}
+		lines = append(lines, prefix+style.Render(c.Name+" ("+c.ID+")"))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) renderEditTagLine() string {
+	theme := m.ctx.Theme
+	promptStyle := lipgloss.NewStyle().
+		Foreground(theme.WarningText).Bold(true)
+	inputStyle := lipgloss.NewStyle().
+		Foreground(theme.PrimaryText)
+	cursorStyle := lipgloss.NewStyle().
+		Foreground(theme.SuccessText)
+	return "\n" + promptStyle.Render("Edit tags (+add,-remove format): ") +
+		inputStyle.Render(m.editingQuery) + cursorStyle.Render("▎")
 }

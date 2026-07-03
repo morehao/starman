@@ -75,7 +75,7 @@ func newCategoryAddCmd() *cobra.Command {
 			}
 			var kws []string
 			if keywords != "" {
-				kws = parseCSV(keywords)
+				kws = store.ParseCSV(keywords)
 			}
 			if sortOrder == 0 {
 				s, err := openStore()
@@ -152,7 +152,7 @@ func newCategoryEditCmd() *cobra.Command {
 				target.Name = name
 			}
 			if cmd.Flags().Changed("keywords") {
-				target.Keywords = parseCSV(keywords)
+				target.Keywords = store.ParseCSV(keywords)
 			}
 			if cmd.Flags().Changed("sort-order") {
 				target.SortOrder = sortOrder

@@ -51,12 +51,12 @@ func singleTag(ctx context.Context, s store.Store, args []string, addFlag, remov
 	}
 	var add, remove []string
 	if len(args) >= 2 {
-		add, remove = parseTagExpr(args[1])
+		add, remove = store.ParseTagExpr(args[1])
 	} else {
-		add = parseCSV(addFlag)
-		remove = parseCSV(removeFlag)
+		add = store.ParseCSV(addFlag)
+		remove = store.ParseCSV(removeFlag)
 	}
-	newTags := applyTags(repo.CustomTags, add, remove)
+	newTags := store.ApplyTags(repo.CustomTags, add, remove)
 	if err := s.UpdateCustomFields(ctx, repo.ID, &store.CustomFields{
 		Description:    repo.CustomDescription,
 		Tags:           newTags,
@@ -74,8 +74,8 @@ func batchTag(ctx context.Context, s store.Store, lang, catFilter, addStr, remov
 	if err != nil {
 		return err
 	}
-	add := parseCSV(addStr)
-	remove := parseCSV(removeStr)
+	add := store.ParseCSV(addStr)
+	remove := store.ParseCSV(removeStr)
 	count := 0
 	for _, r := range repos {
 		if lang != "" && !strings.EqualFold(r.Language, lang) {
@@ -90,7 +90,7 @@ func batchTag(ctx context.Context, s store.Store, lang, catFilter, addStr, remov
 				continue
 			}
 		}
-		newTags := applyTags(r.CustomTags, add, remove)
+		newTags := store.ApplyTags(r.CustomTags, add, remove)
 		if err := s.UpdateCustomFields(ctx, r.ID, &store.CustomFields{
 			Description:    r.CustomDescription,
 			Tags:           newTags,
@@ -106,69 +106,3 @@ func batchTag(ctx context.Context, s store.Store, lang, catFilter, addStr, remov
 	return nil
 }
 
-func parseTagExpr(expr string) (add, remove []string) {
-	parts := strings.Split(expr, ",")
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		if strings.HasPrefix(part, "+") {
-			tag := strings.TrimSpace(part[1:])
-			if tag != "" {
-				add = append(add, tag)
-			}
-		} else if strings.HasPrefix(part, "-") {
-			tag := strings.TrimSpace(part[1:])
-			if tag != "" {
-				remove = append(remove, tag)
-			}
-		} else {
-			add = append(add, part)
-		}
-	}
-	return add, remove
-}
-
-func applyTags(current, add, remove []string) []string {
-	set := make(map[string]bool)
-	for _, t := range current {
-		set[t] = true
-	}
-	for _, t := range add {
-		set[t] = true
-	}
-	for _, t := range remove {
-		delete(set, t)
-	}
-	seen := make(map[string]bool)
-	var result []string
-	for _, t := range current {
-		if set[t] && !seen[t] {
-			seen[t] = true
-			result = append(result, t)
-		}
-	}
-	for _, t := range add {
-		if set[t] && !seen[t] {
-			seen[t] = true
-			result = append(result, t)
-		}
-	}
-	return result
-}
-
-func parseCSV(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	var result []string
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
-}
