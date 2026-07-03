@@ -194,7 +194,7 @@ AI analysis results and custom fields are preserved across syncs.
 Batch AI analysis: README → summary/tags/platform/search_text → category → embedding → FTS5 rebuild.
 
 ```bash
-starman analyze [flags]
+starman analyze [--all] [--repo <name> ...] [--force] [--limit N]
 ```
 
 | Flag | Type | Default | Description |
@@ -213,7 +213,8 @@ Failure isolation: single repo failure doesn't stop the batch. Failed repos are 
 Three-tier hybrid search with structured filtering.
 
 ```bash
-starman search <query> [flags]
+starman search <query> [--json] [--limit N] [--lang L] [--category C] [--platform P]
+                      [--tag T] [--min-stars N] [--max-stars N] [--sort score|stars|name]
 ```
 
 | Flag | Type | Default | Description |
@@ -241,7 +242,7 @@ starman search <query> [flags]
 Generate an Awesome List Markdown file from the local database.
 
 ```bash
-starman generate [output] [flags]
+starman generate [output] [-s language|category|flat] [-o file] [--repo <name>] [-m msg] [-T template]
 ```
 
 | Flag | Type | Default | Description |
@@ -343,7 +344,7 @@ starman backup --repo <name> [-m "msg"]               # Push backup to GitHub re
 Show distribution statistics of synced repositories.
 
 ```bash
-starman stats [flags]
+starman stats [--by language|category|tag] [--top N] [--json]
 ```
 
 | Flag | Type | Default | Description |
@@ -359,7 +360,7 @@ starman stats [flags]
 Display detailed repository information.
 
 ```bash
-starman info <owner/repo> [flags]
+starman info <owner/repo> [--readme] [--readme-variant <file>]
 ```
 
 | Flag | Type | Default | Description |
@@ -426,7 +427,7 @@ starman categorize --cat-filter "web-app" "其他"
 Browse GitHub trending repositories.
 
 ```bash
-starman trending [flags]
+starman trending [--since daily|weekly|monthly] [--lang L] [--top N] [--source rss|search] [--star]
 ```
 
 | Flag | Type | Default | Description |
