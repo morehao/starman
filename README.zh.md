@@ -9,8 +9,8 @@ starman 支持星标同步、AI 分析、Awesome List 生成、Release 追踪、
 ## 功能
 
 - **同步** — 并发分页拉取 GitHub 星标仓库到本地 SQLite（再次同步时保留 AI 分析结果）。支持 `--watch` 模式定时自动同步。
-- **分析** — 批量 AI 分析（OpenAI 兼容）：生成摘要、标签、分类（双向关键词匹配），同时生成 `search_text` 用于 FTS5 全文索引
-- **搜索** — LLM 查询理解 + FTS5 全文检索，BM25 加权打分，支持结构化过滤（`--lang`/`--category`）、可选 `--rerank` LLM 精排、`--sort` 排序和 `--json` 输出
+- **分析** — 批量 AI 分析（OpenAI 兼容）：生成摘要、标签、分类（双向关键词匹配），同时生成 embedding 向量用于语义搜索，以及 `search_text` 用于全文索引
+- **搜索** — 三层混合搜索（向量语义匹配 > AI 查询理解 + 文本检索 > 基础文本检索），支持结构化过滤（`--lang`/`--category`/`--platform`/`--tag`）、`--sort` 排序和 `--json` 输出
 - **生成** — Markdown Awesome List，三种模式：按语言、按 AI 分类、平铺列表（可自动提交到 GitHub 仓库）
 - **Release 追踪** — 订阅仓库并拉取新版本，支持增量水位
 - **Star/Unstar** — 星标管理，同步到本地 DB
@@ -56,6 +56,7 @@ starman config init
 |---------|------|
 | `STARMAN_GITHUB_TOKEN` | GitHub token（回退到 `GITHUB_TOKEN`） |
 | `STARMAN_AI_API_KEY` | AI API key |
+| `STARMAN_EMBEDDING_API_KEY` | Embedding API key（用于向量搜索） |
 | `STARMAN_WEBDAV_PASSWORD` | WebDAV 密码 |
 
 ### 2. 同步星标仓库
@@ -72,7 +73,7 @@ starman sync
 starman analyze
 ```
 
-默认分析最多 20 个未分析的仓库：获取 README，调用 AI 生成摘要/标签/平台/搜索文本，通过关键词匹配解析分类。结果缓存在 DB 中 —— 重复运行只处理新仓库。使用 `--all` 分析所有未分析仓库，`--force` 可重新分析已有仓库。分析完成后自动重建 FTS5 索引以供搜索。
+默认分析最多 20 个未分析的仓库：获取 README，调用 AI 生成摘要/标签/平台/搜索文本，通过关键词匹配解析分类，同时生成 embedding 向量用于语义搜索。结果缓存在 DB 中 —— 重复运行只处理新仓库。使用 `--all` 分析所有未分析仓库，`--force` 可重新分析已有仓库。分析完成后自动重建 FTS5 索引以供搜索。
 
 ### 4. 生成 Awesome List
 
@@ -93,20 +94,20 @@ starman generate -s language --repo awesome-stars
 ### 5. 搜索
 
 ```bash
-# 基础关键词搜索
+# 基础语义搜索
 starman search "终端工具"
 
 # 按语言过滤，按星标排序
 starman search "框架" --lang Go --sort stars --limit 10
 
-# LLM 精排候选仓库
-starman search "机器学习" --rerank
+# 按平台和标签过滤
+starman search "数据库" --platform cli --tag go
 
 # JSON 格式输出
 starman search "机器学习" --json
 ```
 
-FTS5 全文索引 + BM25 打分：LLM 先理解查询意图，然后在仓库全名、描述、AI 摘要、AI 搜索文本、标签和 topics 中全文检索。使用 `--rerank` 可让 LLM 对候选集重新排序。
+三层混合搜索：先尝试向量语义匹配（需配置 embedding），降级到 AI 查询理解 + 文本全文检索，最后兜底基础文本搜索。基于仓库全名、描述、AI 摘要、搜索文本、标签和 topics 进行匹配，使用加权评分排序。
 
 ### 6. 发现趋势仓库
 
@@ -208,8 +209,15 @@ starman search <query> [flags]
 | `--limit` | 限制结果数（0 = 不限） |
 | `--lang` | 按语言过滤 |
 | `--category` | 按分类过滤 |
+| `--platform` | 按平台过滤：`web` \| `desktop` \| `mobile` \| `cli` \| `library` \| `service` |
+| `--tag` | 按标签过滤（OR 逻辑，可多次使用） |
+| `--min-stars` | 最低 star 数 |
+| `--max-stars` | 最高 star 数（0 = 不限） |
+| `--analyzed` | 仅显示已分析的仓库 |
+| `--no-analyzed` | 仅显示未分析的仓库 |
+| `--analysis-failed` | 仅显示分析失败的仓库 |
+| `--no-vector` | 禁用向量搜索，仅用文本搜索 |
 | `--sort` | 排序依据：`score` \| `stars` \| `name`（默认：score） |
-| `--rerank` | LLM 精排候选仓库 |
 
 ### stats
 
@@ -299,6 +307,11 @@ ai:
   concurrency: 3
   custom_prompt: ""
 
+embedding:
+  base_url: "https://api.openai.com/v1"
+  api_key: ""         # 或使用 STARMAN_EMBEDDING_API_KEY
+  model: "text-embedding-3-small"
+
 webdav:
   url: ""
   username: ""
@@ -325,11 +338,13 @@ starman 兼容任何 OpenAI 兼容 API 端点（`/v1/chat/completions`），支�
 
 设置 `ai.base_url` 和 `ai.model` 匹配你的提供商。`ai.concurrency` 控制批量分析的并发数。
 
+Embedding 同样兼容任何 OpenAI 兼容的 embedding API 端点（`/v1/embeddings`）。配置 `embedding` 段可启用向量语义搜索；未配置时搜索自动降级为文本检索。
+
 ## 关键设计
 
 - **增量同步保留分析结果** — 从 GitHub 重新同步时不会覆盖 AI 摘要、标签、分类或你设置的自定义字段。
 - **分类锁定** — 通过 `category_locked` 锁定仓库分类，防止 AI 覆盖手动设置的分类。
-- **FTS5 全文索引** — 搜索使用 SQLite FTS5 + BM25 评分。分析时 LLM 生成的 `ai_search_text` 字段丰富了搜索索引，提升召回率。
+- **三层混合搜索** — 搜索优先尝试向量语义匹配（sqlite-vec），降级到 AI 查询理解 + 全文文本检索，最后兜底基础文本搜索。无向量配置时透明降级，零成本运行。分析时 LLM 生成的 `ai_search_text` 字段丰富了搜索索引，提升召回率。
 - **分析失败隔离** — 某个仓库 AI 分析失败时，批量继续执行。失败的仓库标记 `analysis_failed` 以供重试。
 - **Release 水位** — 订阅的仓库记录最后拉取的 release 时间戳，`release pull` 只获取新版本。
 - **生成器读取本地 DB** — `generate` 不调用 GitHub API 获取数据，而是从 SQLite 读取。请先运行 `sync`，再运行 `analyze` 获取 AI 分类。
@@ -343,7 +358,7 @@ starman 兼容任何 OpenAI 兼容 API 端点（`/v1/chat/completions`），支�
 | CLI 框架 | [cobra](https://github.com/spf13/cobra) + [pflag](https://github.com/spf13/pflag) |
 | GitHub API | [go-github v71](https://github.com/google/go-github) + [httpcache](https://github.com/gregjones/httpcache) |
 | 并发 | [conc](https://github.com/sourcegraph/conc) |
-| SQLite | [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite)（纯 Go，无 CGO） |
+| SQLite | [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) + [modernc.org/sqlite/vec](https://pkg.go.dev/modernc.org/sqlite/vec)（纯 Go，无 CGO） |
 | 配置 | [yaml.v3](https://github.com/go-yaml/yaml) |
 | AI | OpenAI 兼容 HTTP API（无 SDK） |
 
