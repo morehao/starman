@@ -36,6 +36,7 @@ func NewRootCmd(ver string) *cobra.Command {
 	root.AddCommand(newInfoCmd())
 	root.AddCommand(newTagCmd())
 	root.AddCommand(newCategorizeCmd())
+	root.AddCommand(newCategoryCmd())
 	root.AddCommand(newTrendingCmd())
 	return root
 }
