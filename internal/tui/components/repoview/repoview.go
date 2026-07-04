@@ -137,7 +137,7 @@ func (m Model) renderOverview() string {
 func getGlamourRenderer() *glamour.TermRenderer {
 	glamourRendererOnce.Do(func() {
 		r, err := glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
+			glamour.WithStylePath("dark"),
 			glamour.WithWordWrap(0),
 		)
 		if err != nil {
