@@ -389,7 +389,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 
-	if y == 1 && m.tabs.HasSectionTabs() {
+	if y == 2 && m.tabs.HasSectionTabs() {
 		if secIdx := m.tabs.SectionTabAtX(msg.X); secIdx >= 0 {
 			m.tabs.SetActiveSection(secIdx)
 			if m.ctx.View == tuicontext.StarsView {
