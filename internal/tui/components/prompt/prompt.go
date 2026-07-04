@@ -14,12 +14,20 @@ const (
 	PromptConfirm PromptType = iota
 	PromptCategorySelect
 	PromptTagEdit
+	PromptCategoryForm
 )
 
 type PromptResultMsg struct {
 	Type      PromptType
 	Confirmed bool
 	Value     string
+}
+
+type FormField struct {
+	Label    string
+	Value    string
+	IsBool   bool
+	Readonly bool
 }
 
 type Model struct {
@@ -31,6 +39,10 @@ type Model struct {
 	active  bool
 	th      theme.Theme
 	width   int
+
+	formFields   []FormField
+	formFieldIdx int
+	formIsEdit   bool
 }
 
 func NewConfirmModel(title string) Model {
@@ -58,6 +70,21 @@ func NewTagEditModel(title string, current string) Model {
 	return Model{ptype: PromptTagEdit, title: title, input: current, active: true}
 }
 
+func NewCategoryFormModel(title string, fields []FormField, isEdit bool) Model {
+	return Model{
+		ptype:        PromptCategoryForm,
+		title:        title,
+		formFields:   fields,
+		formFieldIdx: 0,
+		active:       true,
+		formIsEdit:   isEdit,
+	}
+}
+
+func NewFormField(label, value string, isBool, readonly bool) FormField {
+	return FormField{Label: label, Value: value, IsBool: isBool, Readonly: readonly}
+}
+
 func (m *Model) SetTheme(th theme.Theme) {
 	m.th = th
 }
@@ -76,6 +103,7 @@ const (
 	nKey         = 110
 	YKey         = 89
 	NKey         = 78
+	spaceKey     = 32
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -91,6 +119,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleCategoryKeys(msg)
 		case PromptTagEdit:
 			return m.handleTagKeys(msg)
+		case PromptCategoryForm:
+			return m.handleCategoryFormKeys(msg)
 		}
 	case tea.WindowSizeMsg:
 		return m, nil
@@ -165,6 +195,52 @@ func (m Model) handleTagKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleCategoryFormKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.Code {
+	case escapeKey:
+		m.active = false
+		return m, func() tea.Msg { return PromptResultMsg{Type: PromptCategoryForm, Confirmed: false} }
+	case enterKey:
+		m.active = false
+		values := make([]string, len(m.formFields))
+		for i, f := range m.formFields {
+			values[i] = f.Value
+		}
+		val := strings.Join(values, "\x00")
+		return m, func() tea.Msg { return PromptResultMsg{Type: PromptCategoryForm, Confirmed: true, Value: val} }
+	case tea.KeyDown, jKey:
+		m.formFieldIdx++
+		if m.formFieldIdx >= len(m.formFields) {
+			m.formFieldIdx = 0
+		}
+	case tea.KeyUp, kKey:
+		m.formFieldIdx--
+		if m.formFieldIdx < 0 {
+			m.formFieldIdx = len(m.formFields) - 1
+		}
+	case spaceKey:
+		f := &m.formFields[m.formFieldIdx]
+		if f.IsBool {
+			if f.Value == "true" {
+				f.Value = "false"
+			} else {
+				f.Value = "true"
+			}
+		}
+	case backspaceKey:
+		f := &m.formFields[m.formFieldIdx]
+		if !f.IsBool && !f.Readonly && len(f.Value) > 0 {
+			f.Value = f.Value[:len(f.Value)-1]
+		}
+	default:
+		f := &m.formFields[m.formFieldIdx]
+		if !f.IsBool && !f.Readonly && msg.Code >= 32 && msg.Code < 127 {
+			f.Value += string(rune(msg.Code))
+		}
+	}
+	return m, nil
+}
+
 func (m Model) View() tea.View {
 	if !m.active {
 		return tea.NewView("")
@@ -203,6 +279,47 @@ func (m Model) View() tea.View {
 	case PromptTagEdit:
 		content = lipgloss.NewStyle().Foreground(m.th.PrimaryText).Render(m.title) + "\n" +
 			lipgloss.NewStyle().Foreground(m.th.PrimaryText).Render(m.input) + "_"
+	case PromptCategoryForm:
+		content = lipgloss.NewStyle().Foreground(m.th.PrimaryText).Bold(true).Render(m.title)
+		for i, f := range m.formFields {
+			prefix := "  "
+			linePrefix := prefix
+			if m.formFieldIdx == i {
+				linePrefix = "▸ "
+			}
+
+			if f.IsBool {
+				toggleVal := "[ ]"
+				if f.Value == "true" {
+					toggleVal = "[x]"
+				}
+				fieldLine := linePrefix + f.Label + ": " + toggleVal
+				if i == m.formFieldIdx {
+					content += lipgloss.NewStyle().Background(m.th.SelectedBackground).Foreground(m.th.PrimaryText).Render(fieldLine)
+				} else {
+					content += lipgloss.NewStyle().Foreground(m.th.FaintText).Render(fieldLine)
+				}
+			} else {
+				val := f.Value
+				if f.Readonly {
+					fieldLine := linePrefix + f.Label + ": " + val + " (只读)"
+					if i == m.formFieldIdx {
+						content += lipgloss.NewStyle().Background(m.th.SelectedBackground).Foreground(m.th.FaintText).Render(fieldLine)
+					} else {
+						content += lipgloss.NewStyle().Foreground(m.th.FaintText).Render(fieldLine)
+					}
+				} else {
+					fieldLine := linePrefix + f.Label + ": " + val + "_"
+					if i == m.formFieldIdx {
+						content += lipgloss.NewStyle().Background(m.th.SelectedBackground).Foreground(m.th.PrimaryText).Render(fieldLine)
+					} else {
+						content += lipgloss.NewStyle().Foreground(m.th.FaintText).Render(fieldLine)
+					}
+				}
+			}
+			content += "\n"
+		}
+		content += "\n" + lipgloss.NewStyle().Foreground(m.th.FaintText).Render("[Enter] Save  [Esc] Cancel")
 	}
 
 	return tea.NewView(overlayStyle.Render(content))

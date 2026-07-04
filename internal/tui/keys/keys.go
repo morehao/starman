@@ -31,6 +31,7 @@ type KeyMap struct {
 	EditCategory  key.Binding
 	EditTag       key.Binding
 	Analyze       key.Binding
+	ActionsMenu   key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -59,6 +60,7 @@ func DefaultKeyMap() KeyMap {
 		EditCategory:  key.NewBinding(key.WithKeys("c")),
 		EditTag:       key.NewBinding(key.WithKeys("t")),
 		Analyze:       key.NewBinding(key.WithKeys("a")),
+		ActionsMenu:   key.NewBinding(key.WithKeys("o")),
 	}
 }
 

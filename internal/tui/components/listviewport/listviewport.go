@@ -60,8 +60,22 @@ func (m *Model) Cursor() int { return m.cursor }
 const tableHeaderLines = 3
 
 func (m *Model) scrollToCursor() {
+	if len(m.rows) == 0 || m.height <= 0 {
+		return
+	}
 	cursorLine := tableHeaderLines + m.cursor
-	m.viewport.EnsureVisible(cursorLine, 0, 0)
+	y := m.viewport.YOffset()
+	h := m.height
+
+	if cursorLine >= y && cursorLine < y+h {
+		return
+	}
+
+	if cursorLine < y {
+		m.viewport.SetYOffset(0)
+	} else {
+		m.viewport.SetYOffset(cursorLine - h + 1)
+	}
 }
 
 func (m *Model) NextRow() {

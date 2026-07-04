@@ -14,6 +14,7 @@ import (
 
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/common"
+	"github.com/morehao/starman/internal/tui/components/categoriessection"
 	"github.com/morehao/starman/internal/tui/components/drawer"
 	"github.com/morehao/starman/internal/tui/components/footer"
 	"github.com/morehao/starman/internal/tui/components/prompt"
@@ -28,6 +29,7 @@ import (
 	"github.com/morehao/starman/internal/tui/components/trendingsection"
 	"github.com/morehao/starman/internal/tui/constants"
 	tuicontext "github.com/morehao/starman/internal/tui/context"
+	"github.com/morehao/starman/internal/tui/theme"
 )
 
 const taskClearDelay = 3 * time.Second
@@ -37,6 +39,7 @@ const (
 	modeSearch
 	modeCommand
 	modePrompt
+	modeActions
 )
 
 type Model struct {
@@ -45,10 +48,12 @@ type Model struct {
 	sidebar     sidebar.Model
 	footer      footer.Model
 	stars       *starssection.Model
+	categories  *categoriessection.Model
 	trending    *trendingsection.Model
 	releases    *releasessection.Model
 	stats       *statssection.Model
 	currSection section.Section
+	actionsMenu categoriessection.ActionsMenuModel
 	repo        *repoview.Model
 	tasks       *tasksHolder
 	runner      CommandRunner
@@ -70,14 +75,15 @@ type Model struct {
 
 func NewModel(ctx *tuicontext.ProgramContext) Model {
 	tabModel := tabs.NewModel(ctx)
-	tabModel.SetTitles([]string{"Stars", "Trending", "Releases", "Stats"})
+	tabModel.SetTitles([]string{"Stars", "Categories", "Trending", "Releases", "Stats"})
 
 	footerModel := footer.NewModel(ctx)
 
 	starsModel := starssection.NewModel(1, ctx, section.SectionConfig{Title: "Stars"}, starssection.GroupAll)
-	trendingModel := trendingsection.NewModel(2, ctx, section.SectionConfig{Title: "Trending"}, trendingsection.PeriodDaily)
-	releasesModel := releasessection.NewModel(3, ctx, section.SectionConfig{Title: "Releases"}, releasessection.ShowUnread)
-	statsModel := statssection.NewModel(4, ctx, section.SectionConfig{Title: "Stats"})
+	categoriesModel := categoriessection.NewModel(2, ctx, section.SectionConfig{Title: "Categories"})
+	trendingModel := trendingsection.NewModel(3, ctx, section.SectionConfig{Title: "Trending"}, trendingsection.PeriodDaily)
+	releasesModel := releasessection.NewModel(4, ctx, section.SectionConfig{Title: "Releases"}, releasessection.ShowUnread)
+	statsModel := statssection.NewModel(5, ctx, section.SectionConfig{Title: "Stats"})
 
 	tabModel.SetSectionTabs([]string{"\U0001F50D Search", "All", "Language", "Category", "Tag"})
 
@@ -87,6 +93,7 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		sidebar:     sidebar.NewModel(ctx),
 		footer:      footerModel,
 		stars:       starsModel,
+		categories:  categoriesModel,
 		trending:    trendingModel,
 		releases:    releasesModel,
 		stats:       statsModel,
@@ -104,6 +111,8 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 	switch ctx.View {
 	case tuicontext.StarsView:
 		m.currSection = m.stars
+	case tuicontext.CategoriesView:
+		m.currSection = m.categories
 	case tuicontext.TrendingView:
 		m.currSection = m.trending
 		m.tabs.SetSectionTabs(nil)
@@ -120,6 +129,7 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 
 func (m Model) Init() tea.Cmd {
 	cmds := m.stars.FetchNextPageSectionRows()
+	cmds = append(cmds, m.categories.FetchNextPageSectionRows()...)
 	cmds = append(cmds, m.trending.FetchNextPageSectionRows()...)
 	cmds = append(cmds, m.releases.FetchNextPageSectionRows()...)
 	cmds = append(cmds, m.stats.FetchNextPageSectionRows()...)
@@ -160,13 +170,23 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.footer.SetTask(m.buildTaskInfo())
 		if typed.Err != nil {
 			m.setError(typed.Message + ": " + typed.Err.Error())
-		}
-		if m.ctx.View == tuicontext.StarsView {
-			m.stars.ResetRows()
-			cmds := m.stars.FetchNextPageSectionRows()
-			if len(cmds) > 0 {
-				return m, tea.Batch(cmds...)
+		} else {
+			switch m.ctx.View {
+			case tuicontext.StarsView:
+				m.stars.ResetRows()
+				m.currSection = m.stars
+			case tuicontext.CategoriesView:
+				m.categories.ResetRows()
+				m.currSection = m.categories
+			case tuicontext.TrendingView:
+				m.trending.ResetRows()
+				m.currSection = m.trending
+			case tuicontext.ReleasesView:
+				m.releases.ResetRows()
+				m.currSection = m.releases
 			}
+			cmds := m.currSection.FetchNextPageSectionRows()
+			return m, tea.Batch(append(cmds, clearAfterDelay(typed.TaskID))...)
 		}
 		return m, clearAfterDelay(typed.TaskID)
 
@@ -194,6 +214,15 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setError("fetch stars failed: " + typed.Err.Error())
 		return m, cmd
 
+	case categoriessection.CategoriesFetchedMsg:
+		updated, cmd := m.categories.Update(typed)
+		m.categories = updated.(*categoriessection.Model)
+		m.syncSidebar()
+		if typed.Err != nil {
+			m.setError("categories fetch failed: " + typed.Err.Error())
+		}
+		return m, cmd
+
 	case trendingsection.TrendingFetchedMsg:
 		updated, cmd := m.trending.Update(typed)
 		m.trending = updated.(*trendingsection.Model)
@@ -218,6 +247,23 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case tea.KeyMsg:
+		if m.mode == modeActions {
+			updated, cmd := m.actionsMenu.Update(typed)
+			m.actionsMenu = updated.(categoriessection.ActionsMenuModel)
+			if cmd != nil {
+				msg := cmd()
+				if result, ok := msg.(categoriessection.ActionsMenuResultMsg); ok {
+					m.mode = modeNormal
+					if result.Confirmed {
+						return m, m.handleActionsMenuResult(result)
+					}
+				}
+			}
+			if !m.actionsMenu.IsFocused() {
+				m.mode = modeNormal
+			}
+			return m, nil
+		}
 		cmd := m.handleKey(typed)
 		return m, cmd
 
@@ -327,6 +373,15 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 		m.recalcLayout()
 	case key.Matches(typed, m.ctx.Keys.Help):
 		m.showHelp = !m.showHelp
+
+	case key.Matches(typed, m.ctx.Keys.ActionsMenu):
+		if m.ctx.View == tuicontext.CategoriesView {
+			hasRow := m.currSection.CurrRow() != nil
+			m.actionsMenu = categoriessection.NewActionsMenuModel(hasRow)
+			m.actionsMenu.SetTheme(m.ctx.Theme)
+			m.mode = modeActions
+		}
+		return nil
 	}
 	return nil
 }
@@ -469,6 +524,9 @@ func (m *Model) handleSearchMode(typed tea.KeyMsg) tea.Cmd {
 	}
 	if !m.searchInput.IsFocused() {
 		m.mode = modeNormal
+		if m.ctx.View == tuicontext.CategoriesView {
+			m.categories.ResetFilters()
+		}
 	}
 	return nil
 }
@@ -559,6 +617,48 @@ func (m *Model) handlePromptResult(result prompt.PromptResultMsg) tea.Cmd {
 		repoName := m.repoNameFromRow()
 		cmdStr := fmt.Sprintf("tag %s %s", repoName, result.Value)
 		return m.executeCommand(cmdStr, "tagging...")
+	case "category_add":
+		if !result.Confirmed {
+			return nil
+		}
+		fields := strings.Split(result.Value, "\x00")
+		if len(fields) < 5 || fields[0] == "" {
+			m.setError("Category ID is required")
+			return nil
+		}
+		cmdStr := fmt.Sprintf("category add %s --name %s --keywords %s --sort-order %s",
+			fields[0], fields[1], fields[2], fields[3])
+		if fields[4] == "true" {
+			cmdStr += " --is-hidden"
+		}
+		return m.executeCommand(cmdStr, "adding category...")
+	case "category_edit":
+		if !result.Confirmed {
+			return nil
+		}
+		fields := strings.Split(result.Value, "\x00")
+		if len(fields) < 5 {
+			return nil
+		}
+		cmdStr := fmt.Sprintf("category edit %s --name %s --keywords %s --sort-order %s",
+			fields[0], fields[1], fields[2], fields[3])
+		if fields[4] == "true" {
+			cmdStr += " --is-hidden"
+		}
+		return m.executeCommand(cmdStr, "editing category...")
+	case "category_delete":
+		if !result.Confirmed {
+			return nil
+		}
+		row := m.currSection.CurrRow()
+		catRow, ok := row.(categoriessection.CategoryRow)
+		if !ok || catRow.Category == nil {
+			return nil
+		}
+		return m.executeCommand(
+			fmt.Sprintf("category delete %s --force", catRow.Category.ID),
+			"deleting category...",
+		)
 	}
 	return nil
 }
@@ -592,7 +692,14 @@ func sectionIndexToGroupBy(idx int) string {
 
 func (m *Model) executeSearch(query string) tea.Cmd {
 	query = strings.TrimSpace(query)
-	if query == "" || m.ctx.View != tuicontext.StarsView {
+	if query == "" {
+		return nil
+	}
+	if m.ctx.View == tuicontext.CategoriesView {
+		m.categories.FilterRows(query)
+		return nil
+	}
+	if m.ctx.View != tuicontext.StarsView {
 		return nil
 	}
 
@@ -656,6 +763,7 @@ func clearAfterDelay(taskID string) tea.Cmd {
 func (m *Model) switchView(delta int) {
 	views := []tuicontext.ViewType{
 		tuicontext.StarsView,
+		tuicontext.CategoriesView,
 		tuicontext.TrendingView,
 		tuicontext.ReleasesView,
 		tuicontext.StatsView,
@@ -675,6 +783,9 @@ func (m *Model) switchView(delta int) {
 	case tuicontext.StarsView:
 		m.currSection = m.stars
 		m.tabs.SetSectionTabs([]string{"\U0001F50D Search", "All", "Language", "Category", "Tag"})
+	case tuicontext.CategoriesView:
+		m.currSection = m.categories
+		m.tabs.SetSectionTabs([]string{"\U0001F50D Search", "All"})
 	case tuicontext.TrendingView:
 		m.currSection = m.trending
 		m.tabs.SetSectionTabs(nil)
@@ -773,7 +884,9 @@ func (m Model) View() tea.View {
 	sectionView := mainStyle.Render(m.sectionView())
 
 	var content string
-	if m.mode == modePrompt {
+	if m.mode == modeActions {
+		content = m.actionsMenu.View().Content
+	} else if m.mode == modePrompt {
 		content = m.prompt.View().Content
 	} else if m.showSidebar && m.ctx.DynamicPreviewWidth > 0 && m.ctx.PreviewPosition == "right" {
 		sidebarStyle := lipgloss.NewStyle().
@@ -850,6 +963,9 @@ func (m Model) sectionView() string {
 	if strings.TrimSpace(view) == "" {
 		if m.ctx.View == tuicontext.StarsView {
 			return m.renderEmptyState()
+		}
+		if m.ctx.View == tuicontext.CategoriesView {
+			return m.renderCategoriesEmptyState()
 		}
 		return m.renderEmptyView(m.ctx.View)
 	}
@@ -953,6 +1069,8 @@ func (m *Model) syncSidebar() {
 	if repoRow, ok := row.(starssection.RepoRow); ok {
 		m.repo.SetRepo(repoRow.Repo)
 		m.sidebar.SetContent(m.repo.View())
+	} else if catRow, ok := row.(categoriessection.CategoryRow); ok {
+		m.sidebar.SetContent(renderCategoryDetail(catRow, m.ctx.Theme))
 	} else if tRow, ok := row.(trendingsection.TrendingRow); ok {
 		m.repo.SetRepo(trendingsection.TrendingToStoreRepo(tRow.Repo))
 		m.sidebar.SetContent(m.repo.View())
@@ -1010,6 +1128,126 @@ func truncateLines(s string, maxLines int) (string, bool) {
 		return s, false
 	}
 	return strings.Join(lines[:maxLines], "\n"), true
+}
+
+func (m *Model) handleActionsMenuResult(result categoriessection.ActionsMenuResultMsg) tea.Cmd {
+	switch result.Action {
+	case categoriessection.ActionAdd:
+		m.promptAction = "category_add"
+		fields := []prompt.FormField{
+			prompt.NewFormField("ID", "", false, false),
+			prompt.NewFormField("Name", "", false, false),
+			prompt.NewFormField("Keywords", "", false, false),
+			prompt.NewFormField("SortOrder", "0", false, false),
+			prompt.NewFormField("IsHidden", "false", true, false),
+		}
+		m.prompt = prompt.NewCategoryFormModel("New Category", fields, false)
+		m.prompt.SetTheme(m.ctx.Theme)
+		m.mode = modePrompt
+
+	case categoriessection.ActionEdit:
+		row := m.currSection.CurrRow()
+		catRow, ok := row.(categoriessection.CategoryRow)
+		if !ok || catRow.Category == nil {
+			m.setError("No category selected")
+			return nil
+		}
+		c := catRow.Category
+		m.promptAction = "category_edit"
+		hiddenStr := "false"
+		if c.IsHidden {
+			hiddenStr = "true"
+		}
+		kwStr := strings.Join(c.Keywords, ",")
+		fields := []prompt.FormField{
+			prompt.NewFormField("ID", c.ID, false, true),
+			prompt.NewFormField("Name", c.Name, false, false),
+			prompt.NewFormField("Keywords", kwStr, false, false),
+			prompt.NewFormField("SortOrder", fmt.Sprintf("%d", c.SortOrder), false, false),
+			prompt.NewFormField("IsHidden", hiddenStr, true, false),
+		}
+		m.prompt = prompt.NewCategoryFormModel("Edit Category", fields, true)
+		m.prompt.SetTheme(m.ctx.Theme)
+		m.mode = modePrompt
+
+	case categoriessection.ActionDelete:
+		row := m.currSection.CurrRow()
+		catRow, ok := row.(categoriessection.CategoryRow)
+		if !ok || catRow.Category == nil {
+			m.setError("No category selected")
+			return nil
+		}
+		c := catRow.Category
+		if !c.IsCustom {
+			m.setError("Cannot delete built-in category: " + c.Name)
+			return nil
+		}
+		m.promptAction = "category_delete"
+		m.prompt = prompt.NewConfirmModel(fmt.Sprintf("Delete category '%s'?", c.Name))
+		m.prompt.SetTheme(m.ctx.Theme)
+		m.mode = modePrompt
+	}
+	return nil
+}
+
+func renderCategoryDetail(row categoriessection.CategoryRow, th theme.Theme) string {
+	c := row.Category
+	if c == nil {
+		return ""
+	}
+
+	boldStyle := lipgloss.NewStyle().Foreground(th.PrimaryText).Bold(true)
+	dimStyle := lipgloss.NewStyle().Foreground(th.FaintText)
+
+	var b strings.Builder
+	b.WriteString(boldStyle.Render(c.Name))
+	b.WriteString("\n\n")
+	b.WriteString(dimStyle.Render("ID: ") + c.ID + "\n")
+
+	kwStr := strings.Join(c.Keywords, ", ")
+	if kwStr == "" {
+		kwStr = "-"
+	}
+	b.WriteString(dimStyle.Render("Keywords: ") + kwStr + "\n")
+	b.WriteString(dimStyle.Render("Repos: ") + fmt.Sprintf("%d", row.RepoCount) + "\n")
+
+	typeStr := "内置"
+	if c.IsCustom {
+		typeStr = "自定义"
+	}
+	b.WriteString(dimStyle.Render("Type: ") + typeStr + "\n")
+	b.WriteString(dimStyle.Render("Sort order: ") + fmt.Sprintf("%d", c.SortOrder) + "\n")
+
+	hiddenStr := "No"
+	if c.IsHidden {
+		hiddenStr = "Yes"
+	}
+	b.WriteString(dimStyle.Render("Hidden: ") + hiddenStr + "\n")
+
+	return b.String()
+}
+
+func (m Model) renderCategoriesEmptyState() string {
+	theme := m.ctx.Theme
+	dimStyle := lipgloss.NewStyle().Foreground(theme.FaintText)
+	boldStyle := lipgloss.NewStyle().Foreground(theme.PrimaryText).Bold(true)
+
+	w := m.ctx.MainContentWidth
+	if w < 40 {
+		w = 40
+	}
+
+	var lines []string
+	lines = append(lines, "")
+	lines = append(lines, centerText(boldStyle.Render("No categories yet"), w))
+	lines = append(lines, "")
+	lines = append(lines, centerText(dimStyle.Render("Press"), w))
+	lines = append(lines, centerText(fmt.Sprintf("   %s to create a new category", boldStyle.Render("o")), w))
+	lines = append(lines, "")
+
+	return lipgloss.NewStyle().
+		Width(w).Height(m.ctx.MainContentHeight).
+		Render(strings.Join(lines, "\n"))
 }
 
 
