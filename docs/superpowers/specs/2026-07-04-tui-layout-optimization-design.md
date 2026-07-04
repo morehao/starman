@@ -9,6 +9,7 @@
 1. 左右栏比例可配置，默认更平衡（38% → 42%）
 2. 左栏列宽弹性扩展，充分利用可用空间
 3. Footer 去重：移除视图切换器，帮助文案常显
+4. 顶部视图 tabs 与 section tabs 视觉区分
 
 ---
 
@@ -146,6 +147,42 @@ Footer 空间利用率提升，帮助信息始终可见，无需按键切换。
 
 ---
 
+## Section 4：Tabs 视图行与 Section 行视觉区分
+
+### 现状
+
+`tabs.View()` 直接 `JoinVertical(viewRow, sectionRow)` 拼接，无视觉分隔。视图行有背景色，section 行无背景，但毗邻时区分不明显。
+
+### 改动
+
+**4.1 添加水平分割线**（`tabs/tabs.go` `View()`）：
+
+在两行之间插入一条 `─` 分割线，颜色使用 `theme.FaintBorder`：
+
+```go
+separator := lipgloss.NewStyle().
+    Foreground(theme.FaintBorder).
+    Width(m.ctx.ScreenWidth).
+    Render(strings.Repeat("─", m.ctx.ScreenWidth))
+
+return lipgloss.JoinVertical(lipgloss.Top, viewRow, separator, sectionRow)
+```
+
+**4.2 样式区分**：
+
+- 视图行：保持 `SelectedBackground` + Bold
+- section 行：`renderSectionTabs()` 中选中项用 `Background(theme.SelectedBackground)`，非选中项保持 `FaintText`
+
+### 效果
+
+```
+⭐ Stars | 📂 Categories | 📈 Trending          ← 粗体 + 深色背景
+───────────────────────────────────────────────  ← 分割线（浅色）
+ 🔍 Search | All | Pinned                       ← 选中项高亮背景
+```
+
+---
+
 ## 涉及文件
 
 | 文件 | 改动 |
@@ -156,12 +193,12 @@ Footer 空间利用率提升，帮助信息始终可见，无需按键切换。
 | `internal/tui/components/listviewport/listviewport.go` | Column 加 Flex 字段，`fitColumns()` 扩展逻辑 |
 | `internal/tui/components/starssection/starssection.go` | 列定义加 Flex: true |
 | `internal/tui/components/*section/`（其他 section） | 各 section 列定义加 Flex: true |
-| `internal/tui/components/tabs/tabs_test.go` | 更新 titles 期望值（加图标） |
+| `internal/tui/components/tabs/tabs.go` | 视图行与 section 行间加分割线 |
+| `internal/tui/components/tabs/tabs_test.go` | 更新 titles 期望值（加图标）；分割线渲染验证 |
 | `internal/tui/commands_test.go` | 移除 `showHelp` 相关断言 |
 
 ## 未涉及
 
 - 右栏纵向划分（用户明确取消）
-- section tabs（第二行）不变
 - 响应式断点逻辑不变
 - Stats 视图（无 sidebar 视图，不受影响）
