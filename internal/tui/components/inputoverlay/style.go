@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/morehao/starman/internal/tui/constants"
 	"github.com/morehao/starman/internal/tui/theme"
 )
 
@@ -57,7 +58,7 @@ func RenderOverlay(th theme.Theme, width, height int, title, query string) strin
 		b.WriteString(separator)
 		b.WriteByte('\n')
 	}
-	b.WriteString(inputLabelStyle.Render("🔍 "))
+	b.WriteString(inputLabelStyle.Render(constants.OverlayIcon + " "))
 	b.WriteString(inputStyle.Render(queryDisplay + "█"))
 	b.WriteByte('\n')
 	b.WriteString(hintStyle.Render("Enter to confirm  Esc to cancel"))
