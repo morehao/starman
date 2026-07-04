@@ -15,9 +15,12 @@ import (
 	"github.com/morehao/starman/internal/github"
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/common"
+	"github.com/morehao/starman/internal/tui/components/drawer"
 	"github.com/morehao/starman/internal/tui/components/footer"
+	"github.com/morehao/starman/internal/tui/components/prompt"
 	"github.com/morehao/starman/internal/tui/components/releasessection"
 	"github.com/morehao/starman/internal/tui/components/repoview"
+	"github.com/morehao/starman/internal/tui/components/searchinput"
 	"github.com/morehao/starman/internal/tui/components/section"
 	"github.com/morehao/starman/internal/tui/components/sidebar"
 	"github.com/morehao/starman/internal/tui/components/starssection"
@@ -30,6 +33,13 @@ import (
 )
 
 const taskClearDelay = 3 * time.Second
+
+const (
+	modeNormal = iota
+	modeSearch
+	modeCommand
+	modePrompt
+)
 
 type Model struct {
 	ctx         *tuicontext.ProgramContext
@@ -45,20 +55,18 @@ type Model struct {
 	repo        *repoview.Model
 	tasks       *tasksHolder
 	runner      CommandRunner
+	drawer      drawer.Model
 	showSidebar bool
 	showHelp    bool
 	ready       bool
 
-	searching    bool
-	searchQuery  string
-	commandMode  bool
-	errorMsg     string
-	errorTimer   *time.Timer
+	searchInput searchinput.Model
+	prompt      prompt.Model
+	mode        int
+	searchQuery string
 
-	editingMode      string
-	editingCats      []*store.Category
-	editingCatCursor int
-	editingQuery     string
+	errorMsg   string
+	errorTimer *time.Timer
 }
 
 func NewModel(ctx *tuicontext.ProgramContext) Model {
@@ -86,7 +94,10 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		currSection: starsModel,
 		repo:        repoview.NewModel(),
 		tasks:       newTasksHolder(),
+		drawer:      drawer.NewModel(),
 		showSidebar: ctx.SidebarOpen,
+		searchInput: searchinput.NewModel(),
+		mode:        modeNormal,
 	}
 
 	switch ctx.View {
@@ -206,92 +217,56 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
+	switch m.mode {
+	case modeSearch:
+		return m.handleSearchMode(typed)
+	case modeCommand:
+		return m.handleCommandMode(typed)
+	case modePrompt:
+		return m.handlePromptMode(typed)
+	}
+
 	switch {
 	case key.Matches(typed, m.keys.Escape):
-		if m.editingMode != "" {
-			m.editingMode = ""
-			m.editingCats = nil
-			m.editingCatCursor = 0
-			m.editingQuery = ""
-			return nil
-		}
-		if m.searching || m.commandMode {
-			m.searching = false
-			m.commandMode = false
-			m.searchQuery = ""
-			return nil
-		}
 		return nil
 
 	case key.Matches(typed, m.keys.Quit):
 		return tea.Quit
 
-	case m.commandMode && key.Matches(typed, m.keys.Enter):
-		cmd := parseCommand(m.searchQuery)
-		m.commandMode = false
-		m.searchQuery = ""
-		return m.executeCommand(cmd)
-
-	case m.commandMode:
-		return m.handleSearchInput(typed)
-
-	case m.searching && key.Matches(typed, m.keys.Enter):
-		return m.executeSearch()
-
-	case m.searching:
-		return m.handleSearchInput(typed)
-
 	case key.Matches(typed, m.keys.Command):
-		m.commandMode = true
-		m.searchQuery = ""
+		if m.mode == modeNormal {
+			m.mode = modeCommand
+			m.searchQuery = ""
+		}
 		return nil
 
 	case key.Matches(typed, m.keys.Search):
-		m.searching = true
-		m.searchQuery = ""
+		if m.mode == modeNormal {
+			m.mode = modeSearch
+			m.searchInput.SetFocused(true)
+		}
 		return nil
 
 	case key.Matches(typed, m.keys.Sync):
 		return m.startSync()
 
 	case key.Matches(typed, m.keys.ToggleStar):
-		if m.editingMode != "" || m.ctx.View != tuicontext.StarsView {
+		if m.ctx.View != tuicontext.StarsView {
 			return nil
 		}
 		return m.toggleStar()
 
 	case key.Matches(typed, m.keys.EditCategory):
-		if m.editingMode != "" || m.ctx.View != tuicontext.StarsView {
+		if m.ctx.View != tuicontext.StarsView {
 			return nil
 		}
 		return m.startEditCategory()
 
 	case key.Matches(typed, m.keys.EditTag):
-		if m.editingMode != "" || m.ctx.View != tuicontext.StarsView {
+		if m.ctx.View != tuicontext.StarsView {
 			return nil
 		}
 		return m.startEditTag()
-
-	case m.editingMode == "category" && key.Matches(typed, m.keys.Enter):
-		return m.finishEditCategory()
-
-	case m.editingMode == "category" && key.Matches(typed, m.keys.Down):
-		if m.editingCatCursor < len(m.editingCats)-1 {
-			m.editingCatCursor++
-		}
-		return nil
-
-	case m.editingMode == "category" && key.Matches(typed, m.keys.Up):
-		if m.editingCatCursor > 0 {
-			m.editingCatCursor--
-		}
-		return nil
-
-	case m.editingMode == "tag" && key.Matches(typed, m.keys.Enter):
-		return m.finishEditTag()
-
-	case m.editingMode == "tag":
-		return m.handleEditingInput(typed)
 
 	case key.Matches(typed, m.keys.NextView):
 		m.switchView(1)
@@ -333,9 +308,34 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (m *Model) handleSearchInput(typed tea.KeyMsg) tea.Cmd {
+func (m *Model) handleSearchMode(typed tea.KeyMsg) tea.Cmd {
+	updated, cmd := m.searchInput.Update(typed)
+	m.searchInput = updated.(searchinput.Model)
+	if cmd != nil {
+		msg := cmd()
+		if searchMsg, ok := msg.(searchinput.SearchExecutedMsg); ok {
+			m.mode = modeNormal
+			return m.executeSearch(searchMsg.Query)
+		}
+	}
+	if !m.searchInput.IsFocused() {
+		m.mode = modeNormal
+	}
+	return nil
+}
+
+func (m *Model) handleCommandMode(typed tea.KeyMsg) tea.Cmd {
 	k := typed.Key()
 	switch k.String() {
+	case "esc":
+		m.mode = modeNormal
+		m.searchQuery = ""
+		return nil
+	case "enter":
+		cmd := parseCommand(m.searchQuery)
+		m.mode = modeNormal
+		m.searchQuery = ""
+		return m.executeCommand(cmd)
 	case "backspace":
 		if len(m.searchQuery) > 0 {
 			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
@@ -350,11 +350,38 @@ func (m *Model) handleSearchInput(typed tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (m *Model) executeSearch() tea.Cmd {
-	query := strings.TrimSpace(m.searchQuery)
-	m.searching = false
+func (m *Model) handlePromptMode(typed tea.KeyMsg) tea.Cmd {
+	updated, cmd := m.prompt.Update(typed)
+	m.prompt = updated.(prompt.Model)
+	if cmd != nil {
+		msg := cmd()
+		if result, ok := msg.(prompt.PromptResultMsg); ok {
+			m.mode = modeNormal
+			if !result.Confirmed {
+				return nil
+			}
+			return m.handlePromptResult(result)
+		}
+	}
+	if !m.prompt.IsFocused() {
+		m.mode = modeNormal
+	}
+	return nil
+}
+
+func (m *Model) handlePromptResult(result prompt.PromptResultMsg) tea.Cmd {
+	switch result.Type {
+	case prompt.PromptCategorySelect:
+		return m.finishEditCategoryWithValue(result.Value)
+	case prompt.PromptTagEdit:
+		return m.finishEditTagWithValue(result.Value)
+	}
+	return nil
+}
+
+func (m *Model) executeSearch(query string) tea.Cmd {
+	query = strings.TrimSpace(query)
 	if query == "" || m.ctx.View != tuicontext.StarsView {
-		m.searchQuery = ""
 		return nil
 	}
 
@@ -502,38 +529,54 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
 func (m *Model) recalcLayout() {
 	w := m.ctx.ScreenWidth
 	h := m.ctx.ScreenHeight
+	if w <= 0 || h <= 0 {
+		return
+	}
 
 	mainHeight := h - constants.TabsHeight - constants.FooterHeight
-	if mainHeight < 3 {
-		mainHeight = 3
-	}
 	m.ctx.MainContentHeight = mainHeight
 
-	if m.showSidebar && m.ctx.PreviewPosition == "right" {
-		ratio := 0.38
-		if m.ctx.TUICfg != nil && m.ctx.TUICfg.Preview.Width > 0 {
-			ratio = m.ctx.TUICfg.Preview.Width
-		}
-		sidebarWidth := int(float64(w) * ratio)
-		if sidebarWidth < 20 {
-			sidebarWidth = 20
-		}
-		if sidebarWidth > w-30 {
-			sidebarWidth = w - 30
-		}
-		m.ctx.DynamicPreviewWidth = sidebarWidth
-		m.ctx.MainContentWidth = w - sidebarWidth
-	} else {
-		m.ctx.MainContentWidth = w
-		m.ctx.DynamicPreviewWidth = 0
+	if m.drawer.IsOpen() {
+		drawerHeight := int(float64(h) * 0.35)
+		mainHeight -= drawerHeight
+		m.ctx.MainContentHeight = mainHeight
 	}
 
-	if m.showSidebar {
+	if m.ctx.PreviewPosition == "auto" {
+		if w < 50 {
+			m.showSidebar = false
+		} else if w < 80 {
+			m.ctx.PreviewPosition = "bottom"
+		} else {
+			m.ctx.PreviewPosition = "right"
+		}
+	}
+
+	if !m.showSidebar {
+		m.ctx.MainContentWidth = w
+		m.ctx.DynamicPreviewWidth = 0
+		m.ctx.DynamicPreviewHeight = 0
+		return
+	}
+
+	switch m.ctx.PreviewPosition {
+	case "right":
+		sidebarWidth := max(28, int(float64(w)*0.38))
+		m.ctx.DynamicPreviewWidth = sidebarWidth
+		m.ctx.DynamicPreviewHeight = mainHeight
+		m.ctx.MainContentWidth = w - sidebarWidth
 		m.sidebar.SetSize(m.ctx.DynamicPreviewWidth, mainHeight)
+	case "bottom":
+		sidebarHeight := int(float64(h) * 0.4)
+		m.ctx.DynamicPreviewHeight = sidebarHeight
+		m.ctx.DynamicPreviewWidth = w
+		m.ctx.MainContentWidth = w
+		m.ctx.MainContentHeight = mainHeight - sidebarHeight
+		m.sidebar.SetSize(m.ctx.DynamicPreviewWidth, sidebarHeight)
 	}
 
 	if ss, ok := m.currSection.(interface{ SetSize(int, int) }); ok {
-		ss.SetSize(m.ctx.MainContentWidth, mainHeight)
+		ss.SetSize(m.ctx.MainContentWidth, m.ctx.MainContentHeight)
 	}
 }
 
@@ -554,7 +597,9 @@ func (m Model) View() tea.View {
 	sectionView := mainStyle.Render(m.sectionView())
 
 	var content string
-	if m.showSidebar && m.ctx.DynamicPreviewWidth > 0 {
+	if m.mode == modePrompt {
+		content = m.prompt.View().Content
+	} else if m.showSidebar && m.ctx.DynamicPreviewWidth > 0 && m.ctx.PreviewPosition == "right" {
 		sidebarStyle := lipgloss.NewStyle().
 			Width(m.ctx.DynamicPreviewWidth).
 			Height(m.ctx.MainContentHeight).
@@ -569,25 +614,27 @@ func (m Model) View() tea.View {
 			sectionView,
 			sidebarContent,
 		)
+	} else if m.showSidebar && m.ctx.PreviewPosition == "bottom" {
+		sidebarView := m.sidebar.View()
+		content = lipgloss.JoinVertical(
+			lipgloss.Top,
+			sectionView,
+			sidebarView,
+		)
 	} else {
 		content = sectionView
 	}
 
 	tabsView := m.tabs.View()
 
-	if m.editingMode == "category" {
-		content = m.renderCategoryDialog()
-	} else if m.editingMode == "tag" {
-		content = m.renderTagDialog()
-	}
-
 	mainArea := lipgloss.JoinVertical(lipgloss.Left, tabsView, content)
 
 	searchLine := ""
-	if m.commandMode {
+	switch m.mode {
+	case modeCommand:
 		searchLine = m.renderInputLine(":", m.searchQuery)
-	} else if m.searching {
-		searchLine = m.renderInputLine("Search: ", m.searchQuery)
+	case modeSearch:
+		searchLine = "\n" + m.searchInput.View().Content
 	}
 
 	helpLine := ""
@@ -816,33 +863,43 @@ func (m *Model) startEditCategory() tea.Cmd {
 		m.setError("Failed to list categories: " + err.Error())
 		return nil
 	}
-	m.editingMode = "category"
-	m.editingCats = cats
-	m.editingCatCursor = 0
+	names := make([]string, len(cats))
+	for i, c := range cats {
+		names[i] = c.Name
+	}
+	currentCat := ""
 	row := m.currSection.CurrRow()
 	if repoRow, ok := row.(starssection.RepoRow); ok && repoRow.Repo != nil {
-		currentCat := repoRow.Repo.CustomCategory
-		if currentCat == "" {
-			currentCat = repoRow.Repo.AICategory
+		cat := repoRow.Repo.CustomCategory
+		if cat == "" {
+			cat = repoRow.Repo.AICategory
 		}
-		for i, c := range cats {
-			if c.ID == currentCat {
-				m.editingCatCursor = i
-				break
-			}
-		}
+		currentCat = cat
 	}
+	m.prompt = prompt.NewCategorySelectModel("Select category", names, currentCat)
+	m.mode = modePrompt
 	return nil
 }
 
-func (m *Model) finishEditCategory() tea.Cmd {
-	m.editingMode = ""
-	if m.editingCatCursor < 0 || m.editingCatCursor >= len(m.editingCats) {
-		m.editingCats = nil
+func (m *Model) finishEditCategoryWithValue(catName string) tea.Cmd {
+	if catName == "" {
 		return nil
 	}
-	selected := m.editingCats[m.editingCatCursor]
-	m.editingCats = nil
+	cats, err := m.ctx.Store.ListCategories(context.Background(), true)
+	if err != nil {
+		m.setError("failed to list categories: " + err.Error())
+		return nil
+	}
+	var catID string
+	for _, c := range cats {
+		if c.Name == catName {
+			catID = c.ID
+			break
+		}
+	}
+	if catID == "" {
+		return nil
+	}
 
 	row := m.currSection.CurrRow()
 	repoRow, ok := row.(starssection.RepoRow)
@@ -859,16 +916,16 @@ func (m *Model) finishEditCategory() tea.Cmd {
 			if err := m.ctx.Store.UpdateCustomFields(context.Background(), repoRow.Repo.ID, &store.CustomFields{
 				Description:    repoRow.Repo.CustomDescription,
 				Tags:           repoRow.Repo.CustomTags,
-				Category:       selected.ID,
+				Category:       catID,
 				CategoryLocked: repoRow.Repo.CategoryLocked,
 			}); err != nil {
 				return TaskFinishedMsg{TaskID: taskID, Name: "categorize", Message: "categorize failed", Err: err}
 			}
-			repoRow.Repo.CustomCategory = selected.ID
+			repoRow.Repo.CustomCategory = catID
 			return TaskFinishedMsg{
 				TaskID:  taskID,
 				Name:    "categorize",
-				Message: fmt.Sprintf("category set to %s for %s", selected.ID, repoRow.Repo.FullName),
+				Message: fmt.Sprintf("category set to %s for %s", catID, repoRow.Repo.FullName),
 			}
 		},
 	)
@@ -880,15 +937,17 @@ func (m *Model) startEditTag() tea.Cmd {
 	if !ok || repoRow.Repo == nil {
 		return nil
 	}
-	m.editingMode = "tag"
-	m.editingQuery = strings.Join(repoRow.Repo.CustomTags, ", ")
+	currentTags := ""
+	allTags := append([]string{}, repoRow.Repo.AITags...)
+	allTags = append(allTags, repoRow.Repo.CustomTags...)
+	currentTags = strings.Join(allTags, ",")
+	m.prompt = prompt.NewTagEditModel("Edit tags (+tag,-tag)", currentTags)
+	m.mode = modePrompt
 	return nil
 }
 
-func (m *Model) finishEditTag() tea.Cmd {
-	m.editingMode = ""
-	query := strings.TrimSpace(m.editingQuery)
-	m.editingQuery = ""
+func (m *Model) finishEditTagWithValue(query string) tea.Cmd {
+	query = strings.TrimSpace(query)
 
 	row := m.currSection.CurrRow()
 	repoRow, ok := row.(starssection.RepoRow)
@@ -924,99 +983,6 @@ func (m *Model) finishEditTag() tea.Cmd {
 			}
 		},
 	)
-}
-
-func (m *Model) handleEditingInput(typed tea.KeyMsg) tea.Cmd {
-	k := typed.Key()
-	switch k.String() {
-	case "backspace":
-		if len(m.editingQuery) > 0 {
-			m.editingQuery = m.editingQuery[:len(m.editingQuery)-1]
-		}
-	default:
-		if k.Text != "" {
-			m.editingQuery += k.Text
-		} else if k.Code >= 32 && k.Code < 127 {
-			m.editingQuery += string(k.Code)
-		}
-	}
-	return nil
-}
-
-func (m Model) renderCategoryDialog() string {
-	theme := m.ctx.Theme
-	const dialogWidth = 44
-
-	titleStyle := lipgloss.NewStyle().
-		Foreground(theme.PrimaryText).
-		Bold(true)
-	helpStyle := lipgloss.NewStyle().
-		Foreground(theme.FaintText)
-	contentWidth := m.ctx.MainContentWidth
-
-	var listLines []string
-	for i, c := range m.editingCats {
-		prefix := "  "
-		lineStyle := lipgloss.NewStyle().Foreground(theme.PrimaryText)
-		if i == m.editingCatCursor {
-			prefix = "▸ "
-			lineStyle = lineStyle.Bold(true).Foreground(theme.SuccessText)
-		}
-		listLines = append(listLines, prefix+lineStyle.Render(c.Name+" ("+c.ID+")"))
-	}
-
-	body := titleStyle.Render("Select Category") + "\n\n" +
-		strings.Join(listLines, "\n") + "\n\n" +
-		helpStyle.Render("j/k navigate · enter confirm · esc cancel")
-
-	dialog := lipgloss.NewStyle().
-		Width(dialogWidth).
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.SuccessText).
-		Render(body)
-
-	return lipgloss.NewStyle().
-		Width(contentWidth).
-		Height(m.ctx.MainContentHeight).
-		Align(lipgloss.Center, lipgloss.Center).
-		Render(dialog)
-}
-
-func (m Model) renderTagDialog() string {
-	theme := m.ctx.Theme
-	const dialogWidth = 50
-	contentWidth := m.ctx.MainContentWidth
-
-	titleStyle := lipgloss.NewStyle().
-		Foreground(theme.PrimaryText).
-		Bold(true)
-	inputStyle := lipgloss.NewStyle().
-		Foreground(theme.SuccessText)
-	helpStyle := lipgloss.NewStyle().
-		Foreground(theme.FaintText)
-
-	display := m.editingQuery
-	if display == "" {
-		display = "(empty)"
-	}
-
-	body := titleStyle.Render("Edit Tags") + "\n\n" +
-		"Tags: " + inputStyle.Render(display+"▎") + "\n\n" +
-		helpStyle.Render("+tag to add · -tag to remove · enter confirm · esc cancel")
-
-	dialog := lipgloss.NewStyle().
-		Width(dialogWidth).
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.SuccessText).
-		Render(body)
-
-	return lipgloss.NewStyle().
-		Width(contentWidth).
-		Height(m.ctx.MainContentHeight).
-		Align(lipgloss.Center, lipgloss.Center).
-		Render(dialog)
 }
 
 

@@ -42,6 +42,18 @@ func (m *Model) SetSize(w, h int) {
 }
 
 func (m Model) View() string {
+	w := m.ctx.DynamicPreviewWidth
+	h := m.ctx.DynamicPreviewHeight
+	if w < 1 {
+		w = m.width
+	}
+	if h < 1 {
+		h = m.height
+	}
+	if (m.ctx.DynamicPreviewWidth > 0 || m.width > 0) && (w < 20 || h < 10) {
+		return ""
+	}
+
 	theme := m.ctx.Theme
 	borderStyle := lipgloss.NewStyle().
 		BorderLeft(true).
@@ -50,13 +62,13 @@ func (m Model) View() string {
 
 	if m.content == "" {
 		return borderStyle.
-			Width(m.width).
-			Height(m.height).
+			Width(w).
+			Height(h).
 			Render("Nothing selected...")
 	}
 
 	return borderStyle.
-		Width(m.width).
+		Width(w).
 		Render(m.viewport.View())
 }
 

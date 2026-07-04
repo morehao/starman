@@ -25,6 +25,13 @@ func (m Model) Init() tea.Cmd { return nil }
 
 func (m Model) IsFocused() bool { return m.focused }
 
+func (m *Model) SetFocused(focused bool) {
+	m.focused = focused
+	if !focused {
+		m.query = ""
+	}
+}
+
 const (
 	enterKey     = 13
 	escapeKey    = 27
