@@ -52,9 +52,9 @@ func TestFooterAlwaysVisibleInNormalMode(t *testing.T) {
 			total := lines(out)
 			lastLine := strings.Split(out, "\n")[total-1]
 			// On narrow screens, the footer may wrap; check for marker text
-			hasFooter := strings.Contains(lastLine, "Stars") ||
-				strings.Contains(lastLine, "?help") ||
-				(total > 1 && strings.Contains(strings.Split(out, "\n")[total-2], "Stars"))
+			hasFooter := strings.Contains(lastLine, "j/k move") ||
+				strings.Contains(lastLine, "1/50") ||
+				(total > 1 && strings.Contains(strings.Split(out, "\n")[total-2], "j/k move"))
 
 			if total > sz.h && sz.w >= 80 {
 				t.Errorf("total=%d lines, exceeds ScreenHeight=%d (diff=%+d)", total, sz.h, total-sz.h)
