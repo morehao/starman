@@ -12,25 +12,21 @@ func TestDefaultKeyMap(t *testing.T) {
 	if km.Quit.Keys()[0] != "q" {
 		t.Errorf("expected Quit='q', got %v", km.Quit.Keys())
 	}
-	if km.Sync.Keys()[0] != "s" {
-		t.Errorf("expected Sync='s', got %v", km.Sync.Keys())
+	if km.ActionsMenu.Keys()[0] != "m" {
+		t.Errorf("expected ActionsMenu='m', got %v", km.ActionsMenu.Keys())
 	}
 	if km.Refresh.Keys()[0] != "r" {
 		t.Errorf("expected Refresh='r', got %v", km.Refresh.Keys())
 	}
 }
 
-func TestNewKeyMap_OverrideQuitAndSync(t *testing.T) {
+func TestNewKeyMap_OverrideQuit(t *testing.T) {
 	cfg := &config.TUIKeybindings{
 		Universal: config.UniversalKeybindings{Quit: "Q"},
-		Stars:     config.StarsKeybindings{Sync: "S"},
 	}
 	km := NewKeyMap(cfg)
 	if km.Quit.Keys()[0] != "Q" {
 		t.Errorf("expected Quit='Q', got %v", km.Quit.Keys())
-	}
-	if km.Sync.Keys()[0] != "S" {
-		t.Errorf("expected Sync='S', got %v", km.Sync.Keys())
 	}
 }
 
@@ -64,26 +60,6 @@ func TestNewKeyMap_OverrideSearchAndCommand(t *testing.T) {
 	}
 }
 
-func TestNewKeyMap_OverrideStarsKeys(t *testing.T) {
-	cfg := &config.TUIKeybindings{
-		Stars: config.StarsKeybindings{
-			ToggleStar: "ctrl+s",
-			EditCat:    "ctrl+c",
-			EditTag:    "ctrl+t",
-		},
-	}
-	km := NewKeyMap(cfg)
-	if km.ToggleStar.Keys()[0] != "ctrl+s" {
-		t.Errorf("expected ToggleStar='ctrl+s', got %v", km.ToggleStar.Keys())
-	}
-	if km.EditCategory.Keys()[0] != "ctrl+c" {
-		t.Errorf("expected EditCategory='ctrl+c', got %v", km.EditCategory.Keys())
-	}
-	if km.EditTag.Keys()[0] != "ctrl+t" {
-		t.Errorf("expected EditTag='ctrl+t', got %v", km.EditTag.Keys())
-	}
-}
-
 func TestAllKeysNonEmpty(t *testing.T) {
 	km := DefaultKeyMap()
 	bindings := []struct {
@@ -103,17 +79,12 @@ func TestAllKeysNonEmpty(t *testing.T) {
 		{"ToggleSidebar", km.ToggleSidebar},
 		{"Quit", km.Quit},
 		{"Help", km.Help},
-		{"OpenGithub", km.OpenGithub},
 		{"Refresh", km.Refresh},
-		{"Sync", km.Sync},
 		{"Search", km.Search},
 		{"Command", km.Command},
 		{"Escape", km.Escape},
 		{"Enter", km.Enter},
-		{"ToggleStar", km.ToggleStar},
-		{"EditCategory", km.EditCategory},
-		{"EditTag", km.EditTag},
-		{"Analyze", km.Analyze},
+		{"ActionsMenu", km.ActionsMenu},
 	}
 	for _, b := range bindings {
 		keys := b.binding.Keys()

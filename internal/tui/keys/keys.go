@@ -21,15 +21,10 @@ type KeyMap struct {
 	Quit          key.Binding
 	Help          key.Binding
 	Refresh       key.Binding
-	Sync          key.Binding
 	Search        key.Binding
 	Command       key.Binding
 	Escape        key.Binding
 	Enter         key.Binding
-	ToggleStar    key.Binding
-	EditCategory  key.Binding
-	EditTag       key.Binding
-	Analyze       key.Binding
 	ActionsMenu   key.Binding
 }
 
@@ -49,15 +44,10 @@ func DefaultKeyMap() KeyMap {
 		Quit:          key.NewBinding(key.WithKeys("q")),
 		Help:          key.NewBinding(key.WithKeys("?")),
 		Refresh:       key.NewBinding(key.WithKeys("r")),
-		Sync:          key.NewBinding(key.WithKeys("s")),
 		Search:        key.NewBinding(key.WithKeys("/")),
 		Command:       key.NewBinding(key.WithKeys(":")),
 		Escape:        key.NewBinding(key.WithKeys("esc")),
 		Enter:         key.NewBinding(key.WithKeys("enter")),
-		ToggleStar:    key.NewBinding(key.WithKeys("x")),
-		EditCategory:  key.NewBinding(key.WithKeys("c")),
-		EditTag:       key.NewBinding(key.WithKeys("t")),
-		Analyze:       key.NewBinding(key.WithKeys("a")),
 		ActionsMenu:   key.NewBinding(key.WithKeys("m")),
 	}
 }
@@ -75,11 +65,6 @@ func NewKeyMap(cfg *config.TUIKeybindings) KeyMap {
 	applyBindingOverride(&km.Command, cfg.Universal.Command)
 	applyBindingOverride(&km.ToggleSidebar, cfg.Universal.ToggleSidebar)
 	applyBindingOverride(&km.Help, cfg.Universal.Help)
-	applyBindingOverride(&km.Sync, cfg.Stars.Sync)
-	applyBindingOverride(&km.Analyze, cfg.Stars.Analyze)
-	applyBindingOverride(&km.ToggleStar, cfg.Stars.ToggleStar)
-	applyBindingOverride(&km.EditCategory, cfg.Stars.EditCat)
-	applyBindingOverride(&km.EditTag, cfg.Stars.EditTag)
 	return km
 }
 

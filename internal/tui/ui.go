@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/common"
+	"github.com/morehao/starman/internal/tui/components/actionsmenu"
 	"github.com/morehao/starman/internal/tui/components/categoriessection"
 	"github.com/morehao/starman/internal/tui/components/drawer"
 	"github.com/morehao/starman/internal/tui/components/footer"
@@ -53,7 +56,7 @@ type Model struct {
 	releases    *releasessection.Model
 	stats       *statssection.Model
 	currSection section.Section
-	actionsMenu categoriessection.ActionsMenuModel
+	actionsMenu actionsmenu.Model
 	repo        *repoview.Model
 	tasks       *tasksHolder
 	runner      CommandRunner
@@ -249,10 +252,10 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.mode == modeActions {
 			updated, cmd := m.actionsMenu.Update(typed)
-			m.actionsMenu = updated.(categoriessection.ActionsMenuModel)
+			m.actionsMenu = updated.(actionsmenu.Model)
 			if cmd != nil {
 				msg := cmd()
-				if result, ok := msg.(categoriessection.ActionsMenuResultMsg); ok {
+				if result, ok := msg.(actionsmenu.ActionsMenuResultMsg); ok {
 					m.mode = modeNormal
 					if result.Confirmed {
 						return m, m.handleActionsMenuResult(result)
@@ -308,21 +311,6 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 
-	case key.Matches(typed, m.ctx.Keys.Sync):
-		return m.handleSyncKey()
-
-	case key.Matches(typed, m.ctx.Keys.ToggleStar):
-		return m.handleToggleStarKey()
-
-	case key.Matches(typed, m.ctx.Keys.EditCategory):
-		return m.handleEditCategoryKey()
-
-	case key.Matches(typed, m.ctx.Keys.EditTag):
-		return m.handleEditTagKey()
-
-	case key.Matches(typed, m.ctx.Keys.Analyze):
-		return m.handleAnalyzeKey()
-
 	case key.Matches(typed, m.ctx.Keys.NextGroup):
 		if m.ctx.View == tuicontext.StarsView {
 			m.tabs.NextSection()
@@ -375,13 +363,7 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 		m.showHelp = !m.showHelp
 
 	case key.Matches(typed, m.ctx.Keys.ActionsMenu):
-		if m.ctx.View == tuicontext.CategoriesView {
-			hasRow := m.currSection.CurrRow() != nil
-			m.actionsMenu = categoriessection.NewActionsMenuModel(hasRow)
-			m.actionsMenu.SetTheme(m.ctx.Theme)
-			m.mode = modeActions
-		}
-		return nil
+		return m.openActionsMenu()
 	}
 	return nil
 }
@@ -419,90 +401,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 	return nil
 }
 
-func (m *Model) handleSyncKey() tea.Cmd {
-	m.promptAction = "sync"
-	m.prompt = prompt.NewConfirmModel("Run full sync? (y=--full, n=quick)")
-	m.prompt.SetTheme(m.ctx.Theme)
-	m.mode = modePrompt
-	return nil
-}
 
-func (m *Model) handleToggleStarKey() tea.Cmd {
-	if m.ctx.View != tuicontext.StarsView {
-		return nil
-	}
-	repoName := m.repoNameFromRow()
-	if repoName == "" {
-		return nil
-	}
-	row := m.currSection.CurrRow()
-	repoRow, ok := row.(starssection.RepoRow)
-	if !ok || repoRow.Repo == nil {
-		return nil
-	}
-	if repoRow.Repo.StarredAt != "" {
-		return m.executeCommand(fmt.Sprintf("unstar %s", repoName), "unstarring...")
-	}
-	return m.executeCommand(fmt.Sprintf("star %s", repoName), "starring...")
-}
-
-func (m *Model) handleEditCategoryKey() tea.Cmd {
-	if m.ctx.View != tuicontext.StarsView {
-		return nil
-	}
-	ctx := context.Background()
-	cats, err := m.ctx.Store.ListCategories(ctx, true)
-	if err != nil {
-		m.setError("Failed to list categories: " + err.Error())
-		return nil
-	}
-	names := make([]string, len(cats))
-	for i, c := range cats {
-		names[i] = c.Name
-	}
-	currentCat := ""
-	row := m.currSection.CurrRow()
-	if repoRow, ok := row.(starssection.RepoRow); ok && repoRow.Repo != nil {
-		cat := repoRow.Repo.CustomCategory
-		if cat == "" {
-			cat = repoRow.Repo.AICategory
-		}
-		currentCat = cat
-	}
-	m.promptAction = "categorize"
-	m.prompt = prompt.NewCategorySelectModel("Select category", names, currentCat)
-	m.prompt.SetTheme(m.ctx.Theme)
-	m.mode = modePrompt
-	return nil
-}
-
-func (m *Model) handleEditTagKey() tea.Cmd {
-	if m.ctx.View != tuicontext.StarsView {
-		return nil
-	}
-	row := m.currSection.CurrRow()
-	repoRow, ok := row.(starssection.RepoRow)
-	if !ok || repoRow.Repo == nil {
-		return nil
-	}
-	currentTags := ""
-	allTags := append([]string{}, repoRow.Repo.AITags...)
-	allTags = append(allTags, repoRow.Repo.CustomTags...)
-	currentTags = strings.Join(allTags, ",")
-	m.promptAction = "tag"
-	m.prompt = prompt.NewTagEditModel("Edit tags (+tag,-tag)", currentTags)
-	m.prompt.SetTheme(m.ctx.Theme)
-	m.mode = modePrompt
-	return nil
-}
-
-func (m *Model) handleAnalyzeKey() tea.Cmd {
-	m.promptAction = "analyze"
-	m.prompt = prompt.NewConfirmModel("Analyze all repos? (y=--all, n=incremental)")
-	m.prompt.SetTheme(m.ctx.Theme)
-	m.mode = modePrompt
-	return nil
-}
 
 func (m *Model) repoNameFromRow() string {
 	row := m.currSection.CurrRow()
@@ -934,8 +833,12 @@ func (m Model) View() tea.View {
 
 	helpLine := ""
 	if m.showHelp {
-		helpLine = "\n" + common.RenderPreviewHeader(theme, m.ctx.ScreenWidth,
-			"j/k move  g/G first/last  h/l prev/next tab  p sidebar  x star  c category  t tag  s sync  / search  : cmd  Tab view  ? help  q quit")
+		helpText := "j/k move  g/G first/last  h/l prev/next tab  "
+		if m.tabs.HasSectionTabs() {
+			helpText += "[ / ] prev/next section  "
+		}
+		helpText += "p sidebar  m actions  / search  : cmd  Tab view  ? help  q quit"
+		helpLine = "\n" + common.RenderPreviewHeader(theme, m.ctx.ScreenWidth, helpText)
 	}
 
 	footerView := m.footer.View()
@@ -1049,7 +952,7 @@ func (m Model) renderEmptyState() string {
 	lines = append(lines, centerText(welcome, w))
 	lines = append(lines, "")
 	lines = append(lines, centerText(dimStyle.Render("Your local database is empty. Press"), w))
-	lines = append(lines, centerText(fmt.Sprintf("   %s to sync from GitHub", boldStyle.Render("s")), w))
+	lines = append(lines, centerText(	fmt.Sprintf("   %s for actions menu, then choose Sync", boldStyle.Render("m")), w))
 	lines = append(lines, centerText(dimStyle.Render(":config init  to reconfigure"), w))
 	lines = append(lines, "")
 	lines = append(lines, "")
@@ -1150,9 +1053,9 @@ func truncateLines(s string, maxLines int) (string, bool) {
 	return strings.Join(lines[:maxLines], "\n"), true
 }
 
-func (m *Model) handleActionsMenuResult(result categoriessection.ActionsMenuResultMsg) tea.Cmd {
+func (m *Model) handleActionsMenuResult(result actionsmenu.ActionsMenuResultMsg) tea.Cmd {
 	switch result.Action {
-	case categoriessection.ActionAdd:
+	case "category_add":
 		m.promptAction = "category_add"
 		fields := []prompt.FormField{
 			prompt.NewFormField("ID", "", false, false),
@@ -1165,7 +1068,7 @@ func (m *Model) handleActionsMenuResult(result categoriessection.ActionsMenuResu
 		m.prompt.SetTheme(m.ctx.Theme)
 		m.mode = modePrompt
 
-	case categoriessection.ActionEdit:
+	case "category_edit":
 		row := m.currSection.CurrRow()
 		catRow, ok := row.(categoriessection.CategoryRow)
 		if !ok || catRow.Category == nil {
@@ -1190,7 +1093,7 @@ func (m *Model) handleActionsMenuResult(result categoriessection.ActionsMenuResu
 		m.prompt.SetTheme(m.ctx.Theme)
 		m.mode = modePrompt
 
-	case categoriessection.ActionDelete:
+	case "category_delete":
 		row := m.currSection.CurrRow()
 		catRow, ok := row.(categoriessection.CategoryRow)
 		if !ok || catRow.Category == nil {
@@ -1206,8 +1109,231 @@ func (m *Model) handleActionsMenuResult(result categoriessection.ActionsMenuResu
 		m.prompt = prompt.NewConfirmModel(fmt.Sprintf("Delete category '%s'?", c.Name))
 		m.prompt.SetTheme(m.ctx.Theme)
 		m.mode = modePrompt
+
+	// ===== Stars =====
+	case "toggle_star":
+		return m.handleToggleStar()
+	case "edit_category":
+		return m.handleStarsEditCategory()
+	case "edit_tag":
+		return m.handleStarsEditTag()
+	case "sync":
+		return m.handleSyncAction()
+	case "analyze":
+		return m.handleAnalyzeAction()
+
+	// ===== Trending =====
+	case "refresh":
+		m.currSection.ResetRows()
+		return tea.Batch(m.currSection.FetchNextPageSectionRows()...)
+
+	// ===== Releases =====
+	case "mark_read":
+		return m.releases.MarkCurrentRead()
+	case "mark_all_read":
+		return m.releases.MarkAllRead()
+	case "toggle_filter":
+		return m.handleReleaseFilterToggle()
+
+	// ===== Common =====
+	case "open_browser":
+		return m.openInBrowser()
 	}
 	return nil
+}
+
+func (m *Model) openActionsMenu() tea.Cmd {
+	hasRow := m.currSection.CurrRow() != nil
+
+	var title string
+	var items []actionsmenu.MenuItem
+
+	switch m.ctx.View {
+	case tuicontext.StarsView:
+		title, items = m.buildStarsMenuItems(hasRow)
+	case tuicontext.CategoriesView:
+		title, items = m.buildCategoriesMenuItems(hasRow)
+	case tuicontext.TrendingView:
+		title, items = m.buildTrendingMenuItems(hasRow)
+	case tuicontext.ReleasesView:
+		title, items = m.buildReleasesMenuItems(hasRow)
+	default:
+		return nil
+	}
+
+	m.actionsMenu = actionsmenu.New(title, items, hasRow)
+	m.actionsMenu.SetTheme(m.ctx.Theme)
+	m.mode = modeActions
+	return nil
+}
+
+func (m *Model) buildCategoriesMenuItems(hasRow bool) (string, []actionsmenu.MenuItem) {
+	return "Category 操作", []actionsmenu.MenuItem{
+		{Action: "category_add", Label: "+ 新增分类", NeedRow: false},
+		{Action: "category_edit", Label: "✏ 编辑当前分类", NeedRow: true},
+		{Action: "category_delete", Label: "✕ 删除当前分类", NeedRow: true},
+	}
+}
+
+func (m *Model) buildStarsMenuItems(hasRow bool) (string, []actionsmenu.MenuItem) {
+	starLabel := "Star"
+	if hasRow {
+		row := m.currSection.CurrRow()
+		if repoRow, ok := row.(starssection.RepoRow); ok && repoRow.Repo != nil {
+			if repoRow.Repo.StarredAt != "" {
+				starLabel = "Unstar"
+			}
+		}
+	}
+	return "Stars 操作", []actionsmenu.MenuItem{
+		{Action: "toggle_star", Label: starLabel, NeedRow: true},
+		{Action: "edit_category", Label: "Edit Category", NeedRow: true},
+		{Action: "edit_tag", Label: "Edit Tags", NeedRow: true},
+		{Action: "---", Label: "────", NeedRow: false, Separator: true},
+		{Action: "sync", Label: "Sync", NeedRow: false},
+		{Action: "analyze", Label: "Analyze", NeedRow: false},
+		{Action: "open_browser", Label: "Open in Browser", NeedRow: true},
+	}
+}
+
+func (m *Model) buildTrendingMenuItems(hasRow bool) (string, []actionsmenu.MenuItem) {
+	return "Trending 操作", []actionsmenu.MenuItem{
+		{Action: "toggle_star", Label: "Star", NeedRow: true},
+		{Action: "open_browser", Label: "Open in Browser", NeedRow: true},
+		{Action: "---", Label: "────", NeedRow: false, Separator: true},
+		{Action: "refresh", Label: "Refresh", NeedRow: false},
+		{Action: "sync", Label: "Sync", NeedRow: false},
+	}
+}
+
+func (m *Model) buildReleasesMenuItems(hasRow bool) (string, []actionsmenu.MenuItem) {
+	filterLabel := "Show All"
+	if m.releases.FilterLabel() == "All" {
+		filterLabel = "Show Unread"
+	}
+	return "Releases 操作", []actionsmenu.MenuItem{
+		{Action: "mark_read", Label: "Mark as Read", NeedRow: true},
+		{Action: "mark_all_read", Label: "Mark All Read", NeedRow: false},
+		{Action: "toggle_filter", Label: filterLabel, NeedRow: false},
+		{Action: "---", Label: "────", NeedRow: false, Separator: true},
+		{Action: "refresh", Label: "Refresh", NeedRow: false},
+		{Action: "sync", Label: "Sync", NeedRow: false},
+		{Action: "open_browser", Label: "Open in Browser", NeedRow: true},
+	}
+}
+
+func (m *Model) handleToggleStar() tea.Cmd {
+	repoName := m.repoNameFromRow()
+	if repoName == "" {
+		return nil
+	}
+	row := m.currSection.CurrRow()
+	repoRow, ok := row.(starssection.RepoRow)
+	if !ok || repoRow.Repo == nil {
+		return m.executeCommand(fmt.Sprintf("star %s", repoName), "starring...")
+	}
+	if repoRow.Repo.StarredAt != "" {
+		return m.executeCommand(fmt.Sprintf("unstar %s", repoName), "unstarring...")
+	}
+	return m.executeCommand(fmt.Sprintf("star %s", repoName), "starring...")
+}
+
+func (m *Model) handleStarsEditCategory() tea.Cmd {
+	ctx := context.Background()
+	cats, err := m.ctx.Store.ListCategories(ctx, true)
+	if err != nil {
+		m.setError("Failed to list categories: " + err.Error())
+		return nil
+	}
+	names := make([]string, len(cats))
+	for i, c := range cats {
+		names[i] = c.Name
+	}
+	currentCat := ""
+	row := m.currSection.CurrRow()
+	if repoRow, ok := row.(starssection.RepoRow); ok && repoRow.Repo != nil {
+		cat := repoRow.Repo.CustomCategory
+		if cat == "" {
+			cat = repoRow.Repo.AICategory
+		}
+		currentCat = cat
+	}
+	m.promptAction = "categorize"
+	m.prompt = prompt.NewCategorySelectModel("Select category", names, currentCat)
+	m.prompt.SetTheme(m.ctx.Theme)
+	m.mode = modePrompt
+	return nil
+}
+
+func (m *Model) handleStarsEditTag() tea.Cmd {
+	row := m.currSection.CurrRow()
+	repoRow, ok := row.(starssection.RepoRow)
+	if !ok || repoRow.Repo == nil {
+		return nil
+	}
+	currentTags := ""
+	allTags := append([]string{}, repoRow.Repo.AITags...)
+	allTags = append(allTags, repoRow.Repo.CustomTags...)
+	currentTags = strings.Join(allTags, ",")
+	m.promptAction = "tag"
+	m.prompt = prompt.NewTagEditModel("Edit tags (+tag,-tag)", currentTags)
+	m.prompt.SetTheme(m.ctx.Theme)
+	m.mode = modePrompt
+	return nil
+}
+
+func (m *Model) handleSyncAction() tea.Cmd {
+	m.promptAction = "sync"
+	m.prompt = prompt.NewConfirmModel("Run full sync? (y=--full, n=quick)")
+	m.prompt.SetTheme(m.ctx.Theme)
+	m.mode = modePrompt
+	return nil
+}
+
+func (m *Model) handleAnalyzeAction() tea.Cmd {
+	m.promptAction = "analyze"
+	m.prompt = prompt.NewConfirmModel("Analyze all repos? (y=--all, n=incremental)")
+	m.prompt.SetTheme(m.ctx.Theme)
+	m.mode = modePrompt
+	return nil
+}
+
+func (m *Model) handleReleaseFilterToggle() tea.Cmd {
+	if m.releases.FilterLabel() == "All" {
+		m.releases.SetFilter("unread")
+	} else {
+		m.releases.SetFilter("all")
+	}
+	m.releases.ResetRows()
+	return tea.Batch(m.releases.FetchNextPageSectionRows()...)
+}
+
+func (m *Model) openInBrowser() tea.Cmd {
+	row := m.currSection.CurrRow()
+	if row == nil {
+		return nil
+	}
+	url := row.GetUrl()
+	if url == "" {
+		m.setError("No URL available")
+		return nil
+	}
+
+	return func() tea.Msg {
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "darwin":
+			cmd = exec.Command("open", url)
+		case "linux":
+			cmd = exec.Command("xdg-open", url)
+		default:
+			return TaskFinishedMsg{Message: "open_browser", Err: fmt.Errorf("unsupported OS: %s", runtime.GOOS)}
+		}
+		if err := cmd.Start(); err != nil {
+			return TaskFinishedMsg{Message: "open_browser", Err: fmt.Errorf("failed to open %s: %w", url, err)}
+		}
+		return TaskFinishedMsg{Message: "Opened " + url}
+	}
 }
 
 func renderCategoryDetail(row categoriessection.CategoryRow, th theme.Theme) string {
