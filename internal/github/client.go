@@ -193,6 +193,10 @@ func convertStarred(sr *gh.StarredRepository) *Repository {
 	if r.Topics != nil {
 		topics = r.Topics
 	}
+	var repoUpdatedAt string
+	if r.UpdatedAt != nil {
+		repoUpdatedAt = r.UpdatedAt.Format(time.RFC3339)
+	}
 	return &Repository{
 		ID:              r.GetID(),
 		FullName:        r.GetFullName(),
@@ -207,5 +211,6 @@ func convertStarred(sr *gh.StarredRepository) *Repository {
 		OwnerLogin:      r.GetOwner().GetLogin(),
 		OwnerAvatar:     r.GetOwner().GetAvatarURL(),
 		StarredAt:       sr.GetStarredAt().Format(time.RFC3339),
+		RepoUpdatedAt:   repoUpdatedAt,
 	}
 }

@@ -177,6 +177,10 @@ func convertRepo(r *gh.Repository) *Repository {
 	if r.Topics != nil {
 		topics = r.Topics
 	}
+	var repoUpdatedAt string
+	if r.UpdatedAt != nil {
+		repoUpdatedAt = r.UpdatedAt.Format(time.RFC3339)
+	}
 	return &Repository{
 		ID:              r.GetID(),
 		FullName:        r.GetFullName(),
@@ -190,6 +194,7 @@ func convertRepo(r *gh.Repository) *Repository {
 		Topics:          topics,
 		OwnerLogin:      r.GetOwner().GetLogin(),
 		OwnerAvatar:     r.GetOwner().GetAvatarURL(),
+		RepoUpdatedAt:   repoUpdatedAt,
 	}
 }
 
