@@ -104,7 +104,6 @@ type Model struct {
 	isLoading bool
 	groupData *GroupedRepos
 	repos     []*store.Repository
-	allRepos  []*store.Repository
 }
 
 func NewModel(id int, ctx *tuicontext.ProgramContext, cfg section.SectionConfig, groupBy string) *Model {
@@ -203,7 +202,6 @@ func (m *Model) FetchNextPageSectionRows() []tea.Cmd {
 }
 
 func (m *Model) buildRows(repos []*store.Repository) []section.RowData {
-	m.allRepos = repos
 	if m.groupBy == GroupAll {
 		m.rows = make([]section.RowData, 0, len(repos))
 		rows := make([]section.RowData, 0, len(repos))
@@ -265,59 +263,6 @@ func (m *Model) ResetRows() {
 	m.loaded = false
 	m.isLoading = false
 	m.groupData = nil
-	m.allRepos = nil
-}
-
-func (m *Model) FilterRows(query string) {
-	if query == "" {
-		if m.allRepos != nil {
-			listRows := m.buildRows(m.allRepos)
-			m.list.SetRows(listRows)
-		}
-		return
-	}
-	filtered := make([]*store.Repository, 0)
-	for _, r := range m.allRepos {
-		if containsFold(r.FullName, query) || containsFold(r.Description, query) {
-			filtered = append(filtered, r)
-		}
-	}
-	listRows := m.buildRows(filtered)
-	m.list.SetRows(listRows)
-}
-
-func (m *Model) SupportsSearch() bool { return true }
-
-func (m *Model) SupportsFilter() bool { return true }
-
-func containsFold(s, substr string) bool {
-	if len(substr) == 0 {
-		return false
-	}
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		match := true
-		for j := 0; j < len(substr); j++ {
-			sc := s[i+j]
-			ss := substr[j]
-			if sc >= 'A' && sc <= 'Z' {
-				sc += 32
-			}
-			if ss >= 'A' && ss <= 'Z' {
-				ss += 32
-			}
-			if sc != ss {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
 }
 
 func formatStarCount(n int) string {

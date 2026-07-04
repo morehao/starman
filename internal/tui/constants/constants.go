@@ -2,7 +2,7 @@ package constants
 
 const (
 	TabsHeight         = 3
-	FooterHeight       = 2
+	FooterHeight       = 1
 	TableHeaderHeight  = 2
 	SidebarPagerHeight = 1
 )
@@ -10,7 +10,6 @@ const (
 const (
 	Logo        = "starman"
 	SearchIcon  = "search"
-	OverlayIcon = "🔍"
 	FailureIcon = "x"
 	SuccessIcon = "ok"
 	StarIcon    = "*"

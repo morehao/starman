@@ -70,6 +70,3 @@ func (p *placeholderSection) GetIsLoading() bool                              { 
 func (p *placeholderSection) GetTotalCount() int                              { return 0 }
 func (p *placeholderSection) IsSearchFocused() bool                           { return false }
 func (p *placeholderSection) UpdateProgramContext(ctx *tuicontext.ProgramContext) { p.ctx = ctx }
-func (p *placeholderSection) FilterRows(query string)                               {}
-func (p *placeholderSection) SupportsSearch() bool                                  { return false }
-func (p *placeholderSection) SupportsFilter() bool                                  { return false }

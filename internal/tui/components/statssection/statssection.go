@@ -180,12 +180,6 @@ func (m *Model) ResetRows() {
 	m.isLoading = false
 }
 
-func (m *Model) FilterRows(query string) {}
-
-func (m *Model) SupportsSearch() bool { return false }
-
-func (m *Model) SupportsFilter() bool { return false }
-
 func countByLanguage(repos []*store.Repository) map[string]int {
 	dist := make(map[string]int)
 	for _, r := range repos {
