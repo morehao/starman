@@ -34,7 +34,7 @@ func newSyncCmd() *cobra.Command {
 			if !watch {
 				return nil
 			}
-			return runWatch(cmd, fullSync, touch, interval)
+			return runWatch(cmd, fullSync, interval)
 		},
 	}
 	cmd.Flags().BoolVar(&fullSync, "full", false, "full sync: delete repos no longer starred on GitHub")
@@ -115,7 +115,7 @@ func runSync(cmd *cobra.Command, fullSync bool, touch bool) error {
 	return nil
 }
 
-func runWatch(cmd *cobra.Command, fullSync bool, touch bool, interval time.Duration) error {
+func runWatch(cmd *cobra.Command, fullSync bool, interval time.Duration) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -129,7 +129,7 @@ func runWatch(cmd *cobra.Command, fullSync bool, touch bool, interval time.Durat
 		case <-time.After(interval):
 			now := time.Now().UTC().Format(time.RFC3339)
 			fmt.Fprintf(cmd.ErrOrStderr(), "[%s] ", now)
-			if err := runSync(cmd, fullSync, touch); err != nil {
+			if err := runSync(cmd, fullSync, false); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "Sync failed: %v\n", err)
 			}
 		}

@@ -63,6 +63,7 @@ func TestUpsertReposOnSyncPreservesAIFields(t *testing.T) {
 	r1Sync := sampleRepo(1, "owner/repo1")
 	r1Sync.Description = "updated desc"
 	r1Sync.StargazersCount = 20
+	r1Sync.RepoUpdatedAt = "2026-07-04T12:00:00Z"
 	if err := s.UpsertReposOnSync(ctx, []*Repository{r1Sync}, false); err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +82,9 @@ func TestUpsertReposOnSyncPreservesAIFields(t *testing.T) {
 	}
 	if got.AICategory != "dev-tools" {
 		t.Fatalf("AI category should be preserved, got %s", got.AICategory)
+	}
+	if got.RepoUpdatedAt != "2026-07-04T12:00:00Z" {
+		t.Fatalf("RepoUpdatedAt should be overwritten by sync, got %q", got.RepoUpdatedAt)
 	}
 }
 

@@ -78,6 +78,32 @@ func TestRun_CommandError(t *testing.T) {
 	}
 }
 
+func TestRun_SyncTouchFlagValidatesMutualExclusion(t *testing.T) {
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "touch + full", args: []string{"starman", "sync", "--touch", "--full"}, want: "mutually exclusive"},
+		{name: "touch + watch", args: []string{"starman", "sync", "--touch", "--watch"}, want: "mutually exclusive"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			os.Args = tc.args
+			err := Run("test")
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected error containing %q, got: %v", tc.want, err)
+			}
+		})
+	}
+}
+
 func TestRun_InvalidCommand(t *testing.T) {
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
