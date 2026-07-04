@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -43,6 +44,7 @@ type Model struct {
 	currSection section.Section
 	repo        *repoview.Model
 	tasks       *tasksHolder
+	runner      CommandRunner
 	showSidebar bool
 	showHelp    bool
 	ready       bool
@@ -349,7 +351,7 @@ func (m *Model) handleSearchInput(typed tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) executeSearch() tea.Cmd {
-	query := strings.TrimSpace(strings.ToLower(m.searchQuery))
+	query := strings.TrimSpace(m.searchQuery)
 	m.searching = false
 	if query == "" || m.ctx.View != tuicontext.StarsView {
 		m.searchQuery = ""
@@ -357,56 +359,40 @@ func (m *Model) executeSearch() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		repos, err := m.ctx.Store.ListRepositories(context.Background())
+		stdout, _, err := m.runner.Run(context.Background(), "search "+query+" --json")
 		if err != nil {
-			return starssection.ReposFetchFailedMsg{SectionID: 1, Err: err}
+			return starssection.ReposFetchedMsg{SectionID: 1, Repos: nil}
 		}
-		filtered := filterRepos(repos, query)
-		return starssection.ReposFetchedMsg{SectionID: 1, Repos: filtered}
+		var hits []jsonHit
+		if err := json.Unmarshal([]byte(stdout), &hits); err != nil {
+			return starssection.ReposFetchedMsg{SectionID: 1, Repos: nil}
+		}
+		repos := convertSearchHitsToRepos(hits)
+		return starssection.ReposFetchedMsg{SectionID: 1, Repos: repos}
 	}
 }
 
-func filterRepos(repos []*store.Repository, query string) []*store.Repository {
-	if query == "" {
-		return repos
-	}
-	var result []*store.Repository
-	for _, r := range repos {
-		if matchRepo(r, query) {
-			result = append(result, r)
-		}
-	}
-	return result
+type jsonHit struct {
+	Score    float64 `json:"score"`
+	FullName string  `json:"full_name"`
+	Language string  `json:"language"`
+	Stars    int     `json:"stars"`
+	Category string  `json:"category"`
+	Summary  string  `json:"summary"`
 }
 
-func matchRepo(r *store.Repository, query string) bool {
-	lc := strings.ToLower
-	if strings.Contains(lc(r.FullName), query) {
-		return true
-	}
-	if strings.Contains(lc(r.Description), query) {
-		return true
-	}
-	if strings.Contains(lc(r.Language), query) {
-		return true
-	}
-	if strings.Contains(lc(r.AICategory), query) {
-		return true
-	}
-	if strings.Contains(lc(r.CustomCategory), query) {
-		return true
-	}
-	for _, t := range r.Topics {
-		if strings.Contains(lc(t), query) {
-			return true
+func convertSearchHitsToRepos(hits []jsonHit) []*store.Repository {
+	repos := make([]*store.Repository, len(hits))
+	for i, h := range hits {
+		repos[i] = &store.Repository{
+			FullName:        h.FullName,
+			Language:        h.Language,
+			StargazersCount: h.Stars,
+			AICategory:      h.Category,
+			AISummary:       h.Summary,
 		}
 	}
-	for _, t := range r.AITags {
-		if strings.Contains(lc(t), query) {
-			return true
-		}
-	}
-	return false
+	return repos
 }
 
 func (m *Model) startSync() tea.Cmd {
