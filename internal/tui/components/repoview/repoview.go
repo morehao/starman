@@ -3,11 +3,17 @@ package repoview
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/glamour"
 
 	"github.com/morehao/starman/internal/store"
+)
+
+var (
+	glamourRenderer     *glamour.TermRenderer
+	glamourRendererOnce sync.Once
 )
 
 type Model struct {
@@ -128,6 +134,20 @@ func (m Model) renderOverview() string {
 	return b.String()
 }
 
+func getGlamourRenderer() *glamour.TermRenderer {
+	glamourRendererOnce.Do(func() {
+		r, err := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(0),
+		)
+		if err != nil {
+			return
+		}
+		glamourRenderer = r
+	})
+	return glamourRenderer
+}
+
 func (m Model) renderReadme() string {
 	if m.repo == nil {
 		return ""
@@ -138,16 +158,8 @@ func (m Model) renderReadme() string {
 		return ""
 	}
 
-	renderWidth := m.width - 4
-	if renderWidth < 20 {
-		renderWidth = 20
-	}
-
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(renderWidth),
-	)
-	if err != nil {
+	renderer := getGlamourRenderer()
+	if renderer == nil {
 		return readmeContent
 	}
 
