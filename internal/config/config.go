@@ -101,7 +101,7 @@ func Default() *Config {
 			Preview: PreviewConfig{
 				Open:     true,
 				Position: "right",
-				Width:    0.38,
+				Width:    0.42,
 				Height:   0.4,
 			},
 			DefaultView: "stars",
