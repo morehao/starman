@@ -21,8 +21,9 @@ const (
 )
 
 var ViewIcons = map[string]string{
-	"stars":    "*",
-	"trending": "^",
+	"stars":      "*",
+	"categories": "@",
+	"trending":   "^",
 	"releases": "#",
 	"stats":    "%",
 }

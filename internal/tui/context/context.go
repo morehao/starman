@@ -11,8 +11,9 @@ import (
 type ViewType string
 
 const (
-	StarsView    ViewType = "stars"
-	TrendingView ViewType = "trending"
+	StarsView      ViewType = "stars"
+	CategoriesView ViewType = "categories"
+	TrendingView   ViewType = "trending"
 	ReleasesView ViewType = "releases"
 	StatsView    ViewType = "stats"
 )
