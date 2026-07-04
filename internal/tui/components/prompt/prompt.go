@@ -93,19 +93,6 @@ func (m Model) IsFocused() bool { return m.active }
 
 func (m Model) Init() tea.Cmd { return nil }
 
-const (
-	enterKey     = 13
-	escapeKey    = 27
-	backspaceKey = 127
-	jKey         = 106
-	kKey         = 107
-	yKey         = 121
-	nKey         = 110
-	YKey         = 89
-	NKey         = 78
-	spaceKey     = 32
-)
-
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -130,13 +117,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleConfirmKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.Code {
-	case escapeKey:
+	case 27:
 		m.active = false
 		return m, func() tea.Msg { return PromptResultMsg{Type: PromptConfirm, Confirmed: false} }
-	case yKey, YKey:
+	case 'y', 'Y':
 		m.active = false
 		return m, func() tea.Msg { return PromptResultMsg{Type: PromptConfirm, Confirmed: true} }
-	case nKey, NKey:
+	case 'n', 'N':
 		m.active = false
 		return m, func() tea.Msg { return PromptResultMsg{Type: PromptConfirm, Confirmed: false} }
 	}
@@ -145,10 +132,10 @@ func (m Model) handleConfirmKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleCategoryKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.Code {
-	case escapeKey:
+	case 27:
 		m.active = false
 		return m, func() tea.Msg { return PromptResultMsg{Type: PromptCategorySelect, Confirmed: false} }
-	case enterKey:
+	case 13:
 		m.active = false
 		return m, func() tea.Msg {
 			return PromptResultMsg{Type: PromptCategorySelect, Confirmed: true, Value: m.options[m.cursor]}
@@ -157,15 +144,7 @@ func (m Model) handleCategoryKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.cursor < len(m.options)-1 {
 			m.cursor++
 		}
-	case jKey:
-		if m.cursor < len(m.options)-1 {
-			m.cursor++
-		}
 	case tea.KeyUp:
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case kKey:
 		if m.cursor > 0 {
 			m.cursor--
 		}
@@ -175,15 +154,15 @@ func (m Model) handleCategoryKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleTagKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.Code {
-	case escapeKey:
+	case 27:
 		m.active = false
 		return m, func() tea.Msg { return PromptResultMsg{Type: PromptTagEdit, Confirmed: false} }
-	case enterKey:
+	case 13:
 		m.active = false
 		return m, func() tea.Msg {
 			return PromptResultMsg{Type: PromptTagEdit, Confirmed: true, Value: strings.TrimSpace(m.input)}
 		}
-	case backspaceKey:
+	case 127:
 		if len(m.input) > 0 {
 			m.input = m.input[:len(m.input)-1]
 		}
@@ -197,10 +176,10 @@ func (m Model) handleTagKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleCategoryFormKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.Code {
-	case escapeKey:
+	case 27:
 		m.active = false
 		return m, func() tea.Msg { return PromptResultMsg{Type: PromptCategoryForm, Confirmed: false} }
-	case enterKey:
+	case 13:
 		m.active = false
 		values := make([]string, len(m.formFields))
 		for i, f := range m.formFields {
@@ -208,17 +187,17 @@ func (m Model) handleCategoryFormKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		}
 		val := strings.Join(values, "\x00")
 		return m, func() tea.Msg { return PromptResultMsg{Type: PromptCategoryForm, Confirmed: true, Value: val} }
-	case tea.KeyDown, jKey:
+	case tea.KeyDown:
 		m.formFieldIdx++
 		if m.formFieldIdx >= len(m.formFields) {
 			m.formFieldIdx = 0
 		}
-	case tea.KeyUp, kKey:
+	case tea.KeyUp:
 		m.formFieldIdx--
 		if m.formFieldIdx < 0 {
 			m.formFieldIdx = len(m.formFields) - 1
 		}
-	case spaceKey:
+	case ' ':
 		f := &m.formFields[m.formFieldIdx]
 		if f.IsBool {
 			if f.Value == "true" {
@@ -227,7 +206,7 @@ func (m Model) handleCategoryFormKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 				f.Value = "true"
 			}
 		}
-	case backspaceKey:
+	case 127:
 		f := &m.formFields[m.formFieldIdx]
 		if !f.IsBool && !f.Readonly && len(f.Value) > 0 {
 			f.Value = f.Value[:len(f.Value)-1]
