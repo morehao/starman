@@ -11,8 +11,9 @@ import (
 )
 
 type Model struct {
-	repo  *store.Repository
-	width int
+	repo     *store.Repository
+	width    int
+	renderer *glamour.TermRenderer
 }
 
 func NewModel() *Model {
@@ -21,7 +22,10 @@ func NewModel() *Model {
 
 func (m *Model) SetRepo(r *store.Repository) { m.repo = r }
 
-func (m *Model) SetWidth(w int) { m.width = w }
+func (m *Model) SetWidth(w int) {
+	m.width = w
+	m.recreateRenderer()
+}
 
 func (m Model) Repo() *store.Repository { return m.repo }
 
@@ -44,7 +48,7 @@ func (m Model) renderDetail() string {
 	}
 	b.WriteString("\n")
 
-	b.WriteString(strings.Repeat("\u2500", 50))
+	b.WriteString(strings.Repeat("\u2500", sepWidth(50, m.width)))
 	b.WriteString("\n")
 
 	if m.repo.Description != "" {
@@ -101,7 +105,7 @@ func (m Model) renderDetail() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(strings.Repeat("\u2500", 50))
+	b.WriteString(strings.Repeat("\u2500", sepWidth(50, m.width)))
 	b.WriteString("\n")
 
 	if m.repo.SubscribedReleases {
@@ -113,23 +117,39 @@ func (m Model) renderDetail() string {
 	return b.String()
 }
 
-func (m Model) renderMarkdown(content string) string {
-	renderWidth := m.width - 4
-	if renderWidth < 20 {
-		renderWidth = 20
+func (m *Model) renderMarkdown(content string) string {
+	if m.renderer == nil {
+		m.recreateRenderer()
 	}
-
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(renderWidth),
-	)
-	if err != nil {
+	if m.renderer == nil {
 		return content
 	}
-
-	rendered, err := renderer.Render(content)
+	rendered, err := m.renderer.Render(content)
 	if err != nil {
 		return content
 	}
 	return rendered
+}
+
+func (m *Model) recreateRenderer() {
+	renderWidth := m.width - 4
+	if renderWidth < 20 {
+		renderWidth = 20
+	}
+	r, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(renderWidth),
+	)
+	if err != nil {
+		m.renderer = nil
+	} else {
+		m.renderer = r
+	}
+}
+
+func sepWidth(minWidth, actualWidth int) int {
+	if actualWidth >= minWidth {
+		return actualWidth
+	}
+	return minWidth
 }
