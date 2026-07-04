@@ -36,7 +36,20 @@ func TestUpsertAndDeleteCustomCategory(t *testing.T) {
 	if !found {
 		t.Fatal("custom category not found")
 	}
-	if err := s.DeleteCategory(ctx, "my-cat"); err != nil {
+
+	repo := &Repository{FullName: "test/repo", Name: "repo", CustomCategory: "my-cat"}
+	if err := s.UpsertRepository(ctx, repo); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetRepository(ctx, "test/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CustomCategory != "my-cat" {
+		t.Fatalf("expected CustomCategory 'my-cat', got %q", got.CustomCategory)
+	}
+
+	if _, err := s.DeleteCategory(ctx, "my-cat"); err != nil {
 		t.Fatal(err)
 	}
 	cats, _ = s.ListCategories(ctx, false)
@@ -45,11 +58,19 @@ func TestUpsertAndDeleteCustomCategory(t *testing.T) {
 			t.Fatal("custom category should be deleted")
 		}
 	}
+
+	got, err = s.GetRepository(ctx, "test/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CustomCategory != "" {
+		t.Fatalf("expected CustomCategory to be cleared after category deletion, got %q", got.CustomCategory)
+	}
 }
 
 func TestCannotDeleteDefaultCategory(t *testing.T) {
 	s := testStore(t)
-	err := s.DeleteCategory(context.Background(), "web-app")
+	_, err := s.DeleteCategory(context.Background(), "web-app")
 	if err == nil {
 		t.Fatal("expected error deleting default category")
 	}

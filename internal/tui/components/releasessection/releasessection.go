@@ -16,10 +16,10 @@ const ShowUnread = "unread"
 const ShowAll = "all"
 
 var defaultColumns = []listviewport.Column{
-	{Title: "repo", Width: 35},
-	{Title: "version", Width: 16},
-	{Title: "date", Width: 12},
-	{Title: "status", Width: 7},
+	{Title: "repo", Width: 32, Flex: true},
+	{Title: "version", Width: 18, Flex: true},
+	{Title: "date", Width: 10},
+	{Title: "status", Width: 8, Flex: true},
 }
 
 type GroupHeaderRow struct {

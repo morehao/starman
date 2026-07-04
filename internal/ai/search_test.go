@@ -118,7 +118,7 @@ func (m *mockStore) SetReleaseSubscription(ctx context.Context, repoFullName str
 func (m *mockStore) UpdateReleaseWatermark(ctx context.Context, repoID int64, t time.Time) error { return nil }
 func (m *mockStore) ListCategories(ctx context.Context, visibleOnly bool) ([]*store.Category, error) { return nil, nil }
 func (m *mockStore) UpsertCategory(ctx context.Context, c *store.Category) error { return nil }
-func (m *mockStore) DeleteCategory(ctx context.Context, id string) error { return nil }
+func (m *mockStore) DeleteCategory(ctx context.Context, id string) (int, error) { return 0, nil }
 func (m *mockStore) GetSyncState(ctx context.Context, key string) (string, error) { return "", nil }
 func (m *mockStore) SetSyncState(ctx context.Context, key, value string) error { return nil }
 func (m *mockStore) SaveSyncStats(ctx context.Context, stats *store.SyncStats) error { return nil }

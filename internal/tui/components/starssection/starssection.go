@@ -21,10 +21,10 @@ const (
 )
 
 var defaultColumns = []listviewport.Column{
-	{Title: "repo", Width: 40},
-	{Title: "stars", Width: 7},
-	{Title: "lang", Width: 12},
-	{Title: "cat", Width: 12},
+	{Title: "repo", Width: 38, Flex: true},
+	{Title: "stars", Width: 8, Flex: true},
+	{Title: "lang", Width: 14, Flex: true},
+	{Title: "cat", Width: 18, Flex: true},
 }
 
 type RepoRow struct {
@@ -103,6 +103,7 @@ type Model struct {
 	loaded    bool
 	isLoading bool
 	groupData *GroupedRepos
+	repos     []*store.Repository
 }
 
 func NewModel(id int, ctx *tuicontext.ProgramContext, cfg section.SectionConfig, groupBy string) *Model {
@@ -169,6 +170,7 @@ func (m *Model) Update(msg tea.Msg) (section.Section, tea.Cmd) {
 		if typed.SectionID != m.id {
 			return m, nil
 		}
+		m.repos = typed.Repos
 		listRows := m.buildRows(typed.Repos)
 		m.list.SetRows(listRows)
 		m.loaded = true
@@ -240,6 +242,19 @@ func groupReposBy(groupBy string, repos []*store.Repository) GroupedRepos {
 	default:
 		return GroupByLanguage(repos)
 	}
+}
+
+func (m *Model) SetGroupBy(groupBy string) {
+	if m.groupBy == groupBy {
+		return
+	}
+	m.groupBy = groupBy
+	if !m.loaded || len(m.repos) == 0 {
+		m.ResetRows()
+		return
+	}
+	listRows := m.buildRows(m.repos)
+	m.list.SetRows(listRows)
 }
 
 func (m *Model) ResetRows() {

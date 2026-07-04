@@ -2,135 +2,84 @@ package tui
 
 import (
 	"testing"
-
-	"github.com/morehao/starman/internal/store"
 )
 
-func TestFilterReposByName(t *testing.T) {
-	repos := []*store.Repository{
-		{FullName: "cli/go-github", Description: "Go GitHub client"},
-		{FullName: "morehao/starman", Description: "Star manager"},
-		{FullName: "test/rust-lib", Description: "HTTP server"},
+func TestConvertSearchHitsToRepos(t *testing.T) {
+	hits := []jsonHit{
+		{Score: 0.95, FullName: "cli/go-github", Language: "Go", Stars: 4200, Category: "dev-tools", Summary: "GitHub client"},
+		{Score: 0.82, FullName: "morehao/starman", Language: "Go", Stars: 150, Category: "tool", Summary: "Star manager"},
 	}
-	filtered := filterRepos(repos, "github")
-	if len(filtered) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(filtered))
+	repos := convertSearchHitsToRepos(hits)
+	if len(repos) != 2 {
+		t.Fatalf("expected 2 repos, got %d", len(repos))
 	}
-	if filtered[0].FullName != "cli/go-github" {
-		t.Fatalf("unexpected result: %s", filtered[0].FullName)
+	if repos[0].FullName != "cli/go-github" {
+		t.Fatalf("unexpected name: %s", repos[0].FullName)
 	}
-}
-
-func TestFilterReposByDescription(t *testing.T) {
-	repos := []*store.Repository{
-		{FullName: "a/b", Description: "Fast HTTP server"},
-		{FullName: "c/d", Description: "CLI tool"},
+	if repos[0].StargazersCount != 4200 {
+		t.Fatalf("unexpected stars: %d", repos[0].StargazersCount)
 	}
-	filtered := filterRepos(repos, "http")
-	if len(filtered) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(filtered))
+	if repos[1].Language != "Go" {
+		t.Fatalf("unexpected language: %s", repos[1].Language)
 	}
 }
 
-func TestFilterReposByLanguage(t *testing.T) {
-	repos := []*store.Repository{
-		{FullName: "a/foo", Language: "Go"},
-		{FullName: "b/bar", Language: "Rust"},
-		{FullName: "c/baz", Language: "Python"},
+func TestConvertSearchHitsToRepos_Empty(t *testing.T) {
+	repos := convertSearchHitsToRepos(nil)
+	if len(repos) != 0 {
+		t.Fatalf("expected empty, got %d", len(repos))
 	}
-	filtered := filterRepos(repos, "go")
-	if len(filtered) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(filtered))
-	}
-}
-
-func TestFilterReposByCategory(t *testing.T) {
-	repos := []*store.Repository{
-		{FullName: "a/b", AICategory: "开发工具"},
-		{FullName: "c/d", CustomCategory: "工具"},
-	}
-	filtered := filterRepos(repos, "开发")
-	if len(filtered) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(filtered))
+	repos = convertSearchHitsToRepos([]jsonHit{})
+	if len(repos) != 0 {
+		t.Fatalf("expected empty, got %d", len(repos))
 	}
 }
 
-func TestFilterReposByTag(t *testing.T) {
-	repos := []*store.Repository{
-		{FullName: "a/b", AITags: []string{"cli", "tui"}},
-		{FullName: "c/d", CustomTags: []string{"web"}},
-	}
-	filtered := filterRepos(repos, "tui")
-	if len(filtered) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(filtered))
-	}
-}
-
-func TestFilterReposByTopic(t *testing.T) {
-	repos := []*store.Repository{
-		{FullName: "a/b", Topics: []string{"bubbletea", "golang"}},
-		{FullName: "c/d", Topics: []string{"rust", "cli"}},
-	}
-	filtered := filterRepos(repos, "bubbletea")
-	if len(filtered) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(filtered))
-	}
-}
-
-func TestFilterReposCaseInsensitive(t *testing.T) {
-	repos := []*store.Repository{
-		{FullName: "Owner/Repo"},
-	}
-	filtered := filterRepos(repos, "owner")
-	if len(filtered) != 1 {
-		t.Fatal("case-insensitive match failed")
-	}
-}
-
-func TestFilterReposEmptyQuery(t *testing.T) {
-	repos := []*store.Repository{
+func TestConvertSearchHitsToRepos_EmptyFields(t *testing.T) {
+	hits := []jsonHit{
 		{FullName: "a/b"},
-		{FullName: "c/d"},
 	}
-	filtered := filterRepos(repos, "")
-	if len(filtered) != 2 {
-		t.Fatalf("empty query should return all, got %d", len(filtered))
+	repos := convertSearchHitsToRepos(hits)
+	if len(repos) != 1 {
+		t.Fatalf("expected 1 repo, got %d", len(repos))
 	}
-}
-
-func TestFilterReposNoMatch(t *testing.T) {
-	repos := []*store.Repository{
-		{FullName: "a/b", Description: "tool", Language: "Go"},
+	r := repos[0]
+	if r.FullName != "a/b" {
+		t.Fatalf("unexpected name: %s", r.FullName)
 	}
-	filtered := filterRepos(repos, "zzzzzzz")
-	if len(filtered) != 0 {
-		t.Fatal("should be no match")
+	if r.Language != "" {
+		t.Fatalf("expected empty language, got %s", r.Language)
 	}
-}
-
-func TestMatchRepoFullName(t *testing.T) {
-	r := &store.Repository{FullName: "morehao/starman"}
-	if !matchRepo(r, "starman") {
-		t.Fatal("should match full name")
-	}
-	if matchRepo(r, "unknown") {
-		t.Fatal("should not match")
+	if r.StargazersCount != 0 {
+		t.Fatalf("expected 0 stars, got %d", r.StargazersCount)
 	}
 }
 
-func TestMatchRepoDescription(t *testing.T) {
-	r := &store.Repository{Description: "A star manager for GitHub"}
-	if !matchRepo(r, "star") {
-		t.Fatal("should match description")
+func TestConvertSearchHitsToRepos_IDCheck(t *testing.T) {
+	hits := []jsonHit{
+		{Score: 0.9, FullName: "owner/repo", Language: "Rust", Stars: 500, Category: "cli", Summary: "A tool"},
+	}
+	repos := convertSearchHitsToRepos(hits)
+	r := repos[0]
+	if r.AICategory != "cli" {
+		t.Fatalf("expected category cli, got %s", r.AICategory)
+	}
+	if r.AISummary != "A tool" {
+		t.Fatalf("expected summary, got %s", r.AISummary)
+	}
+	// IDs are different since we create new pointers
+	if r.ID != 0 {
+		t.Fatalf("expected ID 0 (not set from search hits), got %d", r.ID)
 	}
 }
 
-func TestMatchRepoAITags(t *testing.T) {
-	r := &store.Repository{AITags: []string{"tui", "framework"}}
-	if !matchRepo(r, "framework") {
-		t.Fatal("should match AI tag")
+func TestConvertSearchHitsToRepos_ScoreNotStored(t *testing.T) {
+	// Score is in jsonHit but not in store.Repository
+	hits := []jsonHit{
+		{Score: 0.99, FullName: "x/y", Language: "Go", Stars: 1000, Category: "web", Summary: "web framework"},
 	}
-	if matchRepo(r, "nonexistent") {
-		t.Fatal("should not match")
+	repos := convertSearchHitsToRepos(hits)
+	if len(repos) != 1 {
+		t.Fatalf("expected 1, got %d", len(repos))
 	}
 }

@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/morehao/starman/internal/ai"
 	"github.com/morehao/starman/internal/config"
@@ -56,7 +55,7 @@ func newAnalyzeCmd() *cobra.Command {
 				return err
 			}
 			if len(repos) == 0 {
-				fmt.Println("No repos to analyze.")
+				fmt.Fprintln(cmd.OutOrStdout(), "No repos to analyze.")
 				return nil
 			}
 			aiClient := ai.NewClient(cfg.AI.BaseURL, aiKey, cfg.AI.Model)
@@ -65,22 +64,22 @@ func newAnalyzeCmd() *cobra.Command {
 			embeddingClient := ai.NewEmbeddingClient(cfg.Embedding.BaseURL, embeddingKey, cfg.Embedding.Model)
 			svc := ai.NewServiceWithEmbedding(aiClient, gh, embeddingClient)
 			batch := ai.NewBatchAnalyzer(svc, s, gh, cfg.AI.Concurrency)
-			fmt.Fprintf(os.Stderr, "Analyzing %d repos...\n", len(repos))
+			fmt.Fprintf(cmd.ErrOrStderr(), "Analyzing %d repos...\n", len(repos))
 			result, err := batch.Run(ctx, repos, ai.BatchOpts{
 				Force: force,
 				Limit: effectiveLimit,
 				OnProgress: func(done, total int, name string) {
 					line := fmt.Sprintf("\r[%d/%d] %s", done, total, name)
 					line += "\033[K"
-					fmt.Fprint(os.Stderr, line)
+					fmt.Fprint(cmd.ErrOrStderr(), line)
 				},
 			})
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "\nDone: %d success, %d failed, %d total\n", result.Success, result.Failed, result.Total)
+			fmt.Fprintf(cmd.ErrOrStderr(), "\nDone: %d success, %d failed, %d total\n", result.Success, result.Failed, result.Total)
 			if result.Success > 0 {
-				fmt.Fprintf(os.Stderr, "Rebuilding FTS index...\n")
+				fmt.Fprintf(cmd.ErrOrStderr(), "Rebuilding FTS index...\n")
 				if err := s.RebuildFTSIndex(ctx); err != nil {
 					return fmt.Errorf("rebuild fts index: %w", err)
 				}

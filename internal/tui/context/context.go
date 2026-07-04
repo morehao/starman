@@ -4,14 +4,16 @@ import (
 	"github.com/morehao/starman/internal/config"
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/common"
+	"github.com/morehao/starman/internal/tui/keys"
 	"github.com/morehao/starman/internal/tui/theme"
 )
 
 type ViewType string
 
 const (
-	StarsView    ViewType = "stars"
-	TrendingView ViewType = "trending"
+	StarsView      ViewType = "stars"
+	CategoriesView ViewType = "categories"
+	TrendingView   ViewType = "trending"
 	ReleasesView ViewType = "releases"
 	StatsView    ViewType = "stats"
 )
@@ -32,10 +34,14 @@ type ProgramContext struct {
 	PreviewPosition      string
 	DynamicPreviewWidth  int
 	DynamicPreviewHeight int
+	Keys                 keys.KeyMap
 }
 
 func NewContext(cfg *config.Config, s store.Store, ver string) *ProgramContext {
 	t := theme.DefaultTheme()
+	if cfg != nil && cfg.TUI.Theme == "light" {
+		t = theme.LightTheme()
+	}
 	ctx := &ProgramContext{
 		Config:          cfg,
 		Store:           s,
@@ -45,6 +51,7 @@ func NewContext(cfg *config.Config, s store.Store, ver string) *ProgramContext {
 		PreviewPosition: "right",
 		Theme:           t,
 		Styles:          common.BuildStyles(t),
+		Keys:            keys.DefaultKeyMap(),
 	}
 
 	if cfg != nil {
@@ -58,6 +65,7 @@ func NewContext(cfg *config.Config, s store.Store, ver string) *ProgramContext {
 		if ctx.PreviewPosition == "" {
 			ctx.PreviewPosition = "right"
 		}
+		ctx.Keys = keys.NewKeyMap(&cfg.TUI.Keybindings)
 	}
 	return ctx
 }

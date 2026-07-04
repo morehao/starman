@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/morehao/starman/internal/store"
@@ -32,12 +31,12 @@ func newCategorizeCmd() *cobra.Command {
 				if len(args) < 1 {
 					return fmt.Errorf("category required as positional argument")
 				}
-				return batchCategorize(ctx, s, args[0], lang, catFilter, lock, unlock)
+				return batchCategorize(ctx, s, args[0], lang, catFilter, lock, unlock, cmd)
 			}
 			if len(args) < 2 {
 				return fmt.Errorf("fullName and category required for single-repo mode, or use --lang for batch mode")
 			}
-			return singleCategorize(ctx, s, args[0], args[1], lock, unlock)
+			return singleCategorize(ctx, s, args[0], args[1], lock, unlock, cmd)
 		},
 	}
 	cmd.Flags().StringVar(&lang, "lang", "", "batch mode: filter by language")
@@ -47,7 +46,7 @@ func newCategorizeCmd() *cobra.Command {
 	return cmd
 }
 
-func singleCategorize(ctx context.Context, s store.Store, fullName, cat string, lock, unlock bool) error {
+func singleCategorize(ctx context.Context, s store.Store, fullName, cat string, lock, unlock bool, cmd *cobra.Command) error {
 	repo, err := s.GetRepository(ctx, fullName)
 	if err != nil {
 		return fmt.Errorf("repository %s not found: %w", fullName, err)
@@ -67,11 +66,11 @@ func singleCategorize(ctx context.Context, s store.Store, fullName, cat string, 
 	}); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stdout, "Set category '%s' for %s (locked=%v)\n", cat, fullName, locked)
+	fmt.Fprintf(cmd.OutOrStdout(), "Set category '%s' for %s (locked=%v)\n", cat, fullName, locked)
 	return nil
 }
 
-func batchCategorize(ctx context.Context, s store.Store, cat, lang, catFilter string, lock, unlock bool) error {
+func batchCategorize(ctx context.Context, s store.Store, cat, lang, catFilter string, lock, unlock bool, cmd *cobra.Command) error {
 	repos, err := s.ListRepositories(ctx)
 	if err != nil {
 		return err
@@ -103,11 +102,11 @@ func batchCategorize(ctx context.Context, s store.Store, cat, lang, catFilter st
 			Category:       cat,
 			CategoryLocked: locked,
 		}); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to update %s: %v\n", r.FullName, err)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to update %s: %v\n", r.FullName, err)
 			continue
 		}
 		count++
 	}
-	fmt.Fprintf(os.Stdout, "Set category '%s' for %d repositories\n", cat, count)
+	fmt.Fprintf(cmd.OutOrStdout(), "Set category '%s' for %d repositories\n", cat, count)
 	return nil
 }

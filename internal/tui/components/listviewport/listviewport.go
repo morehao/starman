@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/morehao/starman/internal/tui/components/section"
 	"github.com/morehao/starman/internal/tui/context"
@@ -14,6 +15,7 @@ import (
 type Column struct {
 	Title string
 	Width int
+	Flex  bool
 }
 
 type Model struct {
@@ -35,6 +37,9 @@ func New(cols []Column, programContext *context.ProgramContext) Model {
 }
 
 func (m *Model) SetSize(w, h int) {
+	if m.width == w && m.height == h {
+		return
+	}
 	m.width = w
 	m.height = h
 	m.viewport.SetWidth(w)
@@ -54,10 +59,32 @@ func (m *Model) SetRows(rows []section.RowData) {
 
 func (m *Model) Cursor() int { return m.cursor }
 
+const tableHeaderLines = 3
+
+func (m *Model) scrollToCursor() {
+	if len(m.rows) == 0 || m.height <= 0 {
+		return
+	}
+	cursorLine := tableHeaderLines + m.cursor
+	y := m.viewport.YOffset()
+	h := m.height
+
+	if cursorLine >= y && cursorLine < y+h {
+		return
+	}
+
+	if cursorLine < y {
+		m.viewport.SetYOffset(0)
+	} else {
+		m.viewport.SetYOffset(cursorLine - h + 1)
+	}
+}
+
 func (m *Model) NextRow() {
 	if m.cursor < len(m.rows)-1 {
 		m.cursor++
 		m.viewport.SetContent(m.render())
+		m.scrollToCursor()
 	}
 }
 
@@ -65,6 +92,7 @@ func (m *Model) PrevRow() {
 	if m.cursor > 0 {
 		m.cursor--
 		m.viewport.SetContent(m.render())
+		m.scrollToCursor()
 	}
 }
 
@@ -72,6 +100,7 @@ func (m *Model) FirstItem() {
 	if len(m.rows) > 0 {
 		m.cursor = 0
 		m.viewport.SetContent(m.render())
+		m.scrollToCursor()
 	}
 }
 
@@ -79,6 +108,7 @@ func (m *Model) LastItem() {
 	if len(m.rows) > 0 {
 		m.cursor = len(m.rows) - 1
 		m.viewport.SetContent(m.render())
+		m.scrollToCursor()
 	}
 }
 
@@ -118,6 +148,11 @@ func (m Model) renderTable() string {
 		return ""
 	}
 
+	cols, contentW := m.fitColumns(m.width)
+	if contentW < 1 {
+		return ""
+	}
+
 	theme := m.context.Theme
 	selectedBg := lipgloss.NewStyle().Background(theme.SelectedBackground)
 	selectedFg := lipgloss.NewStyle().Foreground(theme.PrimaryText).Background(theme.SelectedBackground)
@@ -126,21 +161,21 @@ func (m Model) renderTable() string {
 
 	var b strings.Builder
 
-	b.WriteString(borderStyle.Render(strings.Repeat("─", m.width)))
+	b.WriteString(borderStyle.Render(strings.Repeat("─", contentW)))
 	b.WriteString("\n")
 
-	for i, col := range m.columns {
+	for i, col := range cols {
 		title := col.Title
-		if len(title) > col.Width {
-			title = title[:col.Width]
+		if runewidth.StringWidth(title) > col.Width {
+			title = runewidth.Truncate(title, col.Width, "…")
 		}
-		b.WriteString(fmt.Sprintf("%-*s", col.Width, title))
-		if i < len(m.columns)-1 {
+		b.WriteString(padRight(title, col.Width))
+		if i < len(cols)-1 {
 			b.WriteString(" ")
 		}
 	}
 	b.WriteString("\n")
-	b.WriteString(borderStyle.Render(strings.Repeat("─", m.width)))
+	b.WriteString(borderStyle.Render(strings.Repeat("─", contentW)))
 	b.WriteString("\n")
 
 	for rowIdx, row := range m.rows {
@@ -150,33 +185,139 @@ func (m Model) renderTable() string {
 		}
 
 		colVals := row.GetColumns()
-		lineStr := prefix
-		for colIdx, col := range m.columns {
-			val := ""
-			if colIdx < len(colVals) {
-				val = colVals[colIdx]
-			}
-		if len(val) > col.Width {
-			val = val[:col.Width-1] + "…"
-		}
-		lineStr += fmt.Sprintf("%-*s", col.Width, val)
-			if colIdx < len(m.columns)-1 {
-				lineStr += " "
-			}
-		}
-
-		if rowIdx == m.cursor {
-			if len(lineStr) > 2 {
-				b.WriteString(selectedBg.Render(lineStr))
+		var lineStr string
+		if len(colVals) == 0 {
+			title := row.GetTitle()
+			avail := contentW - runewidth.StringWidth(prefix)
+			if avail < 4 {
+				lineStr = prefix + title
 			} else {
-				b.WriteString(selectedFg.Render(lineStr))
+				inner := "── " + title + " ──"
+				if runewidth.StringWidth(inner) > avail {
+					inner = "── " + title
+					if runewidth.StringWidth(inner) > avail-1 {
+						inner = title
+						if runewidth.StringWidth(inner) > avail {
+							inner = runewidth.Truncate(inner, avail, "")
+						}
+					} else {
+						inner += " ─"
+					}
+				}
+				fill := avail - runewidth.StringWidth(inner)
+				if fill > 0 {
+					lineStr = prefix + inner + strings.Repeat("─", fill)
+				} else {
+					lineStr = prefix + inner
+				}
 			}
+			b.WriteString(borderStyle.Render(lineStr))
 		} else {
-			b.WriteString(faintStyle.Render(lineStr))
+			lineStr = prefix
+			for colIdx, col := range cols {
+				val := ""
+				if colIdx < len(colVals) {
+					val = colVals[colIdx]
+				}
+				if runewidth.StringWidth(val) > col.Width {
+					val = runewidth.Truncate(val, col.Width-1, "…")
+				}
+				lineStr += padRight(val, col.Width)
+				if colIdx < len(cols)-1 {
+					lineStr += " "
+				}
+			}
+
+			if rowIdx == m.cursor {
+				if len(lineStr) > 2 {
+					b.WriteString(selectedBg.Render(lineStr))
+				} else {
+					b.WriteString(selectedFg.Render(lineStr))
+				}
+			} else {
+				b.WriteString(faintStyle.Render(lineStr))
+			}
 		}
 		if rowIdx < len(m.rows)-1 {
 			b.WriteString("\n")
 		}
 	}
 	return b.String()
+}
+
+func (m Model) fitColumns(availWidth int) ([]Column, int) {
+	n := len(m.columns)
+	if availWidth <= 0 || n == 0 {
+		return m.columns, 0
+	}
+	gap := n - 1
+	prefixW := 2
+	contentAvail := availWidth - prefixW - gap
+	if contentAvail < n*3 {
+		contentAvail = n * 3
+	}
+
+	idealContent := 0
+	flexIdeal := 0
+	for _, c := range m.columns {
+		idealContent += c.Width
+		if c.Flex {
+			flexIdeal += c.Width
+		}
+	}
+
+	fitted := make([]Column, n)
+	copy(fitted, m.columns)
+
+	if idealContent <= contentAvail {
+		extra := contentAvail - idealContent
+		if extra > 0 && flexIdeal > 0 {
+			distributed := 0
+			for i := range fitted {
+				if m.columns[i].Flex {
+					share := extra * m.columns[i].Width / flexIdeal
+					fitted[i].Width += share
+					distributed += share
+				}
+			}
+			remainder := extra - distributed
+			if remainder > 0 {
+				for i := n - 1; i >= 0; i-- {
+					if m.columns[i].Flex {
+						fitted[i].Width += remainder
+						break
+					}
+				}
+			}
+		}
+	} else {
+		scale := float64(contentAvail) / float64(idealContent)
+		if scale < 0.3 {
+			scale = 0.3
+		}
+		for i := range fitted {
+			w := int(float64(m.columns[i].Width) * scale)
+			if w < 3 {
+				w = 3
+			}
+			fitted[i].Width = w
+		}
+	}
+
+	used := prefixW
+	for i := range fitted {
+		used += fitted[i].Width
+		if i < n-1 {
+			used++
+		}
+	}
+	return fitted, used
+}
+
+func padRight(s string, width int) string {
+	dw := runewidth.StringWidth(s)
+	if dw >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-dw)
 }

@@ -53,7 +53,7 @@ func newBackupCmd() *cobra.Command {
 			if err := gh.CommitFile(ctx, cfg.GitHub.Username, repoName, filePath, data, msg); err != nil {
 				return fmt.Errorf("push backup to %s/%s: %w", cfg.GitHub.Username, repoName, err)
 			}
-			fmt.Printf("Pushed backup to %s/%s/%s\n", cfg.GitHub.Username, repoName, filePath)
+			fmt.Fprintf(cmd.OutOrStdout(), "Pushed backup to %s/%s/%s\n", cfg.GitHub.Username, repoName, filePath)
 			return nil
 		},
 	}
@@ -86,7 +86,7 @@ func newBackupJSONCmd() *cobra.Command {
 				if outPath != "" {
 					return os.WriteFile(outPath, data, 0o644)
 				}
-				fmt.Print(string(data))
+				fmt.Fprint(cmd.OutOrStdout(), string(data))
 				return nil
 			}
 			if importFlag != "" {
@@ -136,7 +136,7 @@ func newBackupWebDAVCmd() *cobra.Command {
 				if err := wc.Push(ctx, path, data); err != nil {
 					return err
 				}
-				fmt.Printf("Pushed backup to %s\n", path)
+				fmt.Fprintf(cmd.OutOrStdout(), "Pushed backup to %s\n", path)
 				return nil
 			}
 			if pull {

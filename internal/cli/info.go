@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/morehao/starman/internal/github"
@@ -29,7 +28,7 @@ func newInfoCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("repository %s not found in local DB, run 'starman sync' first: %w", args[0], err)
 			}
-			printRepoInfo(repo)
+			printRepoInfo(cmd, repo)
 			if readme {
 				cfg, _, err := loadConfig(cmd)
 				if err != nil {
@@ -43,17 +42,17 @@ func newInfoCmd() *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("fetch %s: %w", readmeVariant, err)
 					}
-					fmt.Fprintf(os.Stdout, "\n--- README (%s) ---\n%s\n", readmeVariant, content)
+					fmt.Fprintf(cmd.OutOrStdout(), "\n--- README (%s) ---\n%s\n", readmeVariant, content)
 				} else {
 					content, err := gh.GetReadme(ctx, parts[0], parts[1])
 					if err != nil {
 						return fmt.Errorf("fetch README: %w", err)
 					}
-					fmt.Fprintf(os.Stdout, "\n--- README ---\n%s\n", content)
+					fmt.Fprintf(cmd.OutOrStdout(), "\n--- README ---\n%s\n", content)
 					variants, _ := gh.ListReadmeVariants(ctx, parts[0], parts[1])
 					if len(variants) > 1 {
-						fmt.Fprintf(os.Stdout, "\nAvailable README variants: %s\n", strings.Join(variants, ", "))
-						fmt.Fprintf(os.Stdout, "Use --readme-variant <filename> to view a specific variant.\n")
+						fmt.Fprintf(cmd.OutOrStdout(), "\nAvailable README variants: %s\n", strings.Join(variants, ", "))
+						fmt.Fprintf(cmd.OutOrStdout(), "Use --readme-variant <filename> to view a specific variant.\n")
 					}
 				}
 			}
@@ -65,38 +64,38 @@ func newInfoCmd() *cobra.Command {
 	return cmd
 }
 
-func printRepoInfo(r *store.Repository) {
-	fmt.Fprintf(os.Stdout, "Repository:  %s\n", r.FullName)
-	fmt.Fprintf(os.Stdout, "URL:         %s\n", r.URL)
-	fmt.Fprintf(os.Stdout, "Language:    %s\n", r.Language)
-	fmt.Fprintf(os.Stdout, "Stars:       %d    Forks: %d\n", r.StargazersCount, r.ForksCount)
+func printRepoInfo(cmd *cobra.Command, r *store.Repository) {
+	fmt.Fprintf(cmd.OutOrStdout(), "Repository:  %s\n", r.FullName)
+	fmt.Fprintf(cmd.OutOrStdout(), "URL:         %s\n", r.URL)
+	fmt.Fprintf(cmd.OutOrStdout(), "Language:    %s\n", r.Language)
+	fmt.Fprintf(cmd.OutOrStdout(), "Stars:       %d    Forks: %d\n", r.StargazersCount, r.ForksCount)
 	if len(r.Topics) > 0 {
-		fmt.Fprintf(os.Stdout, "Topics:      %s\n", strings.Join(r.Topics, ", "))
+		fmt.Fprintf(cmd.OutOrStdout(), "Topics:      %s\n", strings.Join(r.Topics, ", "))
 	}
 	if r.StarredAt != "" {
-		fmt.Fprintf(os.Stdout, "Starred At:  %s\n", r.StarredAt[:10])
+		fmt.Fprintf(cmd.OutOrStdout(), "Starred At:  %s\n", r.StarredAt[:10])
 	}
-	fmt.Fprintf(os.Stdout, "\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "\n")
 	if r.AISummary != "" {
-		fmt.Fprintf(os.Stdout, "AI Summary:  %s\n", r.AISummary)
-		fmt.Fprintf(os.Stdout, "AI Tags:     %s\n", strings.Join(r.AITags, ", "))
-		fmt.Fprintf(os.Stdout, "AI Category: %s\n", r.AICategory)
+		fmt.Fprintf(cmd.OutOrStdout(), "AI Summary:  %s\n", r.AISummary)
+		fmt.Fprintf(cmd.OutOrStdout(), "AI Tags:     %s\n", strings.Join(r.AITags, ", "))
+		fmt.Fprintf(cmd.OutOrStdout(), "AI Category: %s\n", r.AICategory)
 		if r.AnalyzedAt != nil {
-			fmt.Fprintf(os.Stdout, "Analyzed At: %s\n", r.AnalyzedAt.Format("2006-01-02"))
+			fmt.Fprintf(cmd.OutOrStdout(), "Analyzed At: %s\n", r.AnalyzedAt.Format("2006-01-02"))
 		}
 	} else {
-		fmt.Fprintf(os.Stdout, "AI Summary:  (not analyzed, run 'starman analyze --repo %s')\n", r.FullName)
+		fmt.Fprintf(cmd.OutOrStdout(), "AI Summary:  (not analyzed, run 'starman analyze --repo %s')\n", r.FullName)
 	}
-	fmt.Fprintf(os.Stdout, "\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "\n")
 	if r.CustomCategory != "" {
-		fmt.Fprintf(os.Stdout, "Custom Category: %s\n", r.CustomCategory)
+		fmt.Fprintf(cmd.OutOrStdout(), "Custom Category: %s\n", r.CustomCategory)
 	} else {
-		fmt.Fprintf(os.Stdout, "Custom Category: (none)\n")
+		fmt.Fprintf(cmd.OutOrStdout(), "Custom Category: (none)\n")
 	}
 	if len(r.CustomTags) > 0 {
-		fmt.Fprintf(os.Stdout, "Custom Tags:     %s\n", strings.Join(r.CustomTags, ", "))
+		fmt.Fprintf(cmd.OutOrStdout(), "Custom Tags:     %s\n", strings.Join(r.CustomTags, ", "))
 	} else {
-		fmt.Fprintf(os.Stdout, "Custom Tags:     (none)\n")
+		fmt.Fprintf(cmd.OutOrStdout(), "Custom Tags:     (none)\n")
 	}
-	fmt.Fprintf(os.Stdout, "Category Locked: %v\n", r.CategoryLocked)
+	fmt.Fprintf(cmd.OutOrStdout(), "Category Locked: %v\n", r.CategoryLocked)
 }

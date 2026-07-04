@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
@@ -8,6 +10,17 @@ import (
 	"github.com/morehao/starman/internal/store"
 	tuicontext "github.com/morehao/starman/internal/tui/context"
 )
+
+var (
+	ErrInteractiveRequired = errors.New("interactive required")
+	ErrBlockingRequired    = errors.New("blocking required")
+)
+
+type CommandRunner interface {
+	Run(ctx context.Context, input string) (stdout, stderr string, err error)
+}
+
+var Runner CommandRunner
 
 var ErrNoConfig = fmt.Errorf("config not found")
 
@@ -31,7 +44,9 @@ func runProgram(cfg *config.Config, ver string) error {
 	defer db.Close()
 
 	ctx := tuicontext.NewContext(cfg, db, ver)
-	program := tea.NewProgram(NewModel(ctx))
+	model := NewModel(ctx)
+	model.runner = Runner
+	program := tea.NewProgram(model)
 	_, err = program.Run()
 	if err != nil {
 		return fmt.Errorf("run tui: %w", err)

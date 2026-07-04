@@ -47,7 +47,7 @@ type Store interface {
 
 	ListCategories(ctx context.Context, visibleOnly bool) ([]*Category, error)
 	UpsertCategory(ctx context.Context, c *Category) error
-	DeleteCategory(ctx context.Context, id string) error
+	DeleteCategory(ctx context.Context, id string) (int, error)
 
 	GetSyncState(ctx context.Context, key string) (string, error)
 	SetSyncState(ctx context.Context, key, value string) error

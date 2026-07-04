@@ -24,10 +24,10 @@ const (
 )
 
 var defaultColumns = []listviewport.Column{
-	{Title: "repo", Width: 38},
-	{Title: "stars", Width: 7},
-	{Title: "lang", Width: 12},
-	{Title: "desc", Width: 20},
+	{Title: "repo", Width: 28, Flex: true},
+	{Title: "stars", Width: 8},
+	{Title: "lang", Width: 14, Flex: true},
+	{Title: "desc", Width: 30, Flex: true},
 }
 
 type TrendingRow struct {
@@ -65,8 +65,8 @@ func (r TrendingRow) GetColumns() []string {
 		lang = "—"
 	}
 	desc := r.Repo.Description
-	if len(desc) > 20 {
-		desc = desc[:19] + "…"
+	if len(desc) > 30 {
+		desc = desc[:29] + "…"
 	}
 	return []string{r.Repo.FullName, stars, lang, desc}
 }
@@ -146,8 +146,11 @@ func (m *Model) FirstItem() { m.list.FirstItem() }
 func (m *Model) LastItem() { m.list.LastItem() }
 
 func (m *Model) SetPeriod(period string) {
+	if m.period == period {
+		return
+	}
 	m.period = period
-	m.ResetRows()
+	m.loaded = false
 }
 
 func (m *Model) Update(msg tea.Msg) (section.Section, tea.Cmd) {

@@ -31,6 +31,8 @@ type Model struct {
 
 var tabLabels = []string{"by Language", "by Category", "by Tag"}
 
+var tabHeaderLabels = []string{"Language", "Category", "Tag"}
+
 func NewModel(id int, ctx *tuicontext.ProgramContext, cfg section.SectionConfig) *Model {
 	return &Model{id: id, ctx: ctx, cfg: cfg}
 }
@@ -94,6 +96,14 @@ func (m *Model) View() string {
 	}
 
 	b.WriteString(boldStyle.Render(fmt.Sprintf("Stats  ·  %s  ·  %d repos", tabLabels[m.tab], total)))
+
+	maxBarWidth := w - 30
+	if maxBarWidth < 10 {
+		maxBarWidth = 10
+	}
+
+	b.WriteString("\n")
+	b.WriteString(dimStyle.Render(fmt.Sprintf("%-18s  %-*s  Count", tabHeaderLabels[m.tab], maxBarWidth, "")))
 	b.WriteString("\n\n")
 
 	maxCount := 0
@@ -101,11 +111,6 @@ func (m *Model) View() string {
 		if c > maxCount {
 			maxCount = c
 		}
-	}
-
-	maxBarWidth := w - 30
-	if maxBarWidth < 10 {
-		maxBarWidth = 10
 	}
 
 	type kv struct {

@@ -40,7 +40,7 @@ func newGenerateCmd() *cobra.Command {
 				return err
 			}
 			if len(out) == 0 {
-				fmt.Fprintln(os.Stderr, "No repositories found. Run 'starman sync' first.")
+				fmt.Fprintln(cmd.ErrOrStderr(), "No repositories found. Run 'starman sync' first.")
 				return nil
 			}
 			if repoName != "" {
@@ -52,13 +52,13 @@ func newGenerateCmd() *cobra.Command {
 				if err := gh.UpdateReadmeFile(context.Background(), username, repoName, string(out), message); err != nil {
 					return fmt.Errorf("update readme: %w", err)
 				}
-				fmt.Fprintf(os.Stderr, "Updated %s/%s README.md\n", username, repoName)
+				fmt.Fprintf(cmd.ErrOrStderr(), "Updated %s/%s README.md\n", username, repoName)
 				return nil
 			}
 			if outPath != "" {
 				return os.WriteFile(outPath, out, 0o644)
 			}
-			fmt.Print(string(out))
+			fmt.Fprint(cmd.OutOrStdout(), string(out))
 			return nil
 		},
 	}

@@ -32,7 +32,7 @@ func newStarCmd() *cobra.Command {
 			if err := gh.Star(ctx, parts[0], parts[1]); err != nil {
 				return err
 			}
-			fmt.Printf("Starred %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "Starred %s\n", args[0])
 			if repo, err := gh.GetRepository(ctx, parts[0], parts[1]); err == nil {
 				if s, err := openStore(); err == nil {
 					_ = s.UpsertRepository(ctx, repo)
@@ -68,7 +68,7 @@ func newUnstarCmd() *cobra.Command {
 			if err := gh.Unstar(ctx, parts[0], parts[1]); err != nil {
 				return err
 			}
-			fmt.Printf("Unstarred %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "Unstarred %s\n", args[0])
 			s, err := openStore()
 			if err != nil {
 				return nil

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/morehao/starman/internal/config"
@@ -59,5 +61,30 @@ func TestConfigPathForArgs(t *testing.T) {
 				t.Fatalf("configPathForArgs(%v)=%q want=%q", tc.args, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestRun_CommandError(t *testing.T) {
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	os.Args = []string{"starman", "sync", "--watch", "--interval", "1m"}
+	err := Run("test")
+	if err == nil {
+		t.Fatal("expected error for invalid interval")
+	}
+	if !strings.Contains(err.Error(), "interval must be at least 5m") {
+		t.Errorf("expected interval error, got: %v", err)
+	}
+}
+
+func TestRun_InvalidCommand(t *testing.T) {
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	os.Args = []string{"starman", "nonexistent-command"}
+	err := Run("test")
+	if err == nil {
+		t.Fatal("expected error for invalid command")
 	}
 }

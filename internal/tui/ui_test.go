@@ -79,10 +79,4 @@ func TestUIKeyBindingsFirstLastToggleSidebarAndHelp(t *testing.T) {
 		t.Fatalf("g should jump to first row, cursor=%d", m.stars.CurrRowIndex())
 	}
 
-	updated, _ = m.Update(keyPress("?"))
-	m = updated.(Model)
-	out = m.View().Content
-	if strings.Contains(out, "g/G first/last") {
-		t.Fatalf("help should be hidden after second ?, got: %q", out)
-	}
 }

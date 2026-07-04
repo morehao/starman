@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/morehao/starman/internal/github"
@@ -58,7 +57,7 @@ func runSync(cmd *cobra.Command, fullSync bool) error {
 	ctx := context.Background()
 	gh := github.New(token)
 
-	fmt.Fprintf(os.Stderr, "Fetching starred repos...\n")
+	fmt.Fprintf(cmd.ErrOrStderr(), "Fetching starred repos...\n")
 	start := time.Now()
 
 	repos, err := gh.ListStarred(ctx, cfg.GitHub.Username)
@@ -91,8 +90,8 @@ func runSync(cmd *cobra.Command, fullSync bool) error {
 	_ = s.SaveSyncStats(ctx, stats)
 
 	_ = s.SetSyncState(ctx, "last_sync", time.Now().UTC().Format(time.RFC3339))
-	fmt.Fprintf(os.Stderr, "  %d repos fetched (%d new) in %v\n", len(repos), newCount, duration)
-	fmt.Fprintf(os.Stderr, "  Sync complete.\n")
+	fmt.Fprintf(cmd.ErrOrStderr(), "  %d repos fetched (%d new) in %v\n", len(repos), newCount, duration)
+	fmt.Fprintf(cmd.ErrOrStderr(), "  Sync complete.\n")
 	return nil
 }
 
@@ -100,18 +99,18 @@ func runWatch(cmd *cobra.Command, fullSync bool, interval time.Duration) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	fmt.Fprintf(os.Stderr, "Watching with interval %v (Ctrl+C to stop)\n", interval)
+	fmt.Fprintf(cmd.ErrOrStderr(), "Watching with interval %v (Ctrl+C to stop)\n", interval)
 
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Fprintf(os.Stderr, "Stopping watch...\n")
+			fmt.Fprintf(cmd.ErrOrStderr(), "Stopping watch...\n")
 			return nil
 		case <-time.After(interval):
 			now := time.Now().UTC().Format(time.RFC3339)
-			fmt.Fprintf(os.Stderr, "[%s] ", now)
+			fmt.Fprintf(cmd.ErrOrStderr(), "[%s] ", now)
 			if err := runSync(cmd, fullSync); err != nil {
-				fmt.Fprintf(os.Stderr, "Sync failed: %v\n", err)
+				fmt.Fprintf(cmd.ErrOrStderr(), "Sync failed: %v\n", err)
 			}
 		}
 	}
