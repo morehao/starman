@@ -71,6 +71,9 @@ func seenAny(m map[string]bool) bool {
 func (g GroupedRepos) sortBucketsByRepoName() {
 	for k, bucket := range g.groups {
 		sort.Slice(bucket.Repos, func(i, j int) bool {
+			if bucket.Repos[i].RepoUpdatedAt != bucket.Repos[j].RepoUpdatedAt {
+				return bucket.Repos[i].RepoUpdatedAt > bucket.Repos[j].RepoUpdatedAt
+			}
 			return bucket.Repos[i].FullName < bucket.Repos[j].FullName
 		})
 		g.groups[k] = bucket

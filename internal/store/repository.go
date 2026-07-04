@@ -190,7 +190,7 @@ const repositoryColumns = `SELECT id, full_name, name, description, url, languag
 	subscribed_releases, last_release_fetch, vector_indexed_at FROM repositories`
 
 func (s *sqliteStore) ListRepositories(ctx context.Context) ([]*Repository, error) {
-	rows, err := s.db.QueryContext(ctx, repositoryColumns+` ORDER BY full_name`)
+	rows, err := s.db.QueryContext(ctx, repositoryColumns+` ORDER BY repo_updated_at DESC NULLS LAST, full_name`)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +207,7 @@ func (s *sqliteStore) ListRepositories(ctx context.Context) ([]*Repository, erro
 }
 
 func (s *sqliteStore) ListUnanalyzed(ctx context.Context, limit int) ([]*Repository, error) {
-	query := repositoryColumns + ` WHERE analyzed_at IS NULL ORDER BY full_name`
+	query := repositoryColumns + ` WHERE analyzed_at IS NULL ORDER BY repo_updated_at DESC NULLS LAST, full_name`
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
@@ -231,7 +231,7 @@ func (s *sqliteStore) ListUnanalyzed(ctx context.Context, limit int) ([]*Reposit
 }
 
 func (s *sqliteStore) ListByCategory(ctx context.Context, category string) ([]*Repository, error) {
-	rows, err := s.db.QueryContext(ctx, repositoryColumns+` WHERE COALESCE(NULLIF(custom_category,''), NULLIF(ai_category,''), '其他') = ? ORDER BY full_name`, category)
+	rows, err := s.db.QueryContext(ctx, repositoryColumns+` WHERE COALESCE(NULLIF(custom_category,''), NULLIF(ai_category,''), '其他') = ? ORDER BY repo_updated_at DESC NULLS LAST, full_name`, category)
 	if err != nil {
 		return nil, err
 	}
