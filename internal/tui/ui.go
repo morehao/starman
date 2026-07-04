@@ -15,7 +15,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/morehao/starman/internal/store"
-	"github.com/morehao/starman/internal/tui/common"
 	"github.com/morehao/starman/internal/tui/components/actionsmenu"
 	"github.com/morehao/starman/internal/tui/components/categoriessection"
 	"github.com/morehao/starman/internal/tui/components/drawer"
@@ -405,13 +404,6 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 
-	if y == m.ctx.ScreenHeight-1 {
-		if viewIdx := m.footer.ViewSwitcherAtX(msg.X); viewIdx >= 0 {
-			m.switchView(viewIdx - m.tabs.Active())
-		}
-		return nil
-	}
-
 	return nil
 }
 
@@ -461,10 +453,6 @@ func (m *Model) handleCommandMode(typed tea.KeyMsg) tea.Cmd {
 		}
 		if cmd == "q" || cmd == "quit" {
 			return tea.Quit
-		}
-		if cmd == "help" {
-			m.showHelp = !m.showHelp
-			return nil
 		}
 		return m.executeCommand(cmd, cmd)
 	case "backspace":
@@ -862,16 +850,6 @@ func (m Model) View() tea.View {
 		searchLine = m.renderInputLine(":", m.searchQuery)
 	}
 
-	helpLine := ""
-	if m.showHelp {
-		helpText := "j/k move  g/G first/last  h/l prev/next tab  "
-		if m.tabs.HasSectionTabs() {
-			helpText += "[ / ] prev/next section  "
-		}
-		helpText += "p sidebar  m actions  / search  : cmd  Tab view  ? help  q quit"
-		helpLine = "\n" + common.RenderPreviewHeader(theme, m.ctx.ScreenWidth, helpText)
-	}
-
 	footerView := m.footer.View()
 
 	extraLines := 1
@@ -881,17 +859,13 @@ func (m Model) View() tea.View {
 	if m.errorMsg != "" {
 		extraLines++
 	}
-	if m.showHelp {
-		extraLines++
-	}
-
 	fittingLines := m.ctx.ScreenHeight - extraLines
 	if fittingLines < 0 {
 		fittingLines = 0
 	}
 	adjustedMainArea, _ := truncateLines(mainArea, fittingLines)
 
-	contentOutput := adjustedMainArea + searchLine + m.renderErrorBar() + helpLine
+	contentOutput := adjustedMainArea + searchLine + m.renderErrorBar()
 
 	v := tea.NewView(contentOutput + "\n" + footerView)
 	v.AltScreen = true

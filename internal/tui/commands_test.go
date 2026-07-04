@@ -73,23 +73,6 @@ func TestHandleCommandMode_QuitViaColonQ(t *testing.T) {
 	}
 }
 
-func TestHandleCommandMode_HelpTogglesHelp(t *testing.T) {
-	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "help",
-		runner:      &fakeRunner{},
-		tasks:       newTasksHolder(),
-	}
-	m.showHelp = false
-	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
-	if cmd != nil {
-		t.Fatalf("expected nil command for help toggle, got %v", cmd)
-	}
-	if !m.showHelp {
-		t.Fatal("showHelp should be toggled on")
-	}
-}
-
 func TestHandleCommandMode_BackspaceRemovesLastChar(t *testing.T) {
 	m := &Model{
 		mode:        modeCommand,
