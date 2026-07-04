@@ -27,16 +27,16 @@ func newCategorizeCmd() *cobra.Command {
 			if lock && unlock {
 				return fmt.Errorf("cannot use --lock and --unlock together")
 			}
-		if lang != "" || catFilter != "" {
-			if len(args) < 1 {
-				return fmt.Errorf("category required as positional argument")
+			if lang != "" || catFilter != "" {
+				if len(args) < 1 {
+					return fmt.Errorf("category required as positional argument")
+				}
+				return batchCategorize(ctx, s, args[0], lang, catFilter, lock, unlock, cmd)
 			}
-			return batchCategorize(ctx, s, args[0], lang, catFilter, lock, unlock, cmd)
-		}
-		if len(args) < 2 {
-			return fmt.Errorf("fullName and category required for single-repo mode, or use --lang for batch mode")
-		}
-		return singleCategorize(ctx, s, args[0], args[1], lock, unlock, cmd)
+			if len(args) < 2 {
+				return fmt.Errorf("fullName and category required for single-repo mode, or use --lang for batch mode")
+			}
+			return singleCategorize(ctx, s, args[0], args[1], lock, unlock, cmd)
 		},
 	}
 	cmd.Flags().StringVar(&lang, "lang", "", "batch mode: filter by language")

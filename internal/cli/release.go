@@ -43,9 +43,9 @@ func newReleaseListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("%-30s %-15s %-12s %s\n", "REPO", "TAG", "PUBLISHED", "ASSETS")
+			fmt.Fprintf(cmd.OutOrStdout(), "%-30s %-15s %-12s %s\n", "REPO", "TAG", "PUBLISHED", "ASSETS")
 			for _, r := range rels {
-				fmt.Printf("%-30s %-15s %-12s %d\n", r.RepoFullName, r.TagName, formatDate(r.PublishedAt), len(r.Assets))
+				fmt.Fprintf(cmd.OutOrStdout(), "%-30s %-15s %-12s %d\n", r.RepoFullName, r.TagName, formatDate(r.PublishedAt), len(r.Assets))
 			}
 			return nil
 		},
@@ -75,7 +75,7 @@ func newReleasePullCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Subscribed: %d, New: %d, Errors: %d\n", stats.Subscribed, stats.NewReleases, stats.Errors)
+			fmt.Fprintf(cmd.OutOrStdout(), "Subscribed: %d, New: %d, Errors: %d\n", stats.Subscribed, stats.NewReleases, stats.Errors)
 			return nil
 		},
 	}
@@ -97,7 +97,7 @@ func newReleaseSubscribeCmd() *cobra.Command {
 			if err := s.SetReleaseSubscription(ctx, args[0], true); err != nil {
 				return err
 			}
-			fmt.Printf("Subscribed to %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "Subscribed to %s\n", args[0])
 			cfg, _, err := loadConfig(cmd)
 			if err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "Initial pull skipped: %v\n", err)
@@ -111,7 +111,7 @@ func newReleaseSubscribeCmd() *cobra.Command {
 				fmt.Fprintf(cmd.ErrOrStderr(), "Initial pull failed: %v\n", err)
 				return nil
 			}
-			fmt.Printf("Pulled %d releases\n", stats.NewReleases)
+			fmt.Fprintf(cmd.OutOrStdout(), "Pulled %d releases\n", stats.NewReleases)
 			return nil
 		},
 	}
@@ -142,7 +142,7 @@ func newReleaseUnsubscribeCmd() *cobra.Command {
 			if err := s.SetReleaseSubscription(context.Background(), args[0], false); err != nil {
 				return err
 			}
-			fmt.Printf("Unsubscribed from %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "Unsubscribed from %s\n", args[0])
 			return nil
 		},
 	}

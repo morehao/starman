@@ -24,16 +24,16 @@ func newTagCmd() *cobra.Command {
 			}
 			defer s.Close()
 			ctx := context.Background()
-		if lang != "" || catFilter != "" {
-			return batchTag(ctx, s, lang, catFilter, addTags, removeTags, cmd)
-		}
-		if len(args) < 1 {
-			return fmt.Errorf("fullName required for single-repo mode, or use --lang/--cat-filter for batch mode")
-		}
-		if len(args) < 2 && addTags == "" && removeTags == "" {
-			return fmt.Errorf("tagExpr required for single-repo mode, or use --add/--remove")
-		}
-		return singleTag(ctx, s, args, addTags, removeTags, cmd)
+			if lang != "" || catFilter != "" {
+				return batchTag(ctx, s, lang, catFilter, addTags, removeTags, cmd)
+			}
+			if len(args) < 1 {
+				return fmt.Errorf("fullName required for single-repo mode, or use --lang/--cat-filter for batch mode")
+			}
+			if len(args) < 2 && addTags == "" && removeTags == "" {
+				return fmt.Errorf("tagExpr required for single-repo mode, or use --add/--remove")
+			}
+			return singleTag(ctx, s, args, addTags, removeTags, cmd)
 		},
 	}
 	cmd.Flags().StringVar(&lang, "lang", "", "batch mode: filter by language")
@@ -104,4 +104,3 @@ func batchTag(ctx context.Context, s store.Store, lang, catFilter, addStr, remov
 	fmt.Fprintf(cmd.OutOrStdout(), "Updated tags for %d repositories\n", count)
 	return nil
 }
-
