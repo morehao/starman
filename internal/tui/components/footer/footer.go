@@ -43,6 +43,7 @@ func (m Model) View() string {
 		Foreground(theme.ErrorText).
 		Background(theme.SelectedBackground)
 
+	helpBgColor := lipgloss.Color("#181825")
 	separator := lipgloss.NewStyle().
 		Foreground(theme.FaintBorder).
 		Background(theme.SelectedBackground).
@@ -51,8 +52,8 @@ func (m Model) View() string {
 
 	helpText := "j/k move  g/G first/last  p sidebar  / search  : cmd  q quit"
 	helpLeft := lipgloss.NewStyle().
-		Foreground(theme.FaintBorder).
-		Background(theme.SelectedBackground).
+		Foreground(theme.FaintText).
+		Background(helpBgColor).
 		Render(helpText)
 
 	var rightParts []string
