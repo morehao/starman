@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/morehao/starman/internal/store"
@@ -25,16 +24,16 @@ func newTagCmd() *cobra.Command {
 			}
 			defer s.Close()
 			ctx := context.Background()
-			if lang != "" || catFilter != "" {
-				return batchTag(ctx, s, lang, catFilter, addTags, removeTags)
-			}
-			if len(args) < 1 {
-				return fmt.Errorf("fullName required for single-repo mode, or use --lang/--cat-filter for batch mode")
-			}
-			if len(args) < 2 && addTags == "" && removeTags == "" {
-				return fmt.Errorf("tagExpr required for single-repo mode, or use --add/--remove")
-			}
-			return singleTag(ctx, s, args, addTags, removeTags)
+		if lang != "" || catFilter != "" {
+			return batchTag(ctx, s, lang, catFilter, addTags, removeTags, cmd)
+		}
+		if len(args) < 1 {
+			return fmt.Errorf("fullName required for single-repo mode, or use --lang/--cat-filter for batch mode")
+		}
+		if len(args) < 2 && addTags == "" && removeTags == "" {
+			return fmt.Errorf("tagExpr required for single-repo mode, or use --add/--remove")
+		}
+		return singleTag(ctx, s, args, addTags, removeTags, cmd)
 		},
 	}
 	cmd.Flags().StringVar(&lang, "lang", "", "batch mode: filter by language")
@@ -44,7 +43,7 @@ func newTagCmd() *cobra.Command {
 	return cmd
 }
 
-func singleTag(ctx context.Context, s store.Store, args []string, addFlag, removeFlag string) error {
+func singleTag(ctx context.Context, s store.Store, args []string, addFlag, removeFlag string, cmd *cobra.Command) error {
 	repo, err := s.GetRepository(ctx, args[0])
 	if err != nil {
 		return fmt.Errorf("repository %s not found: %w", args[0], err)
@@ -65,11 +64,11 @@ func singleTag(ctx context.Context, s store.Store, args []string, addFlag, remov
 	}); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stdout, "Updated tags for %s: %s\n", repo.FullName, strings.Join(newTags, ", "))
+	fmt.Fprintf(cmd.OutOrStdout(), "Updated tags for %s: %s\n", repo.FullName, strings.Join(newTags, ", "))
 	return nil
 }
 
-func batchTag(ctx context.Context, s store.Store, lang, catFilter, addStr, removeStr string) error {
+func batchTag(ctx context.Context, s store.Store, lang, catFilter, addStr, removeStr string, cmd *cobra.Command) error {
 	repos, err := s.ListRepositories(ctx)
 	if err != nil {
 		return err
@@ -97,12 +96,12 @@ func batchTag(ctx context.Context, s store.Store, lang, catFilter, addStr, remov
 			Category:       r.CustomCategory,
 			CategoryLocked: r.CategoryLocked,
 		}); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to update %s: %v\n", r.FullName, err)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to update %s: %v\n", r.FullName, err)
 			continue
 		}
 		count++
 	}
-	fmt.Fprintf(os.Stdout, "Updated tags for %d repositories\n", count)
+	fmt.Fprintf(cmd.OutOrStdout(), "Updated tags for %d repositories\n", count)
 	return nil
 }
 
