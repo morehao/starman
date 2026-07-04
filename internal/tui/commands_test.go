@@ -81,10 +81,37 @@ func TestCommandMode_EmptyInputDoesNothing(t *testing.T) {
 		t.Fatal("expected a cmd even for empty (routing to updateInner handles the empty check)")
 	}
 	msg := cmd()
-	if execMsg, ok := msg.(commandmode.CommandExecutedMsg); ok {
-		if execMsg.Input != "" {
-			t.Fatalf("expected empty input, got '%s'", execMsg.Input)
-		}
+	execMsg, ok := msg.(commandmode.CommandExecutedMsg)
+	if !ok {
+		t.Fatalf("expected CommandExecutedMsg, got %T", msg)
+	}
+	if execMsg.Input != "" {
+		t.Fatalf("expected empty input, got '%s'", execMsg.Input)
+	}
+}
+
+func TestCommandMode_QuitViaCommandInput(t *testing.T) {
+	m := &Model{
+		mode:         modeCommand,
+		commandInput: commandmode.NewModel(),
+		runner:       &fakeRunner{},
+		tasks:        newTasksHolder(),
+	}
+	m.commandInput.SetFocused(true)
+	updated, _ := m.commandInput.Update(tea.KeyPressMsg{Code: 'q'})
+	m.commandInput = updated.(commandmode.Model)
+	updated, cmd := m.commandInput.Update(tea.KeyPressMsg{Code: 13})
+	m.commandInput = updated.(commandmode.Model)
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd from Enter")
+	}
+	msg := cmd()
+	execMsg, ok := msg.(commandmode.CommandExecutedMsg)
+	if !ok {
+		t.Fatalf("expected CommandExecutedMsg, got %T", msg)
+	}
+	if execMsg.Input != "q" {
+		t.Fatalf("expected input 'q', got '%s'", execMsg.Input)
 	}
 }
 

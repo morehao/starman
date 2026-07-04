@@ -2,6 +2,7 @@ package commandmode
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -107,8 +108,8 @@ func TestCommandMode_View_Focused(t *testing.T) {
 	m.focused = true
 	m.input = "sync"
 	got := stripANSI(m.View().Content)
-	if got == "" {
-		t.Error("expected non-empty view when focused")
+	if !strings.Contains(got, "Execute Command") {
+		t.Errorf("expected title 'Execute Command' in view, got: %s", got)
 	}
 }
 
