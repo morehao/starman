@@ -872,6 +872,14 @@ func (m Model) View() tea.View {
 		return tea.NewView("Initializing...")
 	}
 
+	if m.mode == modeSearch {
+		m.searchInput.SetSize(m.ctx.ScreenWidth, m.ctx.ScreenHeight)
+		v := m.searchInput.View()
+		v.AltScreen = true
+		v.MouseMode = tea.MouseModeCellMotion
+		return v
+	}
+
 	m.footer.SetPager(m.sectionPager())
 
 	theme := m.ctx.Theme
@@ -922,8 +930,6 @@ func (m Model) View() tea.View {
 	switch m.mode {
 	case modeCommand:
 		searchLine = m.renderInputLine(":", m.searchQuery)
-	case modeSearch:
-		searchLine = "\n" + m.searchInput.View().Content
 	}
 
 	helpLine := ""
@@ -934,10 +940,24 @@ func (m Model) View() tea.View {
 
 	footerView := m.footer.View()
 
-	contentOutput := mainArea + searchLine + m.renderErrorBar() + helpLine
-	if m.mode == modeNormal && !m.showHelp && m.errorMsg == "" {
-		contentOutput, _ = truncateLines(contentOutput, m.ctx.ScreenHeight-1)
+	extraLines := 1
+	if searchLine != "" {
+		extraLines++
 	}
+	if m.errorMsg != "" {
+		extraLines++
+	}
+	if m.showHelp {
+		extraLines++
+	}
+
+	fittingLines := m.ctx.ScreenHeight - extraLines
+	if fittingLines < 0 {
+		fittingLines = 0
+	}
+	adjustedMainArea, _ := truncateLines(mainArea, fittingLines)
+
+	contentOutput := adjustedMainArea + searchLine + m.renderErrorBar() + helpLine
 
 	v := tea.NewView(contentOutput + "\n" + footerView)
 	v.AltScreen = true
