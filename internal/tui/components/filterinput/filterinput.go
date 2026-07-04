@@ -1,4 +1,4 @@
-package searchinput
+package filterinput
 
 import (
 	tea "charm.land/bubbletea/v2"
@@ -6,7 +6,7 @@ import (
 	"github.com/morehao/starman/internal/tui/theme"
 )
 
-type SearchExecutedMsg struct {
+type FilterExecutedMsg struct {
 	Query string
 }
 
@@ -21,8 +21,7 @@ type Model struct {
 
 func NewModel() Model {
 	return Model{
-		th:          theme.DefaultTheme(),
-		sectionName: "Stars",
+		th: theme.DefaultTheme(),
 	}
 }
 
@@ -71,7 +70,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focused = false
 			q := m.query
 			m.query = ""
-			return m, func() tea.Msg { return SearchExecutedMsg{Query: q} }
+			return m, func() tea.Msg { return FilterExecutedMsg{Query: q} }
 		case backspaceKey:
 			if len(m.query) > 0 {
 				m.query = m.query[:len(m.query)-1]
@@ -96,6 +95,6 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) renderOverlay() string {
-	title := "Search " + m.sectionName
+	title := "Filter " + m.sectionName
 	return inputoverlay.RenderOverlay(m.th, m.width, m.height, title, m.query)
 }

@@ -90,14 +90,15 @@ type TrendingFetchedMsg struct {
 }
 
 type Model struct {
-	id        int
-	ctx       *tuicontext.ProgramContext
-	cfg       section.SectionConfig
-	period    string
-	list      listviewport.Model
-	rows      []section.RowData
-	loaded    bool
-	isLoading bool
+	id          int
+	ctx         *tuicontext.ProgramContext
+	cfg         section.SectionConfig
+	period      string
+	list        listviewport.Model
+	rows        []section.RowData
+	loaded      bool
+	isLoading   bool
+	allTrending []*discovery.TrendingRepo
 }
 
 func NewModel(id int, ctx *tuicontext.ProgramContext, cfg section.SectionConfig, period string) *Model {
@@ -195,6 +196,7 @@ func (m *Model) FetchNextPageSectionRows() []tea.Cmd {
 }
 
 func (m *Model) buildRows(repos []*discovery.TrendingRepo) []section.RowData {
+	m.allTrending = repos
 	m.rows = make([]section.RowData, 0, len(repos))
 	rows := make([]section.RowData, 0, len(repos))
 	for _, r := range repos {
@@ -210,6 +212,7 @@ func (m *Model) ResetRows() {
 	m.list.SetRows(nil)
 	m.loaded = false
 	m.isLoading = false
+	m.allTrending = nil
 }
 
 func formatStarCount(n int) string {
@@ -217,6 +220,58 @@ func formatStarCount(n int) string {
 		return fmt.Sprintf("%.1fk", float64(n)/1000)
 	}
 	return strconv.Itoa(n)
+}
+
+func (m *Model) FilterRows(query string) {
+	if query == "" {
+		if m.allTrending != nil {
+			listRows := m.buildRows(m.allTrending)
+			m.list.SetRows(listRows)
+		}
+		return
+	}
+	filtered := make([]*discovery.TrendingRepo, 0)
+	for _, r := range m.allTrending {
+		if containsFold(r.FullName, query) || containsFold(r.Description, query) {
+			filtered = append(filtered, r)
+		}
+	}
+	listRows := m.buildRows(filtered)
+	m.list.SetRows(listRows)
+}
+
+func (m *Model) SupportsSearch() bool { return false }
+
+func (m *Model) SupportsFilter() bool { return true }
+
+func containsFold(s, substr string) bool {
+	if len(substr) == 0 {
+		return false
+	}
+	if len(s) < len(substr) {
+		return false
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		match := true
+		for j := 0; j < len(substr); j++ {
+			sc := s[i+j]
+			ss := substr[j]
+			if sc >= 'A' && sc <= 'Z' {
+				sc += 32
+			}
+			if ss >= 'A' && ss <= 'Z' {
+				ss += 32
+			}
+			if sc != ss {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 func StringPeriod(s string) string {
