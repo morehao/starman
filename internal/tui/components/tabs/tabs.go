@@ -110,8 +110,10 @@ func (m Model) View() string {
 		return viewRow
 	}
 
+	separatorStyle := lipgloss.NewStyle().Foreground(theme.FaintBorder).Width(m.ctx.ScreenWidth)
 	sectionRow := m.renderSectionTabs()
-	return lipgloss.JoinVertical(lipgloss.Top, viewRow, sectionRow)
+	separator := separatorStyle.Render(strings.Repeat("─", m.ctx.ScreenWidth))
+	return lipgloss.JoinVertical(lipgloss.Top, viewRow, separator, sectionRow)
 }
 
 func (m Model) renderSectionTabs() string {
