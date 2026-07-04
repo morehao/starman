@@ -41,7 +41,7 @@ func TestFooterVisibleAfterManyKeyPresses(t *testing.T) {
 				out := m.View().Content
 				total := lines(out)
 				ls := strings.Split(out, "\n")
-				hasFooter := strings.Contains(ls[total-1], "Stars")
+				hasFooter := strings.Contains(ls[total-1], "j/k move")
 
 				if total != h {
 					t.Errorf("j press %d: total=%d expected=%d", i, total, h)
@@ -59,7 +59,7 @@ func TestFooterVisibleAfterManyKeyPresses(t *testing.T) {
 				out := m.View().Content
 				total := lines(out)
 				ls := strings.Split(out, "\n")
-				hasFooter := strings.Contains(ls[total-1], "Stars")
+				hasFooter := strings.Contains(ls[total-1], "j/k move")
 
 				if total != h {
 					t.Errorf("k press %d: total=%d expected=%d", i, total, h)
@@ -107,7 +107,7 @@ func TestFooterVisibleWithActiveSpinner(t *testing.T) {
 		out := m.View().Content
 		total := lines(out)
 		ls := strings.Split(out, "\n")
-		hasFooter := strings.Contains(ls[total-1], "Stars")
+		hasFooter := strings.Contains(ls[total-1], "j/k move")
 
 		if total != 40 {
 			t.Errorf("step %d: total=%d expected=40", i, total)
@@ -155,7 +155,7 @@ func TestFooterVisibleWithDiverseRepos(t *testing.T) {
 		out := m.View().Content
 		total := lines(out)
 		ls := strings.Split(out, "\n")
-		hasFooter := strings.Contains(ls[total-1], "Stars")
+		hasFooter := strings.Contains(ls[total-1], "j/k move")
 
 		if total != 40 {
 			t.Errorf("j press %d: total=%d expected=40, repo=%s", i, total, repos[i].FullName)
@@ -193,7 +193,7 @@ func TestFooterVisibleWhenSwitchingSidebarTabs(t *testing.T) {
 		out := m.View().Content
 		total := lines(out)
 		ls := strings.Split(out, "\n")
-		hasFooter := strings.Contains(ls[total-1], "Stars")
+		hasFooter := strings.Contains(ls[total-1], "j/k move")
 
 		if total != 40 {
 			t.Errorf("after '%s': total=%d expected=40", key, total)
