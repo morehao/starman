@@ -12,7 +12,7 @@ import (
 
 var defaultColumns = []listviewport.Column{
 	{Title: "ID", Width: 16},
-	{Title: "Name", Width: 14},
+	{Title: "Name", Width: 14, Flex: true},
 	{Title: "Keywords", Width: 22},
 	{Title: "Repos", Width: 6},
 	{Title: "Sort", Width: 5},

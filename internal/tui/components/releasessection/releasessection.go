@@ -16,7 +16,7 @@ const ShowUnread = "unread"
 const ShowAll = "all"
 
 var defaultColumns = []listviewport.Column{
-	{Title: "repo", Width: 35},
+	{Title: "repo", Width: 35, Flex: true},
 	{Title: "version", Width: 16},
 	{Title: "date", Width: 12},
 	{Title: "status", Width: 7},

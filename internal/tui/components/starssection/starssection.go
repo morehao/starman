@@ -21,7 +21,7 @@ const (
 )
 
 var defaultColumns = []listviewport.Column{
-	{Title: "repo", Width: 40},
+	{Title: "repo", Width: 40, Flex: true},
 	{Title: "stars", Width: 7},
 	{Title: "lang", Width: 12},
 	{Title: "cat", Width: 12},
