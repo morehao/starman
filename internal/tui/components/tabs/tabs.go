@@ -9,9 +9,11 @@ import (
 )
 
 type Model struct {
-	ctx    *context.ProgramContext
-	titles []string
-	active int
+	ctx           *context.ProgramContext
+	titles        []string
+	sectionTabs   []string
+	active        int
+	activeSection int
 }
 
 func NewModel(ctx *context.ProgramContext) Model {
@@ -24,6 +26,36 @@ func (m *Model) SetTitles(titles []string) {
 
 func (m *Model) SetActive(active int) {
 	m.active = active
+}
+
+func (m *Model) SetSectionTabs(tabs []string) {
+	m.sectionTabs = tabs
+}
+
+func (m *Model) SetActiveSection(idx int) {
+	if idx >= 0 && idx < len(m.sectionTabs) {
+		m.activeSection = idx
+	}
+}
+
+func (m *Model) NextSection() bool {
+	if len(m.sectionTabs) == 0 {
+		return false
+	}
+	m.activeSection = (m.activeSection + 1) % len(m.sectionTabs)
+	return true
+}
+
+func (m *Model) PrevSection() bool {
+	if len(m.sectionTabs) == 0 {
+		return false
+	}
+	m.activeSection = (m.activeSection - 1 + len(m.sectionTabs)) % len(m.sectionTabs)
+	return true
+}
+
+func (m Model) ActiveSectionIndex() int {
+	return m.activeSection
 }
 
 func (m Model) View() string {
@@ -40,5 +72,29 @@ func (m Model) View() string {
 			titleParts = append(titleParts, faintStyle.Render(t))
 		}
 	}
-	return bgStyle.Render(strings.Join(titleParts, " | "))
+	viewRow := bgStyle.Render(strings.Join(titleParts, " | "))
+
+	if len(m.sectionTabs) == 0 {
+		return viewRow
+	}
+
+	sectionRow := m.renderSectionTabs()
+	return lipgloss.JoinVertical(lipgloss.Top, viewRow, sectionRow)
+}
+
+func (m Model) renderSectionTabs() string {
+	theme := m.ctx.Theme
+	activeStyle := lipgloss.NewStyle().Background(theme.SelectedBackground).Foreground(theme.PrimaryText)
+	faintStyle := lipgloss.NewStyle().Foreground(theme.FaintText)
+	rowStyle := lipgloss.NewStyle().Width(m.ctx.ScreenWidth)
+
+	var items []string
+	for i, t := range m.sectionTabs {
+		if i == m.activeSection {
+			items = append(items, activeStyle.Render(" "+t+" "))
+		} else {
+			items = append(items, faintStyle.Render(" "+t+" "))
+		}
+	}
+	return rowStyle.Render(strings.Join(items, "|"))
 }

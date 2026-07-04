@@ -9,6 +9,8 @@ type KeyMap struct {
 	LastLine      key.Binding
 	NextSection   key.Binding
 	PrevSection   key.Binding
+	NextGroup     key.Binding
+	PrevGroup     key.Binding
 	NextView      key.Binding
 	PrevView      key.Binding
 	ToggleSidebar key.Binding
@@ -24,6 +26,7 @@ type KeyMap struct {
 	ToggleStar    key.Binding
 	EditCategory  key.Binding
 	EditTag       key.Binding
+	Analyze       key.Binding
 }
 
 var Keys = KeyMap{
@@ -31,8 +34,10 @@ var Keys = KeyMap{
 	Down:          key.NewBinding(key.WithKeys("j", "down")),
 	FirstLine:     key.NewBinding(key.WithKeys("g")),
 	LastLine:      key.NewBinding(key.WithKeys("G")),
-	NextSection:   key.NewBinding(key.WithKeys("]", "l")),
-	PrevSection:   key.NewBinding(key.WithKeys("[", "h")),
+	NextSection:   key.NewBinding(key.WithKeys("l")),
+	PrevSection:   key.NewBinding(key.WithKeys("h")),
+	NextGroup:     key.NewBinding(key.WithKeys("]")),
+	PrevGroup:     key.NewBinding(key.WithKeys("[")),
 	NextView:      key.NewBinding(key.WithKeys("tab")),
 	PrevView:      key.NewBinding(key.WithKeys("shift+tab")),
 	ToggleSidebar: key.NewBinding(key.WithKeys("p")),
@@ -48,4 +53,5 @@ var Keys = KeyMap{
 	ToggleStar:    key.NewBinding(key.WithKeys("x")),
 	EditCategory:  key.NewBinding(key.WithKeys("c")),
 	EditTag:       key.NewBinding(key.WithKeys("t")),
+	Analyze:       key.NewBinding(key.WithKeys("a")),
 }

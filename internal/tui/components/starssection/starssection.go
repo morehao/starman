@@ -242,6 +242,13 @@ func groupReposBy(groupBy string, repos []*store.Repository) GroupedRepos {
 	}
 }
 
+func (m *Model) SetGroupBy(groupBy string) {
+	if m.groupBy != groupBy {
+		m.groupBy = groupBy
+		m.ResetRows()
+	}
+}
+
 func (m *Model) ResetRows() {
 	m.rows = nil
 	m.list.SetRows(nil)

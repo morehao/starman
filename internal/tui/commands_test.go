@@ -1,77 +1,154 @@
 package tui
 
 import (
+	"context"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/morehao/starman/internal/tui/components/drawer"
 )
 
-func TestParseCommandEmpty(t *testing.T) {
-	cmd := parseCommand("")
-	if cmd.Name != "" {
-		t.Fatalf("expected empty name, got %q", cmd.Name)
+type fakeRunner struct{ stdout, stderr string; err error }
+
+func (r *fakeRunner) Run(_ context.Context, _ string) (string, string, error) {
+	return r.stdout, r.stderr, r.err
+}
+
+func TestHandleCommandMode_EnterExecutesCommand(t *testing.T) {
+	run := &fakeRunner{stdout: "ok"}
+	m := &Model{
+		mode:        modeCommand,
+		searchQuery: "sync --full",
+		runner:      run,
+		tasks:       newTasksHolder(),
+	}
+	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
+	if cmd == nil {
+		t.Fatal("expected a command")
+	}
+	msg := cmd()
+	if _, ok := msg.(TaskFinishedMsg); !ok {
+		t.Fatalf("expected TaskFinishedMsg, got %T", msg)
+	}
+	if m.mode != modeNormal {
+		t.Fatal("mode should be normal after enter")
+	}
+	if m.searchQuery != "" {
+		t.Fatal("searchQuery should be cleared")
 	}
 }
 
-func TestParseCommandSimple(t *testing.T) {
-	cmd := parseCommand("sync")
-	if cmd.Name != "sync" {
-		t.Fatalf("expected sync, got %q", cmd.Name)
+func TestHandleCommandMode_EscExitsCommandMode(t *testing.T) {
+	m := &Model{
+		mode:        modeCommand,
+		searchQuery: "test",
+	}
+	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 27})
+	if cmd != nil {
+		t.Fatal("expected nil command")
+	}
+	if m.mode != modeNormal {
+		t.Fatal("mode should be normal after esc")
+	}
+	if m.searchQuery != "" {
+		t.Fatal("searchQuery should be cleared")
 	}
 }
 
-func TestParseCommandWithArgs(t *testing.T) {
-	cmd := parseCommand("sync --full --limit=50")
-	if cmd.Name != "sync" {
-		t.Fatalf("expected sync, got %q", cmd.Name)
+func TestHandleCommandMode_QuitViaColonQ(t *testing.T) {
+	m := &Model{
+		mode:        modeCommand,
+		searchQuery: "q",
+		runner:      &fakeRunner{},
+		tasks:       newTasksHolder(),
 	}
-	if cmd.Flags["full"] != "true" {
-		t.Fatalf("expected full=true, got %q", cmd.Flags["full"])
+	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
+	if cmd == nil {
+		t.Fatal("expected quit command")
 	}
-	if cmd.Flags["limit"] != "50" {
-		t.Fatalf("expected limit=50, got %q", cmd.Flags["limit"])
-	}
-}
-
-func TestParseCommandWithPositionalArgs(t *testing.T) {
-	cmd := parseCommand("tag owner/repo +awesome")
-	if cmd.Name != "tag" {
-		t.Fatalf("expected tag, got %q", cmd.Name)
-	}
-	if len(cmd.Args) != 2 {
-		t.Fatalf("expected 2 args, got %d", len(cmd.Args))
-	}
-	if cmd.Args[0] != "owner/repo" {
-		t.Fatalf("expected owner/repo, got %q", cmd.Args[0])
-	}
-	if cmd.Args[1] != "+awesome" {
-		t.Fatalf("expected +awesome, got %q", cmd.Args[1])
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Fatalf("expected QuitMsg, got %T", msg)
 	}
 }
 
-func TestParseCommandQuit(t *testing.T) {
-	for _, q := range []string{"q", "quit"} {
-		cmd := parseCommand(q)
-		if cmd.Name != q {
-			t.Fatalf("expected %q, got %q", q, cmd.Name)
-		}
+func TestHandleCommandMode_HelpTogglesHelp(t *testing.T) {
+	m := &Model{
+		mode:        modeCommand,
+		searchQuery: "help",
+		runner:      &fakeRunner{},
+		tasks:       newTasksHolder(),
+	}
+	m.showHelp = false
+	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
+	if cmd != nil {
+		t.Fatalf("expected nil command for help toggle, got %v", cmd)
+	}
+	if !m.showHelp {
+		t.Fatal("showHelp should be toggled on")
 	}
 }
 
-func TestParseCommandSyncFull(t *testing.T) {
-	cmd := parseCommand("sync --full")
-	if cmd.Name != "sync" {
-		t.Fatalf("expected sync, got %q", cmd.Name)
+func TestHandleCommandMode_BackspaceRemovesLastChar(t *testing.T) {
+	m := &Model{
+		mode:        modeCommand,
+		searchQuery: "sync",
 	}
-	if cmd.Flags["full"] != "true" {
-		t.Fatalf("expected full=true, got %q", cmd.Flags["full"])
+	m.handleCommandMode(tea.KeyPressMsg{Code: 127})
+	if m.searchQuery != "syn" {
+		t.Fatalf("expected 'syn', got %q", m.searchQuery)
 	}
 }
 
-func TestParseCommandSyncFullWithMore(t *testing.T) {
-	cmd := parseCommand("sync --full --limit 50")
-	if cmd.Flags["full"] != "true" {
-		t.Fatalf("expected full=true, got %q", cmd.Flags["full"])
+func TestHandleCommandMode_EmptyCommandDoesNothing(t *testing.T) {
+	m := &Model{
+		mode:        modeCommand,
+		searchQuery: "",
+		runner:      &fakeRunner{},
+		tasks:       newTasksHolder(),
 	}
-	if len(cmd.Args) != 1 || cmd.Args[0] != "50" {
-		t.Fatalf("expected arg 50, got %v", cmd.Args)
+	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
+	if cmd != nil {
+		t.Fatal("expected nil command for empty input")
+	}
+}
+
+func TestExecuteCommandWithRunner(t *testing.T) {
+	run := &fakeRunner{stdout: "hi"}
+	m := &Model{
+		tasks:  newTasksHolder(),
+		runner: run,
+		drawer: drawer.NewModel(),
+	}
+	cmd := m.executeCommand("test", "testing")
+	if cmd == nil {
+		t.Fatal("expected a command")
+	}
+	msg := cmd()
+	tm, ok := msg.(TaskFinishedMsg)
+	if !ok {
+		t.Fatalf("expected TaskFinishedMsg, got %T", msg)
+	}
+	if tm.Message != "testing done" {
+		t.Fatalf("expected 'testing done', got %q", tm.Message)
+	}
+}
+
+func TestExecuteCommandWithRunner_Error(t *testing.T) {
+	run := &fakeRunner{err: &testError{msg: "boom"}, stderr: "details"}
+	m := &Model{
+		tasks:  newTasksHolder(),
+		runner: run,
+		drawer: drawer.NewModel(),
+	}
+	cmd := m.executeCommand("test", "testing")
+	msg := cmd()
+	tm, ok := msg.(TaskFinishedMsg)
+	if !ok {
+		t.Fatalf("expected TaskFinishedMsg, got %T", msg)
+	}
+	if tm.Err == nil {
+		t.Fatal("expected error")
 	}
 }

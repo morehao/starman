@@ -11,8 +11,6 @@ import (
 	"charm.land/lipgloss/v2"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/morehao/starman/internal/config"
-	"github.com/morehao/starman/internal/github"
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/common"
 	"github.com/morehao/starman/internal/tui/components/drawer"
@@ -67,6 +65,8 @@ type Model struct {
 
 	errorMsg   string
 	errorTimer *time.Timer
+
+	promptAction string
 }
 
 func NewModel(ctx *tuicontext.ProgramContext) Model {
@@ -80,6 +80,8 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 	trendingModel := trendingsection.NewModel(2, ctx, section.SectionConfig{Title: "Trending"}, trendingsection.PeriodDaily)
 	releasesModel := releasessection.NewModel(3, ctx, section.SectionConfig{Title: "Releases"}, releasessection.ShowUnread)
 	statsModel := statssection.NewModel(4, ctx, section.SectionConfig{Title: "Stats"})
+
+	tabModel.SetSectionTabs([]string{"\U0001F50D Search", "All", "Language", "Category", "Tag"})
 
 	m := Model{
 		ctx:         ctx,
@@ -105,10 +107,13 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		m.currSection = m.stars
 	case tuicontext.TrendingView:
 		m.currSection = m.trending
+		m.tabs.SetSectionTabs(nil)
 	case tuicontext.ReleasesView:
 		m.currSection = m.releases
+		m.tabs.SetSectionTabs(nil)
 	case tuicontext.StatsView:
 		m.currSection = m.stats
+		m.tabs.SetSectionTabs(nil)
 		m.showSidebar = false
 	}
 	return m
@@ -248,25 +253,33 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 		return nil
 
 	case key.Matches(typed, m.keys.Sync):
-		return m.startSync()
+		return m.handleSyncKey()
 
 	case key.Matches(typed, m.keys.ToggleStar):
-		if m.ctx.View != tuicontext.StarsView {
-			return nil
-		}
-		return m.toggleStar()
+		return m.handleToggleStarKey()
 
 	case key.Matches(typed, m.keys.EditCategory):
-		if m.ctx.View != tuicontext.StarsView {
-			return nil
-		}
-		return m.startEditCategory()
+		return m.handleEditCategoryKey()
 
 	case key.Matches(typed, m.keys.EditTag):
-		if m.ctx.View != tuicontext.StarsView {
-			return nil
+		return m.handleEditTagKey()
+
+	case key.Matches(typed, m.keys.Analyze):
+		return m.handleAnalyzeKey()
+
+	case key.Matches(typed, m.keys.NextGroup):
+		if m.ctx.View == tuicontext.StarsView {
+			m.tabs.NextSection()
+			m.stars.SetGroupBy(sectionIndexToGroupBy(m.tabs.ActiveSectionIndex()))
 		}
-		return m.startEditTag()
+		return nil
+
+	case key.Matches(typed, m.keys.PrevGroup):
+		if m.ctx.View == tuicontext.StarsView {
+			m.tabs.PrevSection()
+			m.stars.SetGroupBy(sectionIndexToGroupBy(m.tabs.ActiveSectionIndex()))
+		}
+		return nil
 
 	case key.Matches(typed, m.keys.NextView):
 		m.switchView(1)
@@ -308,6 +321,95 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+func (m *Model) handleSyncKey() tea.Cmd {
+	m.promptAction = "sync"
+	m.prompt = prompt.NewConfirmModel("Run full sync? (y=--full, n=quick)")
+	m.mode = modePrompt
+	return nil
+}
+
+func (m *Model) handleToggleStarKey() tea.Cmd {
+	if m.ctx.View != tuicontext.StarsView {
+		return nil
+	}
+	repoName := m.repoNameFromRow()
+	if repoName == "" {
+		return nil
+	}
+	row := m.currSection.CurrRow()
+	repoRow, ok := row.(starssection.RepoRow)
+	if !ok || repoRow.Repo == nil {
+		return nil
+	}
+	if repoRow.Repo.StarredAt != "" {
+		return m.executeCommand(fmt.Sprintf("unstar %s", repoName), "unstarring...")
+	}
+	return m.executeCommand(fmt.Sprintf("star %s", repoName), "starring...")
+}
+
+func (m *Model) handleEditCategoryKey() tea.Cmd {
+	if m.ctx.View != tuicontext.StarsView {
+		return nil
+	}
+	ctx := context.Background()
+	cats, err := m.ctx.Store.ListCategories(ctx, true)
+	if err != nil {
+		m.setError("Failed to list categories: " + err.Error())
+		return nil
+	}
+	names := make([]string, len(cats))
+	for i, c := range cats {
+		names[i] = c.Name
+	}
+	currentCat := ""
+	row := m.currSection.CurrRow()
+	if repoRow, ok := row.(starssection.RepoRow); ok && repoRow.Repo != nil {
+		cat := repoRow.Repo.CustomCategory
+		if cat == "" {
+			cat = repoRow.Repo.AICategory
+		}
+		currentCat = cat
+	}
+	m.promptAction = "categorize"
+	m.prompt = prompt.NewCategorySelectModel("Select category", names, currentCat)
+	m.mode = modePrompt
+	return nil
+}
+
+func (m *Model) handleEditTagKey() tea.Cmd {
+	if m.ctx.View != tuicontext.StarsView {
+		return nil
+	}
+	row := m.currSection.CurrRow()
+	repoRow, ok := row.(starssection.RepoRow)
+	if !ok || repoRow.Repo == nil {
+		return nil
+	}
+	currentTags := ""
+	allTags := append([]string{}, repoRow.Repo.AITags...)
+	allTags = append(allTags, repoRow.Repo.CustomTags...)
+	currentTags = strings.Join(allTags, ",")
+	m.promptAction = "tag"
+	m.prompt = prompt.NewTagEditModel("Edit tags (+tag,-tag)", currentTags)
+	m.mode = modePrompt
+	return nil
+}
+
+func (m *Model) handleAnalyzeKey() tea.Cmd {
+	m.promptAction = "analyze"
+	m.prompt = prompt.NewConfirmModel("Analyze all repos? (y=--all, n=incremental)")
+	m.mode = modePrompt
+	return nil
+}
+
+func (m *Model) repoNameFromRow() string {
+	row := m.currSection.CurrRow()
+	if repoRow, ok := row.(starssection.RepoRow); ok && repoRow.Repo != nil {
+		return repoRow.Repo.FullName
+	}
+	return row.GetTitle()
+}
+
 func (m *Model) handleSearchMode(typed tea.KeyMsg) tea.Cmd {
 	updated, cmd := m.searchInput.Update(typed)
 	m.searchInput = updated.(searchinput.Model)
@@ -332,10 +434,20 @@ func (m *Model) handleCommandMode(typed tea.KeyMsg) tea.Cmd {
 		m.searchQuery = ""
 		return nil
 	case "enter":
-		cmd := parseCommand(m.searchQuery)
+		cmd := m.searchQuery
 		m.mode = modeNormal
 		m.searchQuery = ""
-		return m.executeCommand(cmd)
+		if cmd == "" {
+			return nil
+		}
+		if cmd == "q" || cmd == "quit" {
+			return tea.Quit
+		}
+		if cmd == "help" {
+			m.showHelp = !m.showHelp
+			return nil
+		}
+		return m.executeCommand(cmd, cmd)
 	case "backspace":
 		if len(m.searchQuery) > 0 {
 			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
@@ -370,13 +482,58 @@ func (m *Model) handlePromptMode(typed tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) handlePromptResult(result prompt.PromptResultMsg) tea.Cmd {
-	switch result.Type {
-	case prompt.PromptCategorySelect:
-		return m.finishEditCategoryWithValue(result.Value)
-	case prompt.PromptTagEdit:
-		return m.finishEditTagWithValue(result.Value)
+	switch m.promptAction {
+	case "sync":
+		if !result.Confirmed {
+			return nil
+		}
+		cmdStr := "sync"
+		if result.Confirmed {
+			cmdStr = "sync --full"
+		}
+		return m.executeCommand(cmdStr, "syncing...")
+	case "analyze":
+		if result.Confirmed {
+			return m.executeCommand("analyze --all", "analyzing all repos...")
+		}
+		return m.executeCommand("analyze", "analyzing repos...")
+	case "categorize":
+		if !result.Confirmed {
+			return nil
+		}
+		repoName := m.repoNameFromRow()
+		cmdStr := fmt.Sprintf("categorize %s %s", repoName, result.Value)
+		return m.executeCommand(cmdStr, "categorizing...")
+	case "tag":
+		if !result.Confirmed {
+			return nil
+		}
+		repoName := m.repoNameFromRow()
+		cmdStr := fmt.Sprintf("tag %s %s", repoName, result.Value)
+		return m.executeCommand(cmdStr, "tagging...")
 	}
 	return nil
+}
+
+func (m *Model) executeCommand(cmdStr, statusText string) tea.Cmd {
+	taskID := "cmd-" + time.Now().Format("150405")
+	m.tasks.start(taskID, statusText)
+	return func() tea.Msg {
+		stdout, stderr, err := m.runner.Run(context.Background(), cmdStr)
+		m.drawer.AddEntry(":"+cmdStr, stdout, stderr)
+		if err != nil {
+			return TaskFinishedMsg{TaskID: taskID, Message: statusText + " failed", Err: fmt.Errorf("%s: %s", err.Error(), stderr)}
+		}
+		return TaskFinishedMsg{TaskID: taskID, Message: statusText + " done"}
+	}
+}
+
+func sectionIndexToGroupBy(idx int) string {
+	groups := []string{"all", "all", "language", "category", "tag"}
+	if idx < 0 || idx >= len(groups) {
+		return "all"
+	}
+	return groups[idx]
 }
 
 func (m *Model) executeSearch(query string) tea.Cmd {
@@ -422,45 +579,6 @@ func convertSearchHitsToRepos(hits []jsonHit) []*store.Repository {
 	return repos
 }
 
-func (m *Model) startSync() tea.Cmd {
-	cfg := m.ctx.Config
-	if cfg == nil {
-		return nil
-	}
-	token := config.ResolveToken(cfg, "")
-	if token == "" || cfg.GitHub.Username == "" {
-		errMsg := "sync requires github token and username"
-		m.footer.SetTask(&footer.TaskInfo{
-			Status:  2,
-			Message: errMsg,
-		})
-		m.setError(errMsg)
-		return clearAfterDelay("sync-err")
-	}
-
-	taskID := "sync-" + time.Now().Format("150405")
-	m.tasks.start(taskID, "sync")
-
-	return tea.Batch(
-		func() tea.Msg { return TaskStartedMsg{TaskID: taskID, Name: "sync"} },
-		func() tea.Msg {
-			gh := github.New(token)
-			repos, err := gh.ListStarred(context.Background(), cfg.GitHub.Username)
-			if err != nil {
-				return TaskFinishedMsg{TaskID: taskID, Name: "sync", Message: "sync failed", Err: err}
-			}
-			if err := m.ctx.Store.UpsertReposOnSync(context.Background(), repos, false); err != nil {
-				return TaskFinishedMsg{TaskID: taskID, Name: "sync", Message: "sync failed", Err: err}
-			}
-			return TaskFinishedMsg{
-				TaskID:  taskID,
-				Name:    "sync",
-				Message: fmt.Sprintf("synced %d repos", len(repos)),
-			}
-		},
-	)
-}
-
 func (m *Model) buildTaskInfo() *footer.TaskInfo {
 	task := m.tasks.latest()
 	if task == nil {
@@ -502,12 +620,16 @@ func (m *Model) switchView(delta int) {
 	switch m.ctx.View {
 	case tuicontext.StarsView:
 		m.currSection = m.stars
+		m.tabs.SetSectionTabs([]string{"\U0001F50D Search", "All", "Language", "Category", "Tag"})
 	case tuicontext.TrendingView:
 		m.currSection = m.trending
+		m.tabs.SetSectionTabs(nil)
 	case tuicontext.ReleasesView:
 		m.currSection = m.releases
+		m.tabs.SetSectionTabs(nil)
 	case tuicontext.StatsView:
 		m.currSection = m.stats
+		m.tabs.SetSectionTabs(nil)
 		m.showSidebar = false
 		m.ctx.SidebarOpen = false
 		m.recalcLayout()
@@ -801,188 +923,6 @@ func (m Model) renderErrorBar() string {
 		Foreground(theme.ErrorText).
 		Bold(true).
 		Render("✖ "+m.errorMsg)
-}
-
-func (m *Model) toggleStar() tea.Cmd {
-	row := m.currSection.CurrRow()
-	repoRow, ok := row.(starssection.RepoRow)
-	if !ok || repoRow.Repo == nil {
-		return nil
-	}
-	repo := repoRow.Repo
-	parts := strings.SplitN(repo.FullName, "/", 2)
-	if len(parts) != 2 {
-		m.setError("invalid repo full name: " + repo.FullName)
-		return nil
-	}
-	cfg := m.ctx.Config
-	token := config.ResolveToken(cfg, "")
-	if token == "" {
-		m.setError("GitHub token required for starring")
-		return nil
-	}
-
-	taskID := "star-" + time.Now().Format("150405")
-	isStarred := repo.StarredAt != ""
-	action := "star"
-	if isStarred {
-		action = "unstar"
-	}
-	m.tasks.start(taskID, action+" "+repo.FullName)
-
-	return tea.Batch(
-		func() tea.Msg { return TaskStartedMsg{TaskID: taskID, Name: action + " " + repo.FullName} },
-		func() tea.Msg {
-			gh := github.New(token)
-			ctx := context.Background()
-			if isStarred {
-				if err := gh.Unstar(ctx, parts[0], parts[1]); err != nil {
-					return TaskFinishedMsg{TaskID: taskID, Name: action, Message: "unstar failed", Err: err}
-				}
-				repo.StarredAt = ""
-			} else {
-				if err := gh.Star(ctx, parts[0], parts[1]); err != nil {
-					return TaskFinishedMsg{TaskID: taskID, Name: action, Message: "star failed", Err: err}
-				}
-				repo.StarredAt = time.Now().Format(time.RFC3339)
-			}
-			_ = m.ctx.Store.UpsertRepository(ctx, repo)
-			return TaskFinishedMsg{
-				TaskID:  taskID,
-				Name:    action,
-				Message: fmt.Sprintf("%s %s", action, repo.FullName),
-			}
-		},
-	)
-}
-
-func (m *Model) startEditCategory() tea.Cmd {
-	ctx := context.Background()
-	cats, err := m.ctx.Store.ListCategories(ctx, true)
-	if err != nil {
-		m.setError("Failed to list categories: " + err.Error())
-		return nil
-	}
-	names := make([]string, len(cats))
-	for i, c := range cats {
-		names[i] = c.Name
-	}
-	currentCat := ""
-	row := m.currSection.CurrRow()
-	if repoRow, ok := row.(starssection.RepoRow); ok && repoRow.Repo != nil {
-		cat := repoRow.Repo.CustomCategory
-		if cat == "" {
-			cat = repoRow.Repo.AICategory
-		}
-		currentCat = cat
-	}
-	m.prompt = prompt.NewCategorySelectModel("Select category", names, currentCat)
-	m.mode = modePrompt
-	return nil
-}
-
-func (m *Model) finishEditCategoryWithValue(catName string) tea.Cmd {
-	if catName == "" {
-		return nil
-	}
-	cats, err := m.ctx.Store.ListCategories(context.Background(), true)
-	if err != nil {
-		m.setError("failed to list categories: " + err.Error())
-		return nil
-	}
-	var catID string
-	for _, c := range cats {
-		if c.Name == catName {
-			catID = c.ID
-			break
-		}
-	}
-	if catID == "" {
-		return nil
-	}
-
-	row := m.currSection.CurrRow()
-	repoRow, ok := row.(starssection.RepoRow)
-	if !ok || repoRow.Repo == nil {
-		return nil
-	}
-
-	taskID := "cat-" + time.Now().Format("150405")
-	m.tasks.start(taskID, "categorize "+repoRow.Repo.FullName)
-
-	return tea.Batch(
-		func() tea.Msg { return TaskStartedMsg{TaskID: taskID, Name: "categorize " + repoRow.Repo.FullName} },
-		func() tea.Msg {
-			if err := m.ctx.Store.UpdateCustomFields(context.Background(), repoRow.Repo.ID, &store.CustomFields{
-				Description:    repoRow.Repo.CustomDescription,
-				Tags:           repoRow.Repo.CustomTags,
-				Category:       catID,
-				CategoryLocked: repoRow.Repo.CategoryLocked,
-			}); err != nil {
-				return TaskFinishedMsg{TaskID: taskID, Name: "categorize", Message: "categorize failed", Err: err}
-			}
-			repoRow.Repo.CustomCategory = catID
-			return TaskFinishedMsg{
-				TaskID:  taskID,
-				Name:    "categorize",
-				Message: fmt.Sprintf("category set to %s for %s", catID, repoRow.Repo.FullName),
-			}
-		},
-	)
-}
-
-func (m *Model) startEditTag() tea.Cmd {
-	row := m.currSection.CurrRow()
-	repoRow, ok := row.(starssection.RepoRow)
-	if !ok || repoRow.Repo == nil {
-		return nil
-	}
-	currentTags := ""
-	allTags := append([]string{}, repoRow.Repo.AITags...)
-	allTags = append(allTags, repoRow.Repo.CustomTags...)
-	currentTags = strings.Join(allTags, ",")
-	m.prompt = prompt.NewTagEditModel("Edit tags (+tag,-tag)", currentTags)
-	m.mode = modePrompt
-	return nil
-}
-
-func (m *Model) finishEditTagWithValue(query string) tea.Cmd {
-	query = strings.TrimSpace(query)
-
-	row := m.currSection.CurrRow()
-	repoRow, ok := row.(starssection.RepoRow)
-	if !ok || repoRow.Repo == nil {
-		return nil
-	}
-
-	var addTags, removeTags []string
-	if query != "" {
-		addTags, removeTags = store.ParseTagExpr(query)
-	}
-	newTags := store.ApplyTags(repoRow.Repo.CustomTags, addTags, removeTags)
-
-	taskID := "tag-" + time.Now().Format("150405")
-	m.tasks.start(taskID, "tag "+repoRow.Repo.FullName)
-
-	return tea.Batch(
-		func() tea.Msg { return TaskStartedMsg{TaskID: taskID, Name: "tag " + repoRow.Repo.FullName} },
-		func() tea.Msg {
-			if err := m.ctx.Store.UpdateCustomFields(context.Background(), repoRow.Repo.ID, &store.CustomFields{
-				Description:    repoRow.Repo.CustomDescription,
-				Tags:           newTags,
-				Category:       repoRow.Repo.CustomCategory,
-				CategoryLocked: repoRow.Repo.CategoryLocked,
-			}); err != nil {
-				return TaskFinishedMsg{TaskID: taskID, Name: "tag", Message: "tag update failed", Err: err}
-			}
-			repoRow.Repo.CustomTags = newTags
-			return TaskFinishedMsg{
-				TaskID:  taskID,
-				Name:    "tag",
-				Message: fmt.Sprintf("tags updated for %s", repoRow.Repo.FullName),
-			}
-		},
-	)
 }
 
 
