@@ -17,6 +17,7 @@ import (
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/components/actionsmenu"
 	"github.com/morehao/starman/internal/tui/components/categoriessection"
+	"github.com/morehao/starman/internal/tui/components/commandmode"
 	"github.com/morehao/starman/internal/tui/components/drawer"
 	"github.com/morehao/starman/internal/tui/components/footer"
 	"github.com/morehao/starman/internal/tui/components/prompt"
@@ -63,10 +64,10 @@ type Model struct {
 	showSidebar bool
 	ready       bool
 
-	searchInput searchinput.Model
-	prompt      prompt.Model
-	mode        int
-	searchQuery string
+	searchInput  searchinput.Model
+	commandInput commandmode.Model
+	prompt       prompt.Model
+	mode         int
 
 	errorMsg   string
 	errorTimer *time.Timer
@@ -103,11 +104,13 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		tasks:       newTasksHolder(),
 		drawer:      drawer.NewModel(),
 		showSidebar: ctx.SidebarOpen,
-		searchInput: searchinput.NewModel(),
-		mode:        modeNormal,
+		searchInput:  searchinput.NewModel(),
+		commandInput: commandmode.NewModel(),
+		mode:         modeNormal,
 	}
 	m.drawer.SetTheme(ctx.Theme)
 	m.searchInput.SetTheme(ctx.Theme)
+	m.commandInput.SetTheme(ctx.Theme)
 
 	switch ctx.View {
 	case tuicontext.StarsView:
@@ -283,7 +286,25 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	case modeSearch:
 		return m.handleSearchMode(typed)
 	case modeCommand:
-		return m.handleCommandMode(typed)
+		updated, cmd := m.commandInput.Update(typed)
+		m.commandInput = updated.(commandmode.Model)
+		if cmd != nil {
+			msg := cmd()
+			if execMsg, ok := msg.(commandmode.CommandExecutedMsg); ok {
+				m.mode = modeNormal
+				if execMsg.Input == "" {
+					return nil
+				}
+				if execMsg.Input == "q" || execMsg.Input == "quit" {
+					return tea.Quit
+				}
+				return m.executeCommand(execMsg.Input, execMsg.Input)
+			}
+		}
+		if !m.commandInput.IsFocused() {
+			m.mode = modeNormal
+		}
+		return nil
 	case modePrompt:
 		return m.handlePromptMode(typed)
 	}
@@ -298,7 +319,7 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	case key.Matches(typed, m.ctx.Keys.Command):
 		if m.mode == modeNormal {
 			m.mode = modeCommand
-			m.searchQuery = ""
+			m.commandInput.SetFocused(true)
 		}
 		return nil
 
@@ -435,40 +456,6 @@ func (m *Model) handleSearchMode(typed tea.KeyMsg) tea.Cmd {
 	}
 	return nil
 }
-
-func (m *Model) handleCommandMode(typed tea.KeyMsg) tea.Cmd {
-	// TODO: Extract command mode to components/commandmode/ as an independent tea.Model
-	k := typed.Key()
-	switch k.String() {
-	case "esc":
-		m.mode = modeNormal
-		m.searchQuery = ""
-		return nil
-	case "enter":
-		cmd := m.searchQuery
-		m.mode = modeNormal
-		m.searchQuery = ""
-		if cmd == "" {
-			return nil
-		}
-		if cmd == "q" || cmd == "quit" {
-			return tea.Quit
-		}
-		return m.executeCommand(cmd, cmd)
-	case "backspace":
-		if len(m.searchQuery) > 0 {
-			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
-		}
-	default:
-		if k.Text != "" {
-			m.searchQuery += k.Text
-		} else if k.Code >= 32 && k.Code < 127 {
-			m.searchQuery += string(k.Code)
-		}
-	}
-	return nil
-}
-
 func (m *Model) handlePromptMode(typed tea.KeyMsg) tea.Cmd {
 	updated, cmd := m.prompt.Update(typed)
 	m.prompt = updated.(prompt.Model)
@@ -725,6 +712,7 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
 	m.ctx.ScreenHeight = msg.Height
 	m.ready = true
 	m.recalcLayout()
+	m.commandInput.SetTheme(m.ctx.Theme)
 }
 
 func (m *Model) recalcLayout() {
@@ -798,6 +786,14 @@ func (m Model) View() tea.View {
 		return v
 	}
 
+	if m.mode == modeCommand {
+		m.commandInput.SetSize(m.ctx.ScreenWidth, m.ctx.ScreenHeight)
+		v := m.commandInput.View()
+		v.AltScreen = true
+		v.MouseMode = tea.MouseModeCellMotion
+		return v
+	}
+
 	m.footer.SetPager(m.sectionPager())
 
 	theme := m.ctx.Theme
@@ -844,18 +840,9 @@ func (m Model) View() tea.View {
 
 	mainArea := lipgloss.JoinVertical(lipgloss.Left, tabsView, content)
 
-	searchLine := ""
-	switch m.mode {
-	case modeCommand:
-		searchLine = m.renderInputLine(":", m.searchQuery)
-	}
-
 	footerView := m.footer.View()
 
 	extraLines := 1
-	if searchLine != "" {
-		extraLines++
-	}
 	if m.errorMsg != "" {
 		extraLines++
 	}
@@ -865,27 +852,13 @@ func (m Model) View() tea.View {
 	}
 	adjustedMainArea, _ := truncateLines(mainArea, fittingLines)
 
-	contentOutput := adjustedMainArea + searchLine + m.renderErrorBar()
+	contentOutput := adjustedMainArea + m.renderErrorBar()
 
 	v := tea.NewView(contentOutput + "\n" + footerView)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
-
-func (m Model) renderInputLine(prompt, query string) string {
-	theme := m.ctx.Theme
-	promptStyle := lipgloss.NewStyle().
-		Foreground(theme.WarningText).
-		Bold(true)
-	inputStyle := lipgloss.NewStyle().
-		Foreground(theme.PrimaryText)
-	cursorStyle := lipgloss.NewStyle().
-		Foreground(theme.SuccessText)
-
-	return "\n" + promptStyle.Render(prompt) + inputStyle.Render(query) + cursorStyle.Render("▎")
-}
-
 func (m Model) sectionView() string {
 	view := m.currSection.View()
 	if strings.TrimSpace(view) == "" {

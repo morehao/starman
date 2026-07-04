@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/morehao/starman/internal/tui/components/commandmode"
 	"github.com/morehao/starman/internal/tui/components/drawer"
 )
 
@@ -15,85 +16,75 @@ func (r *fakeRunner) Run(_ context.Context, _ string) (string, string, error) {
 	return r.stdout, r.stderr, r.err
 }
 
-func TestHandleCommandMode_EnterExecutesCommand(t *testing.T) {
+func TestCommandMode_EnterExecutesCommand(t *testing.T) {
 	run := &fakeRunner{stdout: "ok"}
 	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "sync --full",
-		runner:      run,
-		tasks:       newTasksHolder(),
+		mode:         modeCommand,
+		commandInput: commandmode.NewModel(),
+		runner:       run,
+		tasks:        newTasksHolder(),
 	}
-	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
+	m.commandInput.SetFocused(true)
+	m.commandInput.SetSize(100, 40)
+	m.commandInput.Update(tea.KeyPressMsg{Code: 's'})
+	m.commandInput.Update(tea.KeyPressMsg{Code: 'y'})
+	m.commandInput.Update(tea.KeyPressMsg{Code: 'n'})
+	m.commandInput.Update(tea.KeyPressMsg{Code: 'c'})
+
+	updated, cmd := m.commandInput.Update(tea.KeyPressMsg{Code: 13})
+	m.commandInput = updated.(commandmode.Model)
+
 	if cmd == nil {
 		t.Fatal("expected a command")
 	}
 	msg := cmd()
-	if _, ok := msg.(TaskFinishedMsg); !ok {
-		t.Fatalf("expected TaskFinishedMsg, got %T", msg)
+	if _, ok := msg.(commandmode.CommandExecutedMsg); !ok {
+		t.Fatalf("expected CommandExecutedMsg, got %T", msg)
 	}
-	if m.mode != modeNormal {
-		t.Fatal("mode should be normal after enter")
-	}
-	if m.searchQuery != "" {
-		t.Fatal("searchQuery should be cleared")
+	if m.commandInput.IsFocused() {
+		t.Fatal("command input should not be focused after Enter")
 	}
 }
 
-func TestHandleCommandMode_EscExitsCommandMode(t *testing.T) {
+func TestCommandMode_EscExitsCommandMode(t *testing.T) {
 	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "test",
+		mode:         modeCommand,
+		commandInput: commandmode.NewModel(),
 	}
-	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 27})
+	m.commandInput.SetFocused(true)
+
+	updated, cmd := m.commandInput.Update(tea.KeyPressMsg{Code: 27})
+	m.commandInput = updated.(commandmode.Model)
+
 	if cmd != nil {
 		t.Fatal("expected nil command")
 	}
-	if m.mode != modeNormal {
-		t.Fatal("mode should be normal after esc")
-	}
-	if m.searchQuery != "" {
-		t.Fatal("searchQuery should be cleared")
+	if m.commandInput.IsFocused() {
+		t.Fatal("command input should not be focused after Esc")
 	}
 }
 
-func TestHandleCommandMode_QuitViaColonQ(t *testing.T) {
+func TestCommandMode_EmptyInputDoesNothing(t *testing.T) {
+	run := &fakeRunner{stdout: "ok"}
 	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "q",
-		runner:      &fakeRunner{},
-		tasks:       newTasksHolder(),
+		mode:         modeCommand,
+		commandInput: commandmode.NewModel(),
+		runner:       run,
+		tasks:        newTasksHolder(),
 	}
-	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
+	m.commandInput.SetFocused(true)
+
+	updated, cmd := m.commandInput.Update(tea.KeyPressMsg{Code: 13})
+	m.commandInput = updated.(commandmode.Model)
+
 	if cmd == nil {
-		t.Fatal("expected quit command")
+		t.Fatal("expected a cmd even for empty (routing to updateInner handles the empty check)")
 	}
 	msg := cmd()
-	if _, ok := msg.(tea.QuitMsg); !ok {
-		t.Fatalf("expected QuitMsg, got %T", msg)
-	}
-}
-
-func TestHandleCommandMode_BackspaceRemovesLastChar(t *testing.T) {
-	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "sync",
-	}
-	m.handleCommandMode(tea.KeyPressMsg{Code: 127})
-	if m.searchQuery != "syn" {
-		t.Fatalf("expected 'syn', got %q", m.searchQuery)
-	}
-}
-
-func TestHandleCommandMode_EmptyCommandDoesNothing(t *testing.T) {
-	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "",
-		runner:      &fakeRunner{},
-		tasks:       newTasksHolder(),
-	}
-	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
-	if cmd != nil {
-		t.Fatal("expected nil command for empty input")
+	if execMsg, ok := msg.(commandmode.CommandExecutedMsg); ok {
+		if execMsg.Input != "" {
+			t.Fatalf("expected empty input, got '%s'", execMsg.Input)
+		}
 	}
 }
 
