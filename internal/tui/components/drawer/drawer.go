@@ -36,6 +36,10 @@ func NewModel() Model {
 	}
 }
 
+func (m *Model) SetTheme(th theme.Theme) {
+	m.th = th
+}
+
 func (m *Model) AddEntry(command, stdout, stderr string) {
 	m.entries = append(m.entries, entry{
 		timestamp: time.Now(),

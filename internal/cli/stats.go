@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -39,9 +38,9 @@ func newStatsCmd() *cobra.Command {
 				items = items[:top]
 			}
 			if jsonOut {
-				return outputStatsJSON(items)
+				return outputStatsJSON(cmd, items)
 			}
-			outputStatsTable(items, by)
+			outputStatsTable(cmd, items, by)
 			return nil
 		},
 	}
@@ -106,19 +105,19 @@ func aggregateStats(repos []*store.Repository, by string) []StatItem {
 	return items
 }
 
-func outputStatsTable(items []StatItem, by string) {
+func outputStatsTable(cmd *cobra.Command, items []StatItem, by string) {
 	header := strings.ToUpper(by)
-	fmt.Fprintf(os.Stdout, "%-30s %s\n", header, "COUNT")
+	fmt.Fprintf(cmd.OutOrStdout(), "%-30s %s\n", header, "COUNT")
 	for _, item := range items {
-		fmt.Fprintf(os.Stdout, "%-30s %d\n", item.Name, item.Count)
+		fmt.Fprintf(cmd.OutOrStdout(), "%-30s %d\n", item.Name, item.Count)
 	}
 }
 
-func outputStatsJSON(items []StatItem) error {
+func outputStatsJSON(cmd *cobra.Command, items []StatItem) error {
 	data, err := json.MarshalIndent(items, "", "  ")
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stdout, string(data))
+	fmt.Fprintln(cmd.OutOrStdout(), string(data))
 	return nil
 }

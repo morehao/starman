@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -97,6 +98,8 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		searchInput: searchinput.NewModel(),
 		mode:        modeNormal,
 	}
+	m.drawer.SetTheme(ctx.Theme)
+	m.searchInput.SetTheme(ctx.Theme)
 
 	switch ctx.View {
 	case tuicontext.StarsView:
@@ -128,6 +131,14 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	updatedDrawer, drawerCmd := m.drawer.Update(msg)
+	m.drawer = updatedDrawer.(drawer.Model)
+
+	model, cmd := m.updateInner(msg)
+	return model, maybeBatch(drawerCmd, cmd)
+}
+
+func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch typed := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.handleWindowSize(typed)
@@ -356,6 +367,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 func (m *Model) handleSyncKey() tea.Cmd {
 	m.promptAction = "sync"
 	m.prompt = prompt.NewConfirmModel("Run full sync? (y=--full, n=quick)")
+	m.prompt.SetTheme(m.ctx.Theme)
 	m.mode = modePrompt
 	return nil
 }
@@ -404,6 +416,7 @@ func (m *Model) handleEditCategoryKey() tea.Cmd {
 	}
 	m.promptAction = "categorize"
 	m.prompt = prompt.NewCategorySelectModel("Select category", names, currentCat)
+	m.prompt.SetTheme(m.ctx.Theme)
 	m.mode = modePrompt
 	return nil
 }
@@ -423,6 +436,7 @@ func (m *Model) handleEditTagKey() tea.Cmd {
 	currentTags = strings.Join(allTags, ",")
 	m.promptAction = "tag"
 	m.prompt = prompt.NewTagEditModel("Edit tags (+tag,-tag)", currentTags)
+	m.prompt.SetTheme(m.ctx.Theme)
 	m.mode = modePrompt
 	return nil
 }
@@ -430,6 +444,7 @@ func (m *Model) handleEditTagKey() tea.Cmd {
 func (m *Model) handleAnalyzeKey() tea.Cmd {
 	m.promptAction = "analyze"
 	m.prompt = prompt.NewConfirmModel("Analyze all repos? (y=--all, n=incremental)")
+	m.prompt.SetTheme(m.ctx.Theme)
 	m.mode = modePrompt
 	return nil
 }
@@ -459,6 +474,7 @@ func (m *Model) handleSearchMode(typed tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) handleCommandMode(typed tea.KeyMsg) tea.Cmd {
+	// TODO: Extract command mode to components/commandmode/ as an independent tea.Model
 	k := typed.Key()
 	switch k.String() {
 	case "esc":
@@ -552,6 +568,12 @@ func (m *Model) executeCommand(cmdStr, statusText string) tea.Cmd {
 	m.tasks.start(taskID, statusText)
 	return func() tea.Msg {
 		stdout, stderr, err := m.runner.Run(context.Background(), cmdStr)
+		if errors.Is(err, ErrInteractiveRequired) {
+			return TaskFinishedMsg{TaskID: taskID, Message: statusText, Err: fmt.Errorf("interactive commands must be run from CLI")}
+		}
+		if errors.Is(err, ErrBlockingRequired) {
+			return TaskFinishedMsg{TaskID: taskID, Message: statusText, Err: fmt.Errorf("blocking commands must be run from CLI")}
+		}
 		m.drawer.AddEntry(":"+cmdStr, stdout, stderr)
 		if err != nil {
 			return TaskFinishedMsg{TaskID: taskID, Message: statusText + " failed", Err: fmt.Errorf("%s: %s", err.Error(), stderr)}
@@ -958,6 +980,22 @@ func (m Model) renderErrorBar() string {
 		Foreground(theme.ErrorText).
 		Bold(true).
 		Render("✖ "+m.errorMsg)
+}
+
+func maybeBatch(cmds ...tea.Cmd) tea.Cmd {
+	var nonNil []tea.Cmd
+	for _, c := range cmds {
+		if c != nil {
+			nonNil = append(nonNil, c)
+		}
+	}
+	if len(nonNil) == 0 {
+		return nil
+	}
+	if len(nonNil) == 1 {
+		return nonNil[0]
+	}
+	return tea.Batch(nonNil...)
 }
 
 

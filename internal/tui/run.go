@@ -2,12 +2,18 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/morehao/starman/internal/config"
 	"github.com/morehao/starman/internal/store"
 	tuicontext "github.com/morehao/starman/internal/tui/context"
+)
+
+var (
+	ErrInteractiveRequired = errors.New("interactive required")
+	ErrBlockingRequired    = errors.New("blocking required")
 )
 
 type CommandRunner interface {

@@ -13,12 +13,15 @@ type SearchExecutedMsg struct {
 type Model struct {
 	query   string
 	focused bool
-	th      *theme.Theme
+	th      theme.Theme
 }
 
 func NewModel() Model {
-	t := theme.DefaultTheme()
-	return Model{th: &t}
+	return Model{th: theme.DefaultTheme()}
+}
+
+func (m *Model) SetTheme(th theme.Theme) {
+	m.th = th
 }
 
 func (m Model) Init() tea.Cmd { return nil }

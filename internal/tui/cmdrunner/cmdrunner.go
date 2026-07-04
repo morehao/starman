@@ -3,15 +3,15 @@ package cmdrunner
 import (
 	"bytes"
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/morehao/starman/internal/cli"
+	"github.com/morehao/starman/internal/tui"
 )
 
 var (
-	ErrInteractiveRequired = errors.New("interactive required")
-	ErrBlockingRequired    = errors.New("blocking required")
+	ErrInteractiveRequired = tui.ErrInteractiveRequired
+	ErrBlockingRequired    = tui.ErrBlockingRequired
 )
 
 type Runner struct {
@@ -29,13 +29,13 @@ func (r *Runner) Run(ctx context.Context, input string) (stdout, stderr string, 
 	}
 
 	if len(args) >= 2 && args[0] == "config" && args[1] == "init" {
-		return "", "", ErrInteractiveRequired
+		return "", "", tui.ErrInteractiveRequired
 	}
 
 	if args[0] == "sync" {
 		for _, a := range args[1:] {
 			if a == "--watch" || strings.HasPrefix(a, "--watch=") {
-				return "", "", ErrBlockingRequired
+				return "", "", tui.ErrBlockingRequired
 			}
 		}
 	}

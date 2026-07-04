@@ -34,7 +34,7 @@ type Model struct {
 }
 
 func NewConfirmModel(title string) Model {
-	return Model{ptype: PromptConfirm, title: title, active: true, th: theme.DefaultTheme()}
+	return Model{ptype: PromptConfirm, title: title, active: true}
 }
 
 func NewCategorySelectModel(title string, categories []string, current string) Model {
@@ -51,12 +51,15 @@ func NewCategorySelectModel(title string, categories []string, current string) M
 		options: categories,
 		cursor:  cursor,
 		active:  true,
-		th:      theme.DefaultTheme(),
 	}
 }
 
 func NewTagEditModel(title string, current string) Model {
-	return Model{ptype: PromptTagEdit, title: title, input: current, active: true, th: theme.DefaultTheme()}
+	return Model{ptype: PromptTagEdit, title: title, input: current, active: true}
+}
+
+func (m *Model) SetTheme(th theme.Theme) {
+	m.th = th
 }
 
 func (m Model) IsFocused() bool { return m.active }
