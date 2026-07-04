@@ -20,7 +20,6 @@ type KeyMap struct {
 	ToggleSidebar key.Binding
 	Quit          key.Binding
 	Help          key.Binding
-	OpenGithub    key.Binding
 	Refresh       key.Binding
 	Sync          key.Binding
 	Search        key.Binding
@@ -49,7 +48,6 @@ func DefaultKeyMap() KeyMap {
 		ToggleSidebar: key.NewBinding(key.WithKeys("p")),
 		Quit:          key.NewBinding(key.WithKeys("q")),
 		Help:          key.NewBinding(key.WithKeys("?")),
-		OpenGithub:    key.NewBinding(key.WithKeys("o")),
 		Refresh:       key.NewBinding(key.WithKeys("r")),
 		Sync:          key.NewBinding(key.WithKeys("s")),
 		Search:        key.NewBinding(key.WithKeys("/")),
@@ -60,7 +58,7 @@ func DefaultKeyMap() KeyMap {
 		EditCategory:  key.NewBinding(key.WithKeys("c")),
 		EditTag:       key.NewBinding(key.WithKeys("t")),
 		Analyze:       key.NewBinding(key.WithKeys("a")),
-		ActionsMenu:   key.NewBinding(key.WithKeys("o")),
+		ActionsMenu:   key.NewBinding(key.WithKeys("m")),
 	}
 }
 
