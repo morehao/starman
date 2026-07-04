@@ -131,8 +131,14 @@ func TestExecuteCommandWithRunner(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected TaskFinishedMsg, got %T", msg)
 	}
-	if tm.Message != "testing done" {
-		t.Fatalf("expected 'testing done', got %q", tm.Message)
+	if tm.Name != "testing" {
+		t.Fatalf("expected Name 'testing', got %q", tm.Name)
+	}
+	if tm.Message != "hi" {
+		t.Fatalf("expected Message 'hi', got %q", tm.Message)
+	}
+	if tm.Err != nil {
+		t.Fatal("expected no error")
 	}
 }
 
@@ -149,7 +155,13 @@ func TestExecuteCommandWithRunner_Error(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected TaskFinishedMsg, got %T", msg)
 	}
+	if tm.Name != "testing" {
+		t.Fatalf("expected Name 'testing', got %q", tm.Name)
+	}
 	if tm.Err == nil {
 		t.Fatal("expected error")
+	}
+	if tm.Message != "details" {
+		t.Fatalf("expected Message 'details', got %q", tm.Message)
 	}
 }

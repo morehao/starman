@@ -43,6 +43,7 @@ const (
 	modeCommand
 	modePrompt
 	modeActions
+	modeOutput
 )
 
 type Model struct {
@@ -68,6 +69,10 @@ type Model struct {
 	commandInput commandmode.Model
 	prompt       prompt.Model
 	mode         int
+
+	outputTitle   string
+	outputContent string
+	outputErr     error
 
 	errorMsg   string
 	errorTimer *time.Timer
@@ -173,7 +178,11 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tasks.finish(typed.TaskID, typed.Message, typed.Err)
 		m.footer.SetTask(m.buildTaskInfo())
 		if strings.HasPrefix(typed.TaskID, "cmd-") {
-			m.drawer.SetOpen(true)
+			m.outputTitle = typed.Name
+			m.outputContent = typed.Message
+			m.outputErr = typed.Err
+			m.mode = modeOutput
+			return m, nil
 		}
 		if typed.Err != nil {
 			m.setError(typed.Message + ": " + typed.Err.Error())
@@ -288,6 +297,9 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	switch m.mode {
 	case modeSearch:
 		return m.handleSearchMode(typed)
+	case modeOutput:
+		m.mode = modeNormal
+		return nil
 	case modeCommand:
 		updated, cmd := m.commandInput.Update(typed)
 		m.commandInput = updated.(commandmode.Model)
@@ -567,9 +579,9 @@ func (m *Model) executeCommand(cmdStr, statusText string) tea.Cmd {
 		}
 		m.drawer.AddEntry(":"+cmdStr, stdout, stderr)
 		if err != nil {
-			return TaskFinishedMsg{TaskID: taskID, Message: statusText + " failed", Err: fmt.Errorf("%s: %s", err.Error(), stderr)}
+			return TaskFinishedMsg{TaskID: taskID, Name: statusText, Message: stderr, Err: fmt.Errorf("%s: %s", err.Error(), stderr)}
 		}
-		return TaskFinishedMsg{TaskID: taskID, Message: statusText + " done"}
+		return TaskFinishedMsg{TaskID: taskID, Name: statusText, Message: strings.TrimSpace(stdout)}
 	}
 }
 
@@ -798,6 +810,13 @@ func (m Model) View() tea.View {
 		return v
 	}
 
+	if m.mode == modeOutput {
+		v := m.renderOutputOverlay()
+		v.AltScreen = true
+		v.MouseMode = tea.MouseModeCellMotion
+		return v
+	}
+
 	m.footer.SetPager(m.sectionPager())
 
 	theme := m.ctx.Theme
@@ -868,6 +887,81 @@ func (m Model) View() tea.View {
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
+
+func (m Model) renderOutputOverlay() tea.View {
+	w := m.ctx.ScreenWidth
+	h := m.ctx.ScreenHeight
+
+	dialogWidth := 60
+	if w > 0 && w < dialogWidth+4 {
+		dialogWidth = w - 4
+	}
+
+	th := m.ctx.Theme
+
+	dialogStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(th.FaintBorder).
+		Padding(1, 2).
+		Width(dialogWidth)
+
+	titleStyle := lipgloss.NewStyle().
+		Foreground(th.PrimaryText).
+		Bold(true)
+
+	contentStyle := lipgloss.NewStyle().
+		Foreground(th.SecondaryText)
+
+	errorStyle := lipgloss.NewStyle().
+		Foreground(th.ErrorText)
+
+	hintStyle := lipgloss.NewStyle().
+		Foreground(th.FaintText)
+
+	contentWidth := dialogWidth - 6
+	if contentWidth < 0 {
+		contentWidth = 0
+	}
+
+	separator := ""
+	if contentWidth > 0 {
+		separator = lipgloss.NewStyle().
+			Foreground(th.FaintBorder).
+			Render(strings.Repeat("─", contentWidth))
+	}
+
+	title := m.outputTitle
+	if title == "" {
+		title = "Command"
+	}
+
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("$ " + title))
+	b.WriteByte('\n')
+	if separator != "" {
+		b.WriteString(separator)
+		b.WriteByte('\n')
+	}
+	if m.outputErr != nil {
+		b.WriteString(errorStyle.Render(m.outputErr.Error()))
+		b.WriteByte('\n')
+	}
+	if m.outputContent != "" {
+		b.WriteString(contentStyle.Render(m.outputContent))
+		b.WriteByte('\n')
+	}
+	b.WriteByte('\n')
+	b.WriteString(hintStyle.Render("Esc to close"))
+
+	rendered := dialogStyle.Render(b.String())
+
+	if w > 0 && h > 0 {
+		rendered = lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, rendered)
+	}
+
+	return tea.NewView(rendered)
+}
+
 func (m Model) sectionView() string {
 	view := m.currSection.View()
 	if strings.TrimSpace(view) == "" {
