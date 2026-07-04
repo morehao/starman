@@ -588,12 +588,13 @@ func (m Model) View() tea.View {
 
 	tabsView := m.tabs.View()
 
-	editLine := ""
 	if m.editingMode == "category" {
-		editLine = m.renderEditCategoryLine()
+		content = m.renderCategoryDialog()
 	} else if m.editingMode == "tag" {
-		editLine = m.renderEditTagLine()
+		content = m.renderTagDialog()
 	}
+
+	mainArea := lipgloss.JoinVertical(lipgloss.Left, tabsView, content)
 
 	searchLine := ""
 	if m.commandMode {
@@ -611,11 +612,7 @@ func (m Model) View() tea.View {
 	footerView := m.footer.View()
 
 	v := tea.NewView(
-		lipgloss.JoinVertical(
-			lipgloss.Left,
-			tabsView,
-			content,
-		) + editLine + searchLine + m.renderErrorBar() + helpLine + "\n" + footerView,
+		mainArea + searchLine + m.renderErrorBar() + helpLine + "\n" + footerView,
 	)
 	v.AltScreen = true
 	return v
@@ -959,35 +956,80 @@ func (m *Model) handleEditingInput(typed tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (m Model) renderEditCategoryLine() string {
+func (m Model) renderCategoryDialog() string {
 	theme := m.ctx.Theme
-	var lines []string
-	lines = append(lines, "")
-	lines = append(lines, lipgloss.NewStyle().
-		Foreground(theme.WarningText).Bold(true).
-		Render("Select category (j/k move, enter confirm, esc cancel):"))
+	const dialogWidth = 44
+
+	titleStyle := lipgloss.NewStyle().
+		Foreground(theme.PrimaryText).
+		Bold(true)
+	helpStyle := lipgloss.NewStyle().
+		Foreground(theme.FaintText)
+	contentWidth := m.ctx.MainContentWidth
+
+	var listLines []string
 	for i, c := range m.editingCats {
 		prefix := "  "
+		lineStyle := lipgloss.NewStyle().Foreground(theme.PrimaryText)
 		if i == m.editingCatCursor {
-			prefix = "> "
+			prefix = "▸ "
+			lineStyle = lineStyle.Bold(true).Foreground(theme.SuccessText)
 		}
-		style := lipgloss.NewStyle().Foreground(theme.PrimaryText)
-		if i == m.editingCatCursor {
-			style = style.Bold(true).Foreground(theme.SuccessText)
-		}
-		lines = append(lines, prefix+style.Render(c.Name+" ("+c.ID+")"))
+		listLines = append(listLines, prefix+lineStyle.Render(c.Name+" ("+c.ID+")"))
 	}
-	return strings.Join(lines, "\n")
+
+	body := titleStyle.Render("Select Category") + "\n\n" +
+		strings.Join(listLines, "\n") + "\n\n" +
+		helpStyle.Render("j/k navigate · enter confirm · esc cancel")
+
+	dialog := lipgloss.NewStyle().
+		Width(dialogWidth).
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.SuccessText).
+		Render(body)
+
+	return lipgloss.NewStyle().
+		Width(contentWidth).
+		Height(m.ctx.MainContentHeight).
+		Align(lipgloss.Center, lipgloss.Center).
+		Render(dialog)
 }
 
-func (m Model) renderEditTagLine() string {
+func (m Model) renderTagDialog() string {
 	theme := m.ctx.Theme
-	promptStyle := lipgloss.NewStyle().
-		Foreground(theme.WarningText).Bold(true)
+	const dialogWidth = 50
+	contentWidth := m.ctx.MainContentWidth
+
+	titleStyle := lipgloss.NewStyle().
+		Foreground(theme.PrimaryText).
+		Bold(true)
 	inputStyle := lipgloss.NewStyle().
-		Foreground(theme.PrimaryText)
-	cursorStyle := lipgloss.NewStyle().
 		Foreground(theme.SuccessText)
-	return "\n" + promptStyle.Render("Edit tags (+add,-remove format): ") +
-		inputStyle.Render(m.editingQuery) + cursorStyle.Render("▎")
+	helpStyle := lipgloss.NewStyle().
+		Foreground(theme.FaintText)
+
+	display := m.editingQuery
+	if display == "" {
+		display = "(empty)"
+	}
+
+	body := titleStyle.Render("Edit Tags") + "\n\n" +
+		"Tags: " + inputStyle.Render(display+"▎") + "\n\n" +
+		helpStyle.Render("+tag to add · -tag to remove · enter confirm · esc cancel")
+
+	dialog := lipgloss.NewStyle().
+		Width(dialogWidth).
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.SuccessText).
+		Render(body)
+
+	return lipgloss.NewStyle().
+		Width(contentWidth).
+		Height(m.ctx.MainContentHeight).
+		Align(lipgloss.Center, lipgloss.Center).
+		Render(dialog)
 }
+
+
