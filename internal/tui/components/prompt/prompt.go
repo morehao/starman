@@ -225,7 +225,7 @@ func (m Model) View() tea.View {
 		return tea.NewView("")
 	}
 
-	overlayWidth := max(30, m.width/2)
+	overlayWidth := max(60, m.width*3/4)
 
 	overlayStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
