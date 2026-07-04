@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/morehao/starman/internal/tui/components/section"
 	"github.com/morehao/starman/internal/tui/context"
@@ -165,10 +166,10 @@ func (m Model) renderTable() string {
 
 	for i, col := range cols {
 		title := col.Title
-		if len(title) > col.Width {
-			title = title[:col.Width]
+		if runewidth.StringWidth(title) > col.Width {
+			title = runewidth.Truncate(title, col.Width, "…")
 		}
-		b.WriteString(fmt.Sprintf("%-*s", col.Width, title))
+		b.WriteString(padRight(title, col.Width))
 		if i < len(cols)-1 {
 			b.WriteString(" ")
 		}
@@ -187,23 +188,23 @@ func (m Model) renderTable() string {
 		var lineStr string
 		if len(colVals) == 0 {
 			title := row.GetTitle()
-			avail := contentW - len(prefix)
+			avail := contentW - runewidth.StringWidth(prefix)
 			if avail < 4 {
 				lineStr = prefix + title
 			} else {
 				inner := "── " + title + " ──"
-				if len(inner) > avail {
+				if runewidth.StringWidth(inner) > avail {
 					inner = "── " + title
-					if len(inner) > avail-1 {
+					if runewidth.StringWidth(inner) > avail-1 {
 						inner = title
-						if len(inner) > avail {
-							inner = inner[:avail]
+						if runewidth.StringWidth(inner) > avail {
+							inner = runewidth.Truncate(inner, avail, "")
 						}
 					} else {
 						inner += " ─"
 					}
 				}
-				fill := avail - len(inner)
+				fill := avail - runewidth.StringWidth(inner)
 				if fill > 0 {
 					lineStr = prefix + inner + strings.Repeat("─", fill)
 				} else {
@@ -218,10 +219,10 @@ func (m Model) renderTable() string {
 				if colIdx < len(colVals) {
 					val = colVals[colIdx]
 				}
-				if len(val) > col.Width {
-					val = val[:col.Width-1] + "…"
+				if runewidth.StringWidth(val) > col.Width {
+					val = runewidth.Truncate(val, col.Width-1, "…")
 				}
-				lineStr += fmt.Sprintf("%-*s", col.Width, val)
+				lineStr += padRight(val, col.Width)
 				if colIdx < len(cols)-1 {
 					lineStr += " "
 				}
@@ -245,53 +246,78 @@ func (m Model) renderTable() string {
 }
 
 func (m Model) fitColumns(availWidth int) ([]Column, int) {
-	if availWidth <= 0 {
+	n := len(m.columns)
+	if availWidth <= 0 || n == 0 {
 		return m.columns, 0
 	}
-	gap := len(m.columns) - 1
+	gap := n - 1
 	prefixW := 2
-	totalW := prefixW + gap
-	for _, c := range m.columns {
-		totalW += c.Width
+	contentAvail := availWidth - prefixW - gap
+	if contentAvail < n*3 {
+		contentAvail = n * 3
 	}
-	if totalW <= availWidth {
-		fitted := make([]Column, len(m.columns))
-		copy(fitted, m.columns)
-		used := prefixW
-		for i := range fitted {
-			used += fitted[i].Width
-			if i < len(m.columns)-1 {
-				used++
-			}
+
+	idealContent := 0
+	flexIdeal := 0
+	for _, c := range m.columns {
+		idealContent += c.Width
+		if c.Flex {
+			flexIdeal += c.Width
 		}
-		extra := availWidth - used
-		if extra > 0 {
+	}
+
+	fitted := make([]Column, n)
+	copy(fitted, m.columns)
+
+	if idealContent <= contentAvail {
+		extra := contentAvail - idealContent
+		if extra > 0 && flexIdeal > 0 {
+			distributed := 0
 			for i := range fitted {
 				if m.columns[i].Flex {
-					fitted[i].Width += extra
-					used += extra
-					break
+					share := extra * m.columns[i].Width / flexIdeal
+					fitted[i].Width += share
+					distributed += share
+				}
+			}
+			remainder := extra - distributed
+			if remainder > 0 {
+				for i := n - 1; i >= 0; i-- {
+					if m.columns[i].Flex {
+						fitted[i].Width += remainder
+						break
+					}
 				}
 			}
 		}
-		return fitted, used
-	}
-	scale := float64(availWidth-prefixW-gap) / float64(totalW-prefixW-gap)
-	if scale < 0.3 {
-		scale = 0.3
-	}
-	fitted := make([]Column, len(m.columns))
-	used := prefixW
-	for i, c := range m.columns {
-		w := int(float64(c.Width) * scale)
-		if w < 3 {
-			w = 3
+	} else {
+		scale := float64(contentAvail) / float64(idealContent)
+		if scale < 0.3 {
+			scale = 0.3
 		}
-		fitted[i] = Column{Title: c.Title, Width: w, Flex: c.Flex}
-		used += w
-		if i < len(m.columns)-1 {
+		for i := range fitted {
+			w := int(float64(m.columns[i].Width) * scale)
+			if w < 3 {
+				w = 3
+			}
+			fitted[i].Width = w
+		}
+	}
+
+	used := prefixW
+	for i := range fitted {
+		used += fitted[i].Width
+		if i < n-1 {
 			used++
 		}
 	}
 	return fitted, used
+}
+
+func padRight(s string, width int) string {
+	dw := runewidth.StringWidth(s)
+	if dw >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-dw)
 }

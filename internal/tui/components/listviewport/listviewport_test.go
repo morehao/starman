@@ -115,13 +115,13 @@ func TestFitColumns(t *testing.T) {
 			wantUsed:   30,
 		},
 		{
-			name: "multiple flex columns only first gets extra",
+			name: "multiple flex columns share extra proportionally",
 			columns: []Column{
 				{Title: "A", Width: 5, Flex: true},
 				{Title: "B", Width: 5, Flex: true},
 			},
 			availW:     30,
-			wantWidths: []int{22, 5},
+			wantWidths: []int{13, 14},
 			wantUsed:   30,
 		},
 		{
@@ -146,7 +146,17 @@ func TestFitColumns(t *testing.T) {
 			columns:    nil,
 			availW:     100,
 			wantWidths: nil,
-			wantUsed:   2,
+			wantUsed:   0,
+		},
+		{
+			name: "flex columns share extra proportional to their default widths",
+			columns: []Column{
+				{Title: "A", Width: 20, Flex: true},
+				{Title: "B", Width: 10, Flex: true},
+			},
+			availW:     60,
+			wantWidths: []int{38, 19},
+			wantUsed:   60,
 		},
 		{
 			name: "flex mixed with non-flex in middle position",

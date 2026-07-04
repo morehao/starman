@@ -69,7 +69,7 @@ func (m Model) HasSectionTabs() bool {
 func (m Model) ViewTabAtX(x int) int {
 	offset := 0
 	for i, t := range m.titles {
-		w := len(t) + 3
+		w := lipgloss.Width(t) + 3
 		if x >= offset && x < offset+w {
 			return i
 		}
@@ -81,7 +81,7 @@ func (m Model) ViewTabAtX(x int) int {
 func (m Model) SectionTabAtX(x int) int {
 	offset := 0
 	for i, t := range m.sectionTabs {
-		w := len(t) + 2
+		w := lipgloss.Width(t) + 2
 		if x >= offset && x < offset+w {
 			return i
 		}

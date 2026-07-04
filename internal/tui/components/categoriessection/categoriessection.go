@@ -11,10 +11,10 @@ import (
 )
 
 var defaultColumns = []listviewport.Column{
-	{Title: "ID", Width: 16},
-	{Title: "Name", Width: 14, Flex: true},
-	{Title: "Keywords", Width: 22},
-	{Title: "Repos", Width: 6},
+	{Title: "ID", Width: 14},
+	{Title: "Name", Width: 16},
+	{Title: "Keywords", Width: 20, Flex: true},
+	{Title: "Repos", Width: 7},
 	{Title: "Sort", Width: 5},
 	{Title: "Type", Width: 8},
 }
@@ -210,7 +210,7 @@ func joinKeywords(kws []string) string {
 		if i > 0 {
 			s += ", "
 		}
-		if len(s)+len(kw) > 20 {
+		if len(s)+len(kw) > 22 {
 			s += "..."
 			break
 		}

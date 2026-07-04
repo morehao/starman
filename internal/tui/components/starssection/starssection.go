@@ -21,10 +21,10 @@ const (
 )
 
 var defaultColumns = []listviewport.Column{
-	{Title: "repo", Width: 40, Flex: true},
-	{Title: "stars", Width: 7},
-	{Title: "lang", Width: 12},
-	{Title: "cat", Width: 12},
+	{Title: "repo", Width: 38, Flex: true},
+	{Title: "stars", Width: 8, Flex: true},
+	{Title: "lang", Width: 14, Flex: true},
+	{Title: "cat", Width: 18, Flex: true},
 }
 
 type RepoRow struct {
