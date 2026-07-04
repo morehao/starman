@@ -18,6 +18,7 @@ func sampleRepo(id int64, name string) *Repository {
 		Topics:          []string{"go", "cli"},
 		OwnerLogin:      "owner",
 		StarredAt:       "2026-01-01T00:00:00Z",
+		RepoUpdatedAt:   "2026-01-15T00:00:00Z",
 	}
 }
 
@@ -39,6 +40,9 @@ func TestUpsertAndListRepositories(t *testing.T) {
 	}
 	if repos[0].FullName != "owner/repo1" {
 		t.Fatalf("unexpected first repo: %s", repos[0].FullName)
+	}
+	if repos[0].RepoUpdatedAt != "2026-01-15T00:00:00Z" {
+		t.Fatalf("expected repo_updated_at '2026-01-15T00:00:00Z', got %q", repos[0].RepoUpdatedAt)
 	}
 }
 

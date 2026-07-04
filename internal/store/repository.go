@@ -58,17 +58,18 @@ func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO repositories (
 		id, full_name, name, description, url, language, homepage,
-		stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at,
+		stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at, repo_updated_at,
 		ai_summary, ai_tags, ai_platforms, ai_category, ai_search_text, analyzed_at, analysis_failed,
 		custom_description, custom_tags, custom_category, category_locked,
 		subscribed_releases, last_release_fetch, vector_indexed_at
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 	ON CONFLICT(id) DO UPDATE SET
 		full_name=excluded.full_name, name=excluded.name, description=excluded.description,
 		url=excluded.url, language=excluded.language, homepage=excluded.homepage,
 		stargazers_count=excluded.stargazers_count, forks_count=excluded.forks_count,
 		topics=excluded.topics, owner_login=excluded.owner_login, owner_avatar=excluded.owner_avatar,
 		starred_at=excluded.starred_at,
+		repo_updated_at=excluded.repo_updated_at,
 		ai_summary=excluded.ai_summary, ai_tags=excluded.ai_tags, ai_platforms=excluded.ai_platforms,
 		ai_category=excluded.ai_category, ai_search_text=excluded.ai_search_text,
 		analyzed_at=excluded.analyzed_at, analysis_failed=excluded.analysis_failed,
@@ -78,7 +79,7 @@ func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 		vector_indexed_at=excluded.vector_indexed_at,
 		updated_at=datetime('now')`,
 		r.ID, r.FullName, r.Name, r.Description, r.URL, r.Language, r.Homepage,
-		r.StargazersCount, r.ForksCount, string(topicsJSON), r.OwnerLogin, r.OwnerAvatar, r.StarredAt,
+		r.StargazersCount, r.ForksCount, string(topicsJSON), r.OwnerLogin, r.OwnerAvatar, r.StarredAt, r.RepoUpdatedAt,
 		r.AISummary, string(tagsJSON), string(platJSON), r.AICategory, r.AISearchText, analyzedAt, analysisFailed,
 		r.CustomDescription, string(customTagsJSON), r.CustomCategory, categoryLocked,
 		subscribed, lastReleaseFetch, vectorIndexedAt,
@@ -95,10 +96,11 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 	var analyzedAt, lastReleaseFetch, vectorIndexedAt sql.NullString
 	var customDesc, customCat sql.NullString
 	var analysisFailed, categoryLocked, subscribed int
-	var searchText sql.NullString
+	var searchText, repoUpdatedAt sql.NullString
 	err := row.Scan(
 		&r.ID, &r.FullName, &r.Name, &r.Description, &r.URL, &r.Language, &r.Homepage,
 		&r.StargazersCount, &r.ForksCount, &topicsJSON, &r.OwnerLogin, &r.OwnerAvatar, &r.StarredAt,
+		&repoUpdatedAt,
 		&r.AISummary, &tagsJSON, &platJSON, &r.AICategory, &searchText, &analyzedAt, &analysisFailed,
 		&customDesc, &customTagsJSON, &customCat, &categoryLocked,
 		&subscribed, &lastReleaseFetch, &vectorIndexedAt,
@@ -126,6 +128,9 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 	}
 	if searchText.Valid {
 		r.AISearchText = searchText.String
+	}
+	if repoUpdatedAt.Valid {
+		r.RepoUpdatedAt = repoUpdatedAt.String
 	}
 	if analyzedAt.Valid {
 		t, err := time.Parse(time.RFC3339, analyzedAt.String)
@@ -161,7 +166,7 @@ func (s *sqliteStore) GetRepository(ctx context.Context, fullName string) (*Repo
 }
 
 const repositoryColumns = `SELECT id, full_name, name, description, url, language, homepage,
-	stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at,
+	stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at, repo_updated_at,
 	ai_summary, ai_tags, ai_platforms, ai_category, ai_search_text, analyzed_at, analysis_failed,
 	custom_description, custom_tags, custom_category, category_locked,
 	subscribed_releases, last_release_fetch, vector_indexed_at FROM repositories`

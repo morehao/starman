@@ -29,6 +29,7 @@ var GitHubSourceFields = []string{
 	"owner_login",
 	"owner_avatar",
 	"starred_at",
+	"repo_updated_at",
 }
 
 func MergeReposOnSync(incoming []*Repository, existing map[string]*Repository) []*Repository {
@@ -55,6 +56,7 @@ func MergeReposOnSync(incoming []*Repository, existing map[string]*Repository) [
 		result.OwnerLogin = newRepo.OwnerLogin
 		result.OwnerAvatar = newRepo.OwnerAvatar
 		result.StarredAt = newRepo.StarredAt
+		result.RepoUpdatedAt = newRepo.RepoUpdatedAt
 
 		merged = append(merged, result)
 	}
