@@ -43,7 +43,7 @@ func (m Model) View() string {
 		Foreground(theme.ErrorText).
 		Background(theme.SelectedBackground)
 
-	helpText := "j/k move  g/G first/last  h/l tab  p sidebar  / search  : cmd  q quit"
+	helpText := "j/k move  g/G first/last  p sidebar  / search  : cmd  q quit"
 	helpLeft := lipgloss.NewStyle().
 		Foreground(theme.FaintText).
 		Background(theme.SelectedBackground).

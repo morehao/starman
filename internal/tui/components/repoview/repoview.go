@@ -142,5 +142,5 @@ func (m Model) renderReleases() string {
 	if m.repo.SubscribedReleases {
 		return fmt.Sprintf("Subscribed to releases for %s\n\nLast fetched: %v", m.repo.FullName, m.repo.LastReleaseFetch)
 	}
-	return "Not subscribed to releases.\n\nPress 's' to subscribe."
+	return "Not subscribed to releases."
 }
