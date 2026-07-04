@@ -98,10 +98,10 @@ func newSearchCmd() *cobra.Command {
 			cliOpts := searchOpts{Lang: lang, Category: category, Sort: sortBy, Limit: limit}
 			hits := filterByCLIOpts(result.Hits, cliOpts)
 
-		if jsonOut {
-			return outputSearchJSON(cmd, hits)
-		}
-		outputSearchTable(cmd, hits)
+			if jsonOut {
+				return outputSearchJSON(cmd, hits)
+			}
+			outputSearchTable(cmd, hits)
 			return nil
 		},
 	}

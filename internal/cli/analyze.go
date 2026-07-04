@@ -55,7 +55,7 @@ func newAnalyzeCmd() *cobra.Command {
 				return err
 			}
 			if len(repos) == 0 {
-				fmt.Println("No repos to analyze.")
+				fmt.Fprintln(cmd.OutOrStdout(), "No repos to analyze.")
 				return nil
 			}
 			aiClient := ai.NewClient(cfg.AI.BaseURL, aiKey, cfg.AI.Model)
