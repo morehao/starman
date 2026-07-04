@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"text/tabwriter"
 
 	"github.com/morehao/starman/internal/store"
@@ -37,7 +36,7 @@ func newCategoryListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "ID\tNAME\tKEYWORDS\tORDER\tTYPE")
 			for _, c := range cats {
 				typeStr := "自定义"
@@ -109,7 +108,7 @@ func newCategoryAddCmd() *cobra.Command {
 			}); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stdout, "Added category '%s' (%s)\n", displayName, id)
+			fmt.Fprintf(cmd.OutOrStdout(), "Added category '%s' (%s)\n", displayName, id)
 			return nil
 		},
 	}
@@ -160,7 +159,7 @@ func newCategoryEditCmd() *cobra.Command {
 			if err := s.UpsertCategory(ctx, target); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stdout, "Updated category '%s'\n", target.ID)
+			fmt.Fprintf(cmd.OutOrStdout(), "Updated category '%s'\n", target.ID)
 			return nil
 		},
 	}
@@ -201,14 +200,14 @@ func newCategoryDeleteCmd() *cobra.Command {
 				return fmt.Errorf("cannot delete built-in category %s", args[0])
 			}
 			if !force {
-				fmt.Fprintf(os.Stderr, "This will delete category '%s' (%s) and clear category from all associated repos.\nUse --force to confirm.\n", target.Name, target.ID)
+				fmt.Fprintf(cmd.ErrOrStderr(), "This will delete category '%s' (%s) and clear category from all associated repos.\nUse --force to confirm.\n", target.Name, target.ID)
 				return nil
 			}
 			affected, err := s.DeleteCategory(ctx, args[0])
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stdout, "Deleted category '%s', cleared category from %d repos\n", args[0], affected)
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted category '%s', cleared category from %d repos\n", args[0], affected)
 			return nil
 		},
 	}
