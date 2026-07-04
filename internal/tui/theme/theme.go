@@ -29,3 +29,16 @@ func DefaultTheme() Theme {
 		FaintBorder:        lipgloss.Color("#313244"),
 	}
 }
+
+func LightTheme() Theme {
+	return Theme{
+		SelectedBackground: lipgloss.Color("#D4D4D8"),
+		PrimaryText:        lipgloss.Color("#18181B"),
+		SecondaryText:      lipgloss.Color("#52525B"),
+		FaintText:          lipgloss.Color("#A1A1AA"),
+		SuccessText:        lipgloss.Color("#16A34A"),
+		ErrorText:          lipgloss.Color("#DC2626"),
+		WarningText:        lipgloss.Color("#CA8A04"),
+		FaintBorder:        lipgloss.Color("#D4D4D8"),
+	}
+}

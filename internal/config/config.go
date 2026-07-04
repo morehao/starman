@@ -18,10 +18,33 @@ type Config struct {
 }
 
 type TUIConfig struct {
-	Preview      PreviewConfig `yaml:"preview"`
-	DefaultView  string        `yaml:"default_view"`
-	ConfirmQuit  bool          `yaml:"confirm_quit"`
-	Theme        string        `yaml:"theme"`
+	Preview     PreviewConfig  `yaml:"preview"`
+	DefaultView string         `yaml:"default_view"`
+	ConfirmQuit bool           `yaml:"confirm_quit"`
+	Theme       string         `yaml:"theme"`
+	Keybindings TUIKeybindings `yaml:"keybindings"`
+}
+
+type TUIKeybindings struct {
+	Universal UniversalKeybindings `yaml:"universal"`
+	Stars     StarsKeybindings     `yaml:"stars"`
+}
+
+type UniversalKeybindings struct {
+	Quit          string `yaml:"quit"`
+	Refresh       string `yaml:"refresh"`
+	Search        string `yaml:"search"`
+	Command       string `yaml:"command"`
+	ToggleSidebar string `yaml:"toggle_sidebar"`
+	Help          string `yaml:"help"`
+}
+
+type StarsKeybindings struct {
+	Sync       string `yaml:"sync"`
+	Analyze    string `yaml:"analyze"`
+	ToggleStar string `yaml:"toggle_star"`
+	EditCat    string `yaml:"edit_category"`
+	EditTag    string `yaml:"edit_tag"`
 }
 
 type PreviewConfig struct {

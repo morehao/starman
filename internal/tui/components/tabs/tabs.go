@@ -28,6 +28,10 @@ func (m *Model) SetActive(active int) {
 	m.active = active
 }
 
+func (m Model) Active() int {
+	return m.active
+}
+
 func (m *Model) SetSectionTabs(tabs []string) {
 	m.sectionTabs = tabs
 }
@@ -56,6 +60,34 @@ func (m *Model) PrevSection() bool {
 
 func (m Model) ActiveSectionIndex() int {
 	return m.activeSection
+}
+
+func (m Model) HasSectionTabs() bool {
+	return len(m.sectionTabs) > 0
+}
+
+func (m Model) ViewTabAtX(x int) int {
+	offset := 0
+	for i, t := range m.titles {
+		w := len(t) + 3
+		if x >= offset && x < offset+w {
+			return i
+		}
+		offset += w
+	}
+	return -1
+}
+
+func (m Model) SectionTabAtX(x int) int {
+	offset := 0
+	for i, t := range m.sectionTabs {
+		w := len(t) + 2
+		if x >= offset && x < offset+w {
+			return i
+		}
+		offset += w
+	}
+	return -1
 }
 
 func (m Model) View() string {

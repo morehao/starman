@@ -121,3 +121,16 @@ func getViewKey(i int) string {
 		return ""
 	}
 }
+
+func (m Model) ViewSwitcherAtX(x int) int {
+	views := []string{"⭐Stars", "📈Trending", "📦Releases", "📊Stats"}
+	offset := 0
+	for i, label := range views {
+		w := offset + len(label) + 3
+		if x >= offset && x < w {
+			return i
+		}
+		offset = w
+	}
+	return -1
+}

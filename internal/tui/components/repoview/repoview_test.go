@@ -122,6 +122,37 @@ func TestReadmeTabEmpty(t *testing.T) {
 	}
 }
 
+func TestReadmeTabGlamour(t *testing.T) {
+	m := NewModel()
+	m.SetWidth(80)
+	m.SetRepo(&store.Repository{
+		FullName:      "test/repo",
+		AISummary:     "# Hello\n\nThis is a **test** README.\n\n- item 1\n- item 2",
+	})
+	m.NextTab()
+	out := m.View()
+	if !strings.Contains(out, "Hello") {
+		t.Fatalf("expected README content in render: %q", out)
+	}
+	if !strings.Contains(out, "test") {
+		t.Fatalf("expected 'test' in glamour rendered output: %q", out)
+	}
+}
+
+func TestReadmeTabGlamourNarrow(t *testing.T) {
+	m := NewModel()
+	m.SetWidth(30)
+	m.SetRepo(&store.Repository{
+		FullName:      "test/repo",
+		AISummary:     "# Hello\n\nSome markdown content",
+	})
+	m.NextTab()
+	out := m.View()
+	if !strings.Contains(out, "Hello") {
+		t.Fatalf("expected README content in narrow render: %q", out)
+	}
+}
+
 func TestReleasesTab(t *testing.T) {
 	m := NewModel()
 	m.SetRepo(&store.Repository{

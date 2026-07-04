@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/glamour"
 
 	"github.com/morehao/starman/internal/store"
 )
@@ -14,6 +15,7 @@ var tabTitles = []string{"Overview", "README", "Releases"}
 type Model struct {
 	activeTab int
 	repo      *store.Repository
+	width     int
 }
 
 func NewModel() *Model {
@@ -21,6 +23,8 @@ func NewModel() *Model {
 }
 
 func (m *Model) SetRepo(r *store.Repository) { m.repo = r }
+
+func (m *Model) SetWidth(w int) { m.width = w }
 
 func (m Model) Repo() *store.Repository { return m.repo }
 
@@ -143,10 +147,29 @@ func (m Model) renderReadme() string {
 		return ""
 	}
 
-	if m.repo.AISummary != "" {
-		return lipgloss.NewStyle().Bold(true).Render("AI Summary") + "\n\n" + m.repo.AISummary
+	readmeContent := m.repo.AISummary
+	if readmeContent == "" {
+		return "No README available.\n\nUse :analyze to generate an AI summary."
 	}
-	return "No README available."
+
+	renderWidth := m.width - 4
+	if renderWidth < 20 {
+		renderWidth = 20
+	}
+
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(renderWidth),
+	)
+	if err != nil {
+		return "AI Summary\n\n" + readmeContent
+	}
+
+	rendered, err := renderer.Render(readmeContent)
+	if err != nil {
+		return "AI Summary\n\n" + readmeContent
+	}
+	return rendered
 }
 
 func (m Model) renderReleases() string {

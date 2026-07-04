@@ -27,7 +27,6 @@ import (
 	"github.com/morehao/starman/internal/tui/components/trendingsection"
 	"github.com/morehao/starman/internal/tui/constants"
 	tuicontext "github.com/morehao/starman/internal/tui/context"
-	"github.com/morehao/starman/internal/tui/keys"
 )
 
 const taskClearDelay = 3 * time.Second
@@ -41,7 +40,6 @@ const (
 
 type Model struct {
 	ctx         *tuicontext.ProgramContext
-	keys        *keys.KeyMap
 	tabs        tabs.Model
 	sidebar     sidebar.Model
 	footer      footer.Model
@@ -70,7 +68,6 @@ type Model struct {
 }
 
 func NewModel(ctx *tuicontext.ProgramContext) Model {
-	keyMap := keys.Keys
 	tabModel := tabs.NewModel(ctx)
 	tabModel.SetTitles([]string{"Stars", "Trending", "Releases", "Stats"})
 
@@ -85,7 +82,6 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 
 	m := Model{
 		ctx:         ctx,
-		keys:        &keyMap,
 		tabs:        tabModel,
 		sidebar:     sidebar.NewModel(ctx),
 		footer:      footerModel,
@@ -213,6 +209,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		cmd := m.handleKey(typed)
 		return m, cmd
+
+	case tea.MouseClickMsg:
+		return m, m.handleMouseClick(typed)
 	}
 
 	updated, cmd := m.currSection.Update(msg)
@@ -232,92 +231,125 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	}
 
 	switch {
-	case key.Matches(typed, m.keys.Escape):
+	case key.Matches(typed, m.ctx.Keys.Escape):
 		return nil
 
-	case key.Matches(typed, m.keys.Quit):
+	case key.Matches(typed, m.ctx.Keys.Quit):
 		return tea.Quit
 
-	case key.Matches(typed, m.keys.Command):
+	case key.Matches(typed, m.ctx.Keys.Command):
 		if m.mode == modeNormal {
 			m.mode = modeCommand
 			m.searchQuery = ""
 		}
 		return nil
 
-	case key.Matches(typed, m.keys.Search):
+	case key.Matches(typed, m.ctx.Keys.Search):
 		if m.mode == modeNormal {
 			m.mode = modeSearch
 			m.searchInput.SetFocused(true)
 		}
 		return nil
 
-	case key.Matches(typed, m.keys.Sync):
+	case key.Matches(typed, m.ctx.Keys.Sync):
 		return m.handleSyncKey()
 
-	case key.Matches(typed, m.keys.ToggleStar):
+	case key.Matches(typed, m.ctx.Keys.ToggleStar):
 		return m.handleToggleStarKey()
 
-	case key.Matches(typed, m.keys.EditCategory):
+	case key.Matches(typed, m.ctx.Keys.EditCategory):
 		return m.handleEditCategoryKey()
 
-	case key.Matches(typed, m.keys.EditTag):
+	case key.Matches(typed, m.ctx.Keys.EditTag):
 		return m.handleEditTagKey()
 
-	case key.Matches(typed, m.keys.Analyze):
+	case key.Matches(typed, m.ctx.Keys.Analyze):
 		return m.handleAnalyzeKey()
 
-	case key.Matches(typed, m.keys.NextGroup):
+	case key.Matches(typed, m.ctx.Keys.NextGroup):
 		if m.ctx.View == tuicontext.StarsView {
 			m.tabs.NextSection()
 			m.stars.SetGroupBy(sectionIndexToGroupBy(m.tabs.ActiveSectionIndex()))
 		}
 		return nil
 
-	case key.Matches(typed, m.keys.PrevGroup):
+	case key.Matches(typed, m.ctx.Keys.PrevGroup):
 		if m.ctx.View == tuicontext.StarsView {
 			m.tabs.PrevSection()
 			m.stars.SetGroupBy(sectionIndexToGroupBy(m.tabs.ActiveSectionIndex()))
 		}
 		return nil
 
-	case key.Matches(typed, m.keys.NextView):
+	case key.Matches(typed, m.ctx.Keys.NextView):
 		m.switchView(1)
-	case key.Matches(typed, m.keys.PrevView):
+	case key.Matches(typed, m.ctx.Keys.PrevView):
 		m.switchView(-1)
-	case key.Matches(typed, m.keys.Down):
+	case key.Matches(typed, m.ctx.Keys.Down):
 		m.currSection.NextRow()
 		m.syncSidebar()
-	case key.Matches(typed, m.keys.Up):
+	case key.Matches(typed, m.ctx.Keys.Up):
 		m.currSection.PrevRow()
 		m.syncSidebar()
-	case key.Matches(typed, m.keys.FirstLine):
+	case key.Matches(typed, m.ctx.Keys.FirstLine):
 		m.currSection.FirstItem()
 		m.syncSidebar()
-	case key.Matches(typed, m.keys.LastLine):
+	case key.Matches(typed, m.ctx.Keys.LastLine):
 		m.currSection.LastItem()
 		m.syncSidebar()
-	case key.Matches(typed, m.keys.PrevSection):
+	case key.Matches(typed, m.ctx.Keys.PrevSection):
 		if m.ctx.View == tuicontext.StatsView {
 			m.stats.PrevTab()
 		} else {
 			m.repo.PrevTab()
 			m.syncSidebar()
 		}
-	case key.Matches(typed, m.keys.NextSection):
+	case key.Matches(typed, m.ctx.Keys.NextSection):
 		if m.ctx.View == tuicontext.StatsView {
 			m.stats.NextTab()
 		} else {
 			m.repo.NextTab()
 			m.syncSidebar()
 		}
-	case key.Matches(typed, m.keys.ToggleSidebar):
+	case key.Matches(typed, m.ctx.Keys.ToggleSidebar):
 		m.showSidebar = !m.showSidebar
 		m.ctx.SidebarOpen = m.showSidebar
 		m.recalcLayout()
-	case key.Matches(typed, m.keys.Help):
+	case key.Matches(typed, m.ctx.Keys.Help):
 		m.showHelp = !m.showHelp
 	}
+	return nil
+}
+
+func (m *Model) handleMouseClick(msg tea.MouseClickMsg) tea.Cmd {
+	if msg.Button != tea.MouseLeft {
+		return nil
+	}
+
+	y := msg.Y
+	if y == 0 {
+		if viewIdx := m.tabs.ViewTabAtX(msg.X); viewIdx >= 0 {
+			m.switchView(viewIdx - m.tabs.Active())
+		}
+		return nil
+	}
+
+	if y == 1 && m.tabs.HasSectionTabs() {
+		if secIdx := m.tabs.SectionTabAtX(msg.X); secIdx >= 0 {
+			m.tabs.SetActiveSection(secIdx)
+			if m.ctx.View == tuicontext.StarsView {
+				m.stars.SetGroupBy(sectionIndexToGroupBy(secIdx))
+			}
+		}
+		return nil
+	}
+
+	if y == m.ctx.ScreenHeight-1 {
+		if viewIdx := m.footer.ViewSwitcherAtX(msg.X); viewIdx >= 0 {
+			m.switchView(viewIdx - m.tabs.Active())
+		}
+		return nil
+	}
+
 	return nil
 }
 
@@ -771,6 +803,7 @@ func (m Model) View() tea.View {
 		mainArea + searchLine + m.renderErrorBar() + helpLine + "\n" + footerView,
 	)
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
@@ -889,6 +922,8 @@ func (m *Model) syncSidebar() {
 		m.sidebar.SetContent("")
 		return
 	}
+
+	m.repo.SetWidth(m.ctx.DynamicPreviewWidth)
 
 	if repoRow, ok := row.(starssection.RepoRow); ok {
 		m.repo.SetRepo(repoRow.Repo)
