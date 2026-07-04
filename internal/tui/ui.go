@@ -88,7 +88,7 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 	releasesModel := releasessection.NewModel(4, ctx, section.SectionConfig{Title: "Releases"}, releasessection.ShowUnread)
 	statsModel := statssection.NewModel(5, ctx, section.SectionConfig{Title: "Stats"})
 
-	tabModel.SetSectionTabs([]string{"\U0001F50D Search", "All", "Language", "Category", "Tag"})
+	tabModel.SetSectionTabs([]string{"All", "Language", "Category", "Tag"})
 
 	m := Model{
 		ctx:         ctx,
@@ -118,7 +118,7 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		m.currSection = m.categories
 	case tuicontext.TrendingView:
 		m.currSection = m.trending
-		m.tabs.SetSectionTabs([]string{"\U0001F50D Search", "Daily", "Weekly", "Monthly"})
+		m.tabs.SetSectionTabs([]string{"Daily", "Weekly", "Monthly"})
 	case tuicontext.ReleasesView:
 		m.currSection = m.releases
 		m.tabs.SetSectionTabs(nil)
@@ -599,7 +599,7 @@ func (m *Model) executeCommand(cmdStr, statusText string) tea.Cmd {
 }
 
 func sectionIndexToGroupBy(idx int) string {
-	groups := []string{"all", "all", "language", "category", "tag"}
+	groups := []string{"all", "language", "category", "tag"}
 	if idx < 0 || idx >= len(groups) {
 		return "all"
 	}
@@ -711,13 +711,13 @@ func (m *Model) switchView(delta int) {
 	switch m.ctx.View {
 	case tuicontext.StarsView:
 		m.currSection = m.stars
-		m.tabs.SetSectionTabs([]string{"\U0001F50D Search", "All", "Language", "Category", "Tag"})
+		m.tabs.SetSectionTabs([]string{"All", "Language", "Category", "Tag"})
 	case tuicontext.CategoriesView:
 		m.currSection = m.categories
-		m.tabs.SetSectionTabs([]string{"\U0001F50D Search", "All"})
+		m.tabs.SetSectionTabs(nil)
 	case tuicontext.TrendingView:
 		m.currSection = m.trending
-		m.tabs.SetSectionTabs([]string{"\U0001F50D Search", "Daily", "Weekly", "Monthly"})
+		m.tabs.SetSectionTabs([]string{"Daily", "Weekly", "Monthly"})
 	case tuicontext.ReleasesView:
 		m.currSection = m.releases
 		m.tabs.SetSectionTabs(nil)

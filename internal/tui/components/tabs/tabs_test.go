@@ -44,7 +44,7 @@ func TestTabs_StarsSections(t *testing.T) {
 		Theme:       theme.DefaultTheme(),
 		ScreenWidth: 120,
 	}
-	sections := []string{"\U0001F50D Search", "All", "Language", "Category", "Tag"}
+	sections := []string{"All", "Language", "Category", "Tag"}
 	m := NewModel(ctx)
 	m.SetTitles([]string{"Stars", "Trending", "Releases", "Stats"})
 	m.SetSectionTabs(sections)
@@ -62,10 +62,10 @@ func TestTabs_SectionNavigation(t *testing.T) {
 		Theme:       theme.DefaultTheme(),
 		ScreenWidth: 120,
 	}
-	sections := []string{"\U0001F50D Search", "All", "Language", "Category", "Tag"}
+	sections := []string{"All", "Language", "Category", "Tag"}
+
 	m := NewModel(ctx)
 	m.SetSectionTabs(sections)
-
 	if m.ActiveSectionIndex() != 0 {
 		t.Fatal("expected active section 0")
 	}
