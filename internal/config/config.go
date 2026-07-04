@@ -37,6 +37,7 @@ type UniversalKeybindings struct {
 	Command       string `yaml:"command"`
 	ToggleSidebar string `yaml:"toggle_sidebar"`
 	Help          string `yaml:"help"`
+	Filter        string `yaml:"filter"`
 }
 
 type StarsKeybindings struct {

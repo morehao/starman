@@ -28,6 +28,7 @@ type KeyMap struct {
 	Escape        key.Binding
 	Enter         key.Binding
 	ActionsMenu   key.Binding
+	Filter        key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -51,6 +52,7 @@ func DefaultKeyMap() KeyMap {
 		Escape:        key.NewBinding(key.WithKeys("esc")),
 		Enter:         key.NewBinding(key.WithKeys("enter")),
 		ActionsMenu:   key.NewBinding(key.WithKeys("m")),
+		Filter:        key.NewBinding(key.WithKeys("f")),
 	}
 }
 
@@ -67,6 +69,7 @@ func NewKeyMap(cfg *config.TUIKeybindings) KeyMap {
 	applyBindingOverride(&km.Command, cfg.Universal.Command)
 	applyBindingOverride(&km.ToggleSidebar, cfg.Universal.ToggleSidebar)
 	applyBindingOverride(&km.Help, cfg.Universal.Help)
+	applyBindingOverride(&km.Filter, cfg.Universal.Filter)
 	return km
 }
 
