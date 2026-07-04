@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -94,15 +93,15 @@ func newSearchCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "Search mode: %s (%d results)\n", result.Mode, len(result.Hits))
+			fmt.Fprintf(cmd.ErrOrStderr(), "Search mode: %s (%d results)\n", result.Mode, len(result.Hits))
 
 			cliOpts := searchOpts{Lang: lang, Category: category, Sort: sortBy, Limit: limit}
 			hits := filterByCLIOpts(result.Hits, cliOpts)
 
-			if jsonOut {
-				return outputSearchJSON(hits)
-			}
-			outputSearchTable(hits)
+		if jsonOut {
+			return outputSearchJSON(cmd, hits)
+		}
+		outputSearchTable(cmd, hits)
 			return nil
 		},
 	}
@@ -159,18 +158,18 @@ func filterByCLIOpts(hits []*ai.SearchHit, opts searchOpts) []*ai.SearchHit {
 	return filtered
 }
 
-func outputSearchTable(hits []*ai.SearchHit) {
-	fmt.Fprintf(os.Stdout, "%-6s %-40s %s\n", "SCORE", "REPO", "DESCRIPTION")
+func outputSearchTable(cmd *cobra.Command, hits []*ai.SearchHit) {
+	fmt.Fprintf(cmd.OutOrStdout(), "%-6s %-40s %s\n", "SCORE", "REPO", "DESCRIPTION")
 	for _, h := range hits {
 		desc := h.Repo.Description
 		if len(desc) > 50 {
 			desc = desc[:50] + "..."
 		}
-		fmt.Fprintf(os.Stdout, "%-6.1f %-40s %s\n", h.Score, h.Repo.FullName, desc)
+		fmt.Fprintf(cmd.OutOrStdout(), "%-6.1f %-40s %s\n", h.Score, h.Repo.FullName, desc)
 	}
 }
 
-func outputSearchJSON(hits []*ai.SearchHit) error {
+func outputSearchJSON(cmd *cobra.Command, hits []*ai.SearchHit) error {
 	type jsonHit struct {
 		Score    float64 `json:"score"`
 		FullName string  `json:"full_name"`
@@ -201,6 +200,6 @@ func outputSearchJSON(hits []*ai.SearchHit) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stdout, string(data))
+	fmt.Fprintln(cmd.OutOrStdout(), string(data))
 	return nil
 }
