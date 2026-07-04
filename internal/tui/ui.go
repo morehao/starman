@@ -709,7 +709,7 @@ func (m *Model) recalcLayout() {
 		return
 	}
 
-	mainHeight := h - constants.TabsHeight - constants.FooterHeight - 1
+	mainHeight := h - constants.TabsHeight - constants.FooterHeight
 	m.ctx.MainContentHeight = mainHeight
 
 	if m.drawer.IsOpen() {
@@ -821,9 +821,12 @@ func (m Model) View() tea.View {
 
 	footerView := m.footer.View()
 
-	v := tea.NewView(
-		mainArea + searchLine + m.renderErrorBar() + helpLine + "\n" + footerView,
-	)
+	contentOutput := mainArea + searchLine + m.renderErrorBar() + helpLine
+	if m.mode == modeNormal && !m.showHelp && m.errorMsg == "" {
+		contentOutput, _ = truncateLines(contentOutput, m.ctx.ScreenHeight-1)
+	}
+
+	v := tea.NewView(contentOutput + "\n" + footerView)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
@@ -996,6 +999,17 @@ func maybeBatch(cmds ...tea.Cmd) tea.Cmd {
 		return nonNil[0]
 	}
 	return tea.Batch(nonNil...)
+}
+
+func truncateLines(s string, maxLines int) (string, bool) {
+	if maxLines <= 0 {
+		return "", false
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= maxLines {
+		return s, false
+	}
+	return strings.Join(lines[:maxLines], "\n"), true
 }
 
 
