@@ -2,7 +2,7 @@ package constants
 
 const (
 	TabsHeight         = 3
-	FooterHeight       = 1
+	FooterHeight       = 2
 	TableHeaderHeight  = 2
 	SidebarPagerHeight = 1
 )

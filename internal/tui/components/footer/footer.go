@@ -33,7 +33,7 @@ func (m *Model) SetTask(t *TaskInfo)     { m.task = t }
 
 func (m Model) View() string {
 	theme := m.ctx.Theme
-	bgStyle := lipgloss.NewStyle().
+	fullWidth := lipgloss.NewStyle().
 		Background(theme.SelectedBackground).
 		Width(m.ctx.ScreenWidth)
 	successStyle := lipgloss.NewStyle().
@@ -43,9 +43,15 @@ func (m Model) View() string {
 		Foreground(theme.ErrorText).
 		Background(theme.SelectedBackground)
 
+	separator := lipgloss.NewStyle().
+		Foreground(theme.FaintBorder).
+		Background(theme.SelectedBackground).
+		Width(m.ctx.ScreenWidth).
+		Render(strings.Repeat("─", m.ctx.ScreenWidth))
+
 	helpText := "j/k move  g/G first/last  p sidebar  / search  : cmd  q quit"
 	helpLeft := lipgloss.NewStyle().
-		Foreground(theme.FaintText).
+		Foreground(theme.FaintBorder).
 		Background(theme.SelectedBackground).
 		Render(helpText)
 
@@ -55,7 +61,10 @@ func (m Model) View() string {
 		switch m.task.Status {
 		case 0:
 			frame := spinnerFrames[m.task.SpinnerIdx%len(spinnerFrames)]
-			rightParts = append(rightParts, frame+" "+m.task.Message)
+			rightParts = append(rightParts, lipgloss.NewStyle().
+				Foreground(theme.SecondaryText).
+				Background(theme.SelectedBackground).
+				Render(frame+" "+m.task.Message))
 		case 1:
 			rightParts = append(rightParts, successStyle.Render("✅ "+m.task.Message))
 		case 2:
@@ -68,7 +77,10 @@ func (m Model) View() string {
 	}
 
 	if m.pager != "" {
-		rightParts = append(rightParts, m.pager)
+		rightParts = append(rightParts, lipgloss.NewStyle().
+			Foreground(theme.SecondaryText).
+			Background(theme.SelectedBackground).
+			Render(m.pager))
 	}
 
 	rightStr := strings.Join(rightParts, "  ")
@@ -78,7 +90,7 @@ func (m Model) View() string {
 		spacerWidth = 1
 	}
 
-	return bgStyle.Render(lipgloss.JoinHorizontal(
+	infoLine := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		helpLeft,
 		lipgloss.NewStyle().
@@ -86,6 +98,12 @@ func (m Model) View() string {
 			Width(spacerWidth).
 			Render(""),
 		lipgloss.NewStyle().Background(theme.SelectedBackground).Render(rightStr),
+	)
+
+	return fullWidth.Render(lipgloss.JoinVertical(
+		lipgloss.Top,
+		separator,
+		infoLine,
 	))
 }
 

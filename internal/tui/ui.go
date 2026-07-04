@@ -846,7 +846,7 @@ func (m Model) View() tea.View {
 
 	footerView := m.footer.View()
 
-	extraLines := 1
+	extraLines := constants.FooterHeight
 	if searchLine != "" {
 		extraLines++
 	}
