@@ -5,17 +5,13 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/glamour"
 
 	"github.com/morehao/starman/internal/store"
 )
 
-var tabTitles = []string{"Overview", "README", "Releases"}
-
 type Model struct {
-	activeTab int
-	repo      *store.Repository
-	width     int
+	repo  *store.Repository
+	width int
 }
 
 func NewModel() *Model {
@@ -28,43 +24,32 @@ func (m *Model) SetWidth(w int) { m.width = w }
 
 func (m Model) Repo() *store.Repository { return m.repo }
 
-func (m *Model) NextTab() { m.activeTab = (m.activeTab + 1) % len(tabTitles) }
-
-func (m *Model) PrevTab() { m.activeTab = (m.activeTab + len(tabTitles) - 1) % len(tabTitles) }
-
-func (m Model) ActiveTab() int { return m.activeTab }
-
 func (m Model) View() string {
-	var parts []string
-
-	tabLine := m.renderTabs()
-	parts = append(parts, tabLine)
-
 	if m.repo == nil {
-		return strings.Join(parts, "\n")
+		return ""
 	}
 
-	switch m.activeTab {
-	case 0:
-		parts = append(parts, m.renderOverview())
-	case 1:
-		parts = append(parts, m.renderReadme())
-	case 2:
-		parts = append(parts, m.renderReleases())
-	}
-	return strings.Join(parts, "\n")
-}
+	var b strings.Builder
 
-func (m Model) renderTabs() string {
-	tabParts := make([]string, 0, len(tabTitles))
-	for i, tab := range tabTitles {
-		if i == m.activeTab {
-			tabParts = append(tabParts, "[ "+tab+" ]")
-		} else {
-			tabParts = append(tabParts, "  "+tab+"  ")
-		}
+	b.WriteString(m.renderOverview())
+
+	readme := m.renderReadme()
+	if readme != "" {
+		b.WriteString("\n\n")
+		b.WriteString(lipgloss.NewStyle().Bold(true).Render("README"))
+		b.WriteString("\n")
+		b.WriteString(readme)
 	}
-	return strings.Join(tabParts, "│")
+
+	releases := m.renderReleases()
+	if releases != "" {
+		b.WriteString("\n\n")
+		b.WriteString(lipgloss.NewStyle().Bold(true).Render("Releases"))
+		b.WriteString("\n")
+		b.WriteString(releases)
+	}
+
+	return b.String()
 }
 
 func (m Model) renderOverview() string {
@@ -146,30 +131,7 @@ func (m Model) renderReadme() string {
 	if m.repo == nil {
 		return ""
 	}
-
-	readmeContent := m.repo.AISummary
-	if readmeContent == "" {
-		return "No README available.\n\nUse :analyze to generate an AI summary."
-	}
-
-	renderWidth := m.width - 4
-	if renderWidth < 20 {
-		renderWidth = 20
-	}
-
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(renderWidth),
-	)
-	if err != nil {
-		return "AI Summary\n\n" + readmeContent
-	}
-
-	rendered, err := renderer.Render(readmeContent)
-	if err != nil {
-		return "AI Summary\n\n" + readmeContent
-	}
-	return rendered
+	return m.repo.AISummary
 }
 
 func (m Model) renderReleases() string {
@@ -180,5 +142,5 @@ func (m Model) renderReleases() string {
 	if m.repo.SubscribedReleases {
 		return fmt.Sprintf("Subscribed to releases for %s\n\nLast fetched: %v", m.repo.FullName, m.repo.LastReleaseFetch)
 	}
-	return "Not subscribed to releases.\n\nPress 's' to subscribe."
+	return "Not subscribed to releases."
 }

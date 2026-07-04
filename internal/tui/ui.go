@@ -390,16 +390,10 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	case key.Matches(typed, m.ctx.Keys.PrevSection):
 		if m.ctx.View == tuicontext.StatsView {
 			m.stats.PrevTab()
-		} else {
-			m.repo.PrevTab()
-			m.syncSidebar()
 		}
 	case key.Matches(typed, m.ctx.Keys.NextSection):
 		if m.ctx.View == tuicontext.StatsView {
 			m.stats.NextTab()
-		} else {
-			m.repo.NextTab()
-			m.syncSidebar()
 		}
 	case key.Matches(typed, m.ctx.Keys.ToggleSidebar):
 		m.showSidebar = !m.showSidebar
