@@ -48,6 +48,16 @@ func (m *Model) AddEntry(command, stdout, stderr string) {
 func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+	vpWidth := width - 2
+	vpHeight := height - 2
+	if vpWidth < 1 {
+		vpWidth = 1
+	}
+	if vpHeight < 1 {
+		vpHeight = 1
+	}
+	m.vp.SetWidth(vpWidth)
+	m.vp.SetHeight(vpHeight)
 }
 
 func (m Model) IsOpen() bool    { return m.open }
@@ -68,13 +78,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case ctrlO:
 			m.open = !m.open
 			m.focused = m.open
+			return m, nil
 		case esc:
 			if m.open {
 				m.open = false
 				m.focused = false
+				return m, nil
 			}
 		case ctrlL:
 			m.entries = nil
+			return m, nil
+		}
+		if m.open {
+			var cmd tea.Cmd
+			m.vp, cmd = m.vp.Update(msg)
+			return m, cmd
 		}
 	}
 	return m, nil
@@ -86,11 +104,6 @@ func (m Model) View() tea.View {
 	}
 
 	var b strings.Builder
-	border := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(m.th.FaintBorder).
-		Width(m.width)
-
 	for i := len(m.entries) - 1; i >= 0; i-- {
 		e := m.entries[i]
 		b.WriteString(lipgloss.NewStyle().Foreground(m.th.FaintText).Render(e.timestamp.Format("15:04:05") + " "))
@@ -106,5 +119,12 @@ func (m Model) View() tea.View {
 			b.WriteString("\n")
 		}
 	}
-	return tea.NewView(border.Render(b.String()))
+
+	m.vp.SetContent(b.String())
+
+	border := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(m.th.FaintBorder).
+		Width(m.width)
+	return tea.NewView(border.Render(m.vp.View()))
 }
