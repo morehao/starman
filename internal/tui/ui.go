@@ -442,9 +442,6 @@ func (m *Model) handleSearchMode(typed tea.KeyMsg) tea.Cmd {
 	}
 	if !m.searchInput.IsFocused() {
 		m.mode = modeNormal
-		if m.ctx.View == tuicontext.CategoriesView {
-			m.categories.ResetFilters()
-		}
 	}
 	return nil
 }
@@ -641,11 +638,11 @@ func (m *Model) starsSearch(query string) tea.Cmd {
 	return func() tea.Msg {
 		stdout, _, err := m.runner.Run(context.Background(), "search "+query+" --json")
 		if err != nil {
-			return starssection.ReposFetchedMsg{SectionID: 1, Repos: nil}
+			return starssection.ReposFetchFailedMsg{SectionID: 1, Err: err}
 		}
 		var hits []jsonHit
 		if err := json.Unmarshal([]byte(stdout), &hits); err != nil {
-			return starssection.ReposFetchedMsg{SectionID: 1, Repos: nil}
+			return starssection.ReposFetchFailedMsg{SectionID: 1, Err: fmt.Errorf("parse search results: %w", err)}
 		}
 		repos := convertSearchHitsToRepos(hits)
 		return starssection.ReposFetchedMsg{SectionID: 1, Repos: repos}
