@@ -484,6 +484,7 @@ func (m *Model) switchView(delta int) {
 	}
 	nextIdx := (currentIdx + delta + len(views)) % len(views)
 	m.ctx.View = views[nextIdx]
+	m.tabs.SetActive(nextIdx)
 
 	switch m.ctx.View {
 	case tuicontext.StarsView:
