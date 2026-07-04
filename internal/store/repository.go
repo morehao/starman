@@ -27,6 +27,24 @@ func (s *sqliteStore) UpsertRepositories(ctx context.Context, rs []*Repository) 
 	return tx.Commit()
 }
 
+func (s *sqliteStore) UpsertReposTouchOnly(ctx context.Context, repos []*Repository) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, r := range repos {
+		_, err := tx.ExecContext(ctx,
+			`UPDATE repositories SET repo_updated_at=?, updated_at=datetime('now') WHERE full_name=?`,
+			r.RepoUpdatedAt, r.FullName)
+		if err != nil {
+			return fmt.Errorf("touch repo %s: %w", r.FullName, err)
+		}
+	}
+	return tx.Commit()
+}
+
 func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 	topicsJSON, _ := json.Marshal(r.Topics)
 	tagsJSON, _ := json.Marshal(r.AITags)

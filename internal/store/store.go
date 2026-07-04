@@ -11,6 +11,7 @@ type Store interface {
 	UpsertRepository(ctx context.Context, r *Repository) error
 	UpsertRepositories(ctx context.Context, rs []*Repository) error
 	UpsertReposOnSync(ctx context.Context, rs []*Repository, fullSync bool) error
+	UpsertReposTouchOnly(ctx context.Context, repos []*Repository) error
 	GetRepository(ctx context.Context, fullName string) (*Repository, error)
 	ListRepositories(ctx context.Context) ([]*Repository, error)
 	ListUnanalyzed(ctx context.Context, limit int) ([]*Repository, error)

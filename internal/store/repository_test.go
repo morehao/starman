@@ -218,6 +218,38 @@ func TestSetAnalysisFailed(t *testing.T) {
 	}
 }
 
+func TestUpsertReposTouchOnly(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	r1 := sampleRepo(1, "owner/repo1")
+	if err := s.UpsertRepository(ctx, r1); err != nil {
+		t.Fatal(err)
+	}
+
+	r1.RepoUpdatedAt = "2026-07-04T12:00:00Z"
+	if err := s.UpsertReposTouchOnly(ctx, []*Repository{r1}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetRepository(ctx, "owner/repo1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RepoUpdatedAt != "2026-07-04T12:00:00Z" {
+		t.Fatalf("expected repo_updated_at '2026-07-04T12:00:00Z', got %q", got.RepoUpdatedAt)
+	}
+	if got.Description != "test desc" {
+		t.Fatalf("touch should not modify description, got %q", got.Description)
+	}
+	if got.StargazersCount != 10 {
+		t.Fatalf("touch should not modify stargazers_count, got %d", got.StargazersCount)
+	}
+	if got.StarredAt != r1.StarredAt {
+		t.Fatalf("touch should not modify starred_at, got %q", got.StarredAt)
+	}
+}
+
 func TestDeleteAllRepositories(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
