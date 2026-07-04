@@ -11,7 +11,9 @@ type KeyMap struct {
 	Down          key.Binding
 	FirstLine     key.Binding
 	LastLine      key.Binding
+	// Deprecated: Sidebar tabs have been merged. Only used by Stats view.
 	NextSection   key.Binding
+	// Deprecated: Sidebar tabs have been merged. Only used by Stats view.
 	PrevSection   key.Binding
 	NextGroup     key.Binding
 	PrevGroup     key.Binding
