@@ -14,6 +14,7 @@ import (
 type Column struct {
 	Title string
 	Width int
+	Flex  bool
 }
 
 type Model struct {
@@ -254,7 +255,26 @@ func (m Model) fitColumns(availWidth int) ([]Column, int) {
 		totalW += c.Width
 	}
 	if totalW <= availWidth {
-		return m.columns, totalW
+		fitted := make([]Column, len(m.columns))
+		copy(fitted, m.columns)
+		used := prefixW
+		for i := range fitted {
+			used += fitted[i].Width
+			if i < len(m.columns)-1 {
+				used++
+			}
+		}
+		extra := availWidth - used
+		if extra > 0 {
+			for i := range fitted {
+				if m.columns[i].Flex {
+					fitted[i].Width += extra
+					used += extra
+					break
+				}
+			}
+		}
+		return fitted, used
 	}
 	scale := float64(availWidth-prefixW-gap) / float64(totalW-prefixW-gap)
 	if scale < 0.3 {
@@ -267,7 +287,7 @@ func (m Model) fitColumns(availWidth int) ([]Column, int) {
 		if w < 3 {
 			w = 3
 		}
-		fitted[i] = Column{Title: c.Title, Width: w}
+		fitted[i] = Column{Title: c.Title, Width: w, Flex: c.Flex}
 		used += w
 		if i < len(m.columns)-1 {
 			used++
