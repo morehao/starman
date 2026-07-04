@@ -41,32 +41,29 @@ func NewRootCmd(ver string) *cobra.Command {
 	return root
 }
 
-func Run(ver string) {
+func Run(ver string) error {
 	if !hasSubcommandArgs(os.Args[1:]) {
 		configPath, err := configPathForArgs(os.Args[1:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return fmt.Errorf("parse config path: %w", err)
 		}
 
 		cfg, err := config.Load(configPath)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return fmt.Errorf("load config: %w", err)
 		}
 
 		if err := tui.Run(cfg, ver); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return fmt.Errorf("tui: %w", err)
 		}
-		return
+		return nil
 	}
 
 	root := NewRootCmd(ver)
 	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return err
 	}
+	return nil
 }
 
 func configPathForArgs(args []string) (string, error) {
