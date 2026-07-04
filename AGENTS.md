@@ -186,29 +186,21 @@ Normal(表格导航) ──/──► Search ──Enter──► 执行搜索 �
 - 任意模式下 `Esc` 必须能无副作用地回到 Normal
 - 模式切换时 sidebar 内容不清空
 
-### 4.3 命令模式规范
+### 4.3 命令执行架构（headless 复用 cobra 命令树）
 
-语法：`:<command> [位置参数...] [--flag] [--key=value]`
+语法不变：`:<command> [位置参数...] [--flag] [--key=value]`。但执行方式由 [ADR-001](../docs/adr-001-headless-cli-command-execution.md) 重新定义——从手写 `parseCommand` 改为 headless 复用 cobra 命令树：
 
-**强制要求**：命令模式支持的命令集合，必须与 CLI 子命令集合保持同构映射关系：
+- 用户输入按 shell 语义切分为 `[]string` 后，交由 `internal/tui/cmdrunner` 包新建 `*cobra.Command` 实例、`SetArgs`、`SetOut`/`SetErr` 指向输出抽屉、`ExecuteContext` 执行。**命令定义的唯一来源是 cobra 命令树**，不再手写逐条解析。任何 CLI 子命令新增或修改 flag，TUI 自动可用。
+- **前置条件**：`internal/cli` 各命令的 `RunE` 不得调用 `os.Exit`，输出必须走 `cmd.OutOrStdout()`/`cmd.ErrOrStderr()`，每次执行需新建 `*cobra.Command` 实例。
+- **例外**：`config init`（依赖交互式 stdin）路由到原生 Prompt 组件；`sync --watch`（常驻阻塞）拦截为 TUI 定时 Task。详见 ADR-001 §2.6。
+- **边界**：高频读取操作（表格分页、行选中懒加载）仍直连业务包，不经过命令链路。详见 ADR-001 §2.5。
+- **键位是命令的语法糖**：动作类快捷键（`s`/`a`/`x`/`t`/`c` 等）职责收窄为"拼出等价命令字符串 + 可选弹确认 → 转发 headless runner"，不再在按键处理函数里直接调业务包函数——这样每个按键操作都能在输出抽屉的历史里追溯。破坏性操作（`--full` 等）的 y/n 确认规则不受影响。详见 ADR-001 §2.7。
 
-| CLI 命令 | TUI 命令模式 |
-|---|---|
-| `starman sync [--full]` | `:sync [--full]` |
-| `starman analyze [--all] [--limit N] [--force]` | `:analyze [--all] [--limit N] [--force]` |
-| `starman generate -s ... -o ... --repo ...` | `:generate [-s ...] [-o ...] [--repo ...]` |
-| `starman backup webdav --push/--pull/--test` | `:backup webdav --push` 等 |
-| `starman tag <repo> +a,-b` | `:tag <repo> +a,-b` |
-| `starman categorize <repo> <cat> [--lock]` | `:categorize <repo> <cat> [--lock]` |
-| `starman release subscribe/unsubscribe/pull` | `:release subscribe/unsubscribe/pull ...` |
-| `starman config show` | `:config show` |
-| `starman star/unstar <repo>` | `:star`/`:unstar <repo>` 或直接 `x` 键 |
-
-**禁止事项**：命令模式内部**不得**反向调用 `internal/cli` 里的 cobra Command，必须直接调用 cli 命令背后的业务函数。如果某个 CLI 命令的逻辑深嵌在 `internal/cli` 包内，**先把逻辑下沉成 `internal/<domain>` 的可导出函数，cli 和 tui 共同调用它**。
-
-### 4.4 长文本/结构化输出的展示规范
+### 4.4 输出抽屉
 
 `:config show`、`:release list` 等产出较长结构化文本的命令，使用 sidebar 容器弹出「输出面板」模式（只读、可滚动的 `viewport`，独立组件），`Esc` 关闭返回 Normal。不允许把大段文本塞进错误条或 footer。
+
+命令执行的实时流式输出、命令历史、结构化结果，统一进入一个**常驻可收起的底部抽屉**（`components/drawer/`），默认收起不占空间，快捷键展开后挤压主体高度。收起时 Footer 仍按 4.5 展示单行 Task 状态摘要。新功能凡是涉及展示大段文本或长任务进度，一律用此抽屉，不允许各命令自造展示方式。
 
 ### 4.5 异步任务规范
 
@@ -287,7 +279,7 @@ func TestStarsSection_View_Default(t *testing.T) {
 - [ ] L3：布局与样式类用例分开
 - [ ] L4：至少一条覆盖该功能的端到端旅程
 - [ ] 空态、错误态有对应用例
-- [ ] 若涉及命令模式：`parseCommand` 覆盖新命令的所有 flag 组合
+- [ ] 若涉及命令模式：`cmdrunner` 的参数切分（含带引号参数）和例外拦截有对应用例
 
 ---
 
@@ -300,7 +292,7 @@ func TestStarsSection_View_Default(t *testing.T) {
 | 组件目录 | 新组件放 `components/<name>/`，不得散落在 `ui.go` |
 | 主题/图标/样式 | 只能引用 `theme/`、`constants/`、`common/` |
 | 键位注册 | 只能在 `keys/` 里定义，按三层分类 |
-| 命令解析与执行 | 只能在 `commands.go`，禁止反向调用 `internal/cli` |
+| 命令解析与执行 | 通过 `internal/tui/cmdrunner` headless 调用 cobra 命令树（见 ADR-001），不再手写参数解析；高频读取操作仍直连业务包 |
 
 ---
 
@@ -317,7 +309,7 @@ func TestStarsSection_View_Default(t *testing.T) {
   - 新键位必须注册进 keys/ 包并归入正确的层级
   - 长耗时操作必须通过 Task 系统（ctx.StartTask + TaskFinishedMsg），Update() 内禁止阻塞
   - 必须实现宽屏/窄屏/极窄三档响应式行为
-  - 命令模式新增命令要和对应 CLI 子命令的参数保持一致
+  - 命令模式通过 `cmdrunner` headless 复用 cobra 命令树，不需手写解析
 
 ## 功能描述
 [状态 / 按键与事件 / 视觉反馈]
@@ -332,14 +324,14 @@ func TestStarsSection_View_Default(t *testing.T) {
 ## 8. 技术债收敛路线图（按优先级排序）
 
 **P0（违反核心原则，优先处理）**
-1. 将 `ui.go` 中内联的搜索输入、分类/标签 overlay 拆成独立组件
-2. 搜索从内存过滤升级为 `store.Search` 三段式检索
-3. 补齐窄屏自动切 bottom 预览 + 极窄关闭 sidebar
+1. **落地 ADR-001**：`internal/cli` 前置改造（移除 `os.Exit`、输出走 `cmd.OutOrStdout()`、每次新建 Command 实例）→ 实现 `internal/tui/cmdrunner` headless runner → 新增输出抽屉组件（`components/drawer/`，见 4.4）→ 处理 `config init`/`sync --watch` 两个例外场景。**此项完成后"补齐命令模式"自动达成，无需单独排期。**
+2. 将 `ui.go` 中内联的搜索输入、分类/标签 overlay 拆成独立组件
+3. 搜索从内存过滤改为 headless 调用 `search --json` 走完整搜索链路
+4. 补齐窄屏自动切 bottom 预览 + 极窄关闭 sidebar
 
 **P1（功能完整性缺口）**
-4. 补齐命令模式：`:analyze`/`:generate`/`:backup`/`:tag`/`:categorize`/`:release ...`/`:config show`
 5. Stars 视图暴露分组 tabs（Language/Category/Tag）
-6. 新增"输出面板"组件，承接结构化输出需求
+6. 键位改造为"拼命令字符串 + 转发 headless runner"的语法糖模式（ADR-001 §2.7），逐个梳理现有按键的处理函数
 
 **P2（体验与可维护性）**
 7. keybindings 从 `config.yaml` 的 `tui.keybindings` 读取覆盖默认值
