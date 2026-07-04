@@ -146,8 +146,11 @@ func (m *Model) FirstItem() { m.list.FirstItem() }
 func (m *Model) LastItem() { m.list.LastItem() }
 
 func (m *Model) SetPeriod(period string) {
+	if m.period == period {
+		return
+	}
 	m.period = period
-	m.ResetRows()
+	m.loaded = false
 }
 
 func (m *Model) Update(msg tea.Msg) (section.Section, tea.Cmd) {

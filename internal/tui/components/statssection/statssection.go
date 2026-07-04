@@ -142,7 +142,7 @@ func (m *Model) View() string {
 			barLen = 1
 		}
 		bar := strings.Repeat("█", barLen)
-		line := fmt.Sprintf("%-18s  %-*s  %s", valStyle.Render(label), maxBarWidth, bar, dimStyle.Render(fmt.Sprintf("%d", item.count)))
+		line := fmt.Sprintf("%-18s %s %s", valStyle.Render(label), bar, dimStyle.Render(fmt.Sprintf("%d", item.count)))
 		b.WriteString(line)
 		b.WriteString("\n")
 	}

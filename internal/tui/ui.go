@@ -118,7 +118,7 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		m.currSection = m.categories
 	case tuicontext.TrendingView:
 		m.currSection = m.trending
-		m.tabs.SetSectionTabs(nil)
+		m.tabs.SetSectionTabs([]string{"\U0001F50D Search", "Daily", "Weekly", "Monthly"})
 	case tuicontext.ReleasesView:
 		m.currSection = m.releases
 		m.tabs.SetSectionTabs(nil)
@@ -316,12 +316,24 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 			m.tabs.NextSection()
 			m.stars.SetGroupBy(sectionIndexToGroupBy(m.tabs.ActiveSectionIndex()))
 		}
+		if m.ctx.View == tuicontext.TrendingView {
+			m.tabs.NextSection()
+			m.trending.SetPeriod(sectionIndexToTrendingPeriod(m.tabs.ActiveSectionIndex()))
+			m.trending.ResetRows()
+			return tea.Batch(m.trending.FetchNextPageSectionRows()...)
+		}
 		return nil
 
 	case key.Matches(typed, m.ctx.Keys.PrevGroup):
 		if m.ctx.View == tuicontext.StarsView {
 			m.tabs.PrevSection()
 			m.stars.SetGroupBy(sectionIndexToGroupBy(m.tabs.ActiveSectionIndex()))
+		}
+		if m.ctx.View == tuicontext.TrendingView {
+			m.tabs.PrevSection()
+			m.trending.SetPeriod(sectionIndexToTrendingPeriod(m.tabs.ActiveSectionIndex()))
+			m.trending.ResetRows()
+			return tea.Batch(m.trending.FetchNextPageSectionRows()...)
 		}
 		return nil
 
@@ -386,6 +398,11 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 			m.tabs.SetActiveSection(secIdx)
 			if m.ctx.View == tuicontext.StarsView {
 				m.stars.SetGroupBy(sectionIndexToGroupBy(secIdx))
+			}
+			if m.ctx.View == tuicontext.TrendingView {
+				m.trending.SetPeriod(sectionIndexToTrendingPeriod(secIdx))
+				m.trending.ResetRows()
+				return tea.Batch(m.trending.FetchNextPageSectionRows()...)
 			}
 		}
 		return nil
@@ -589,6 +606,19 @@ func sectionIndexToGroupBy(idx int) string {
 	return groups[idx]
 }
 
+func sectionIndexToTrendingPeriod(idx int) string {
+	switch idx {
+	case 1:
+		return trendingsection.PeriodDaily
+	case 2:
+		return trendingsection.PeriodWeekly
+	case 3:
+		return trendingsection.PeriodMonthly
+	default:
+		return trendingsection.PeriodDaily
+	}
+}
+
 func (m *Model) executeSearch(query string) tea.Cmd {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -687,7 +717,7 @@ func (m *Model) switchView(delta int) {
 		m.tabs.SetSectionTabs([]string{"\U0001F50D Search", "All"})
 	case tuicontext.TrendingView:
 		m.currSection = m.trending
-		m.tabs.SetSectionTabs(nil)
+		m.tabs.SetSectionTabs([]string{"\U0001F50D Search", "Daily", "Weekly", "Monthly"})
 	case tuicontext.ReleasesView:
 		m.currSection = m.releases
 		m.tabs.SetSectionTabs(nil)

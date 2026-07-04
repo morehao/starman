@@ -55,6 +55,7 @@ func (m Model) View() string {
 		label string
 	}{
 		{"⭐", "Stars"},
+		{"📂", "Categories"},
 		{"📈", "Trending"},
 		{"📦", "Releases"},
 		{"📊", "Stats"},
@@ -62,7 +63,7 @@ func (m Model) View() string {
 
 	var viewParts []string
 	for i, v := range views {
-		label := v.icon + v.label
+		label := v.icon + " " + v.label
 		if string(m.ctx.View) == getViewKey(i) {
 			viewParts = append(viewParts, activeStyle.Render(label))
 		} else {
@@ -112,10 +113,12 @@ func getViewKey(i int) string {
 	case 0:
 		return string(context.StarsView)
 	case 1:
-		return string(context.TrendingView)
+		return string(context.CategoriesView)
 	case 2:
-		return string(context.ReleasesView)
+		return string(context.TrendingView)
 	case 3:
+		return string(context.ReleasesView)
+	case 4:
 		return string(context.StatsView)
 	default:
 		return ""
@@ -123,7 +126,7 @@ func getViewKey(i int) string {
 }
 
 func (m Model) ViewSwitcherAtX(x int) int {
-	views := []string{"⭐Stars", "📈Trending", "📦Releases", "📊Stats"}
+	views := []string{"⭐ Stars", "📂 Categories", "📈 Trending", "📦 Releases", "📊 Stats"}
 	offset := 0
 	for i, label := range views {
 		w := offset + len(label) + 3
