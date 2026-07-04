@@ -54,11 +54,6 @@ CLI 参数 > 环境变量 > 配置文件 > 默认值。
 
 CI 在 `v*` 标签上触发，运行 `goreleaser release --clean`。产出多平台二进制文件、deb/rpm 包、Homebrew formula、Scoop manifest。
 
-## 分支与提交流程
-
-1. **禁止在 `main` 分支上直接开发**：所有代码变动（新功能、bug 修复、重构等）必须在新建分支上进行。
-2. **`main` 分支不允许直接提交**：所有改动必须通过 PR 合入 `main`，禁止直接 `git push` 到 `main` 或直接在 `main` 分支上 `git commit`。
-
 ## Git Worktrees
 
 `.worktrees/` 在 `.gitignore` 中 — 项目使用 `git worktree` 进行并行开发。

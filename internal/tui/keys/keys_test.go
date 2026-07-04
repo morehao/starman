@@ -85,7 +85,6 @@ func TestAllKeysNonEmpty(t *testing.T) {
 		{"Escape", km.Escape},
 		{"Enter", km.Enter},
 		{"ActionsMenu", km.ActionsMenu},
-		{"Filter", km.Filter},
 	}
 	for _, b := range bindings {
 		keys := b.binding.Keys()

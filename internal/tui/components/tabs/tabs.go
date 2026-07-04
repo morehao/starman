@@ -81,7 +81,7 @@ func (m Model) ViewTabAtX(x int) int {
 func (m Model) SectionTabAtX(x int) int {
 	offset := 0
 	for i, t := range m.sectionTabs {
-		w := lipgloss.Width(t) + 4
+		w := lipgloss.Width(t) + 2
 		if x >= offset && x < offset+w {
 			return i
 		}
@@ -125,9 +125,9 @@ func (m Model) renderSectionTabs() string {
 	var items []string
 	for i, t := range m.sectionTabs {
 		if i == m.activeSection {
-			items = append(items, activeStyle.Render("  "+t+"  "))
+			items = append(items, activeStyle.Render(" "+t+" "))
 		} else {
-			items = append(items, faintStyle.Render("  "+t+"  "))
+			items = append(items, faintStyle.Render(" "+t+" "))
 		}
 	}
 	return rowStyle.Render(strings.Join(items, "|"))

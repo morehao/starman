@@ -188,10 +188,6 @@ func (m *Model) SetSize(w, h int) {
 	m.list.SetSize(w, h)
 }
 
-func (m *Model) SupportsSearch() bool { return true }
-
-func (m *Model) SupportsFilter() bool { return true }
-
 func (m *Model) FilterRows(query string) {
 	if query == "" {
 		m.rows = m.buildRows(m.categories, nil)
