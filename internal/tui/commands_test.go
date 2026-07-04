@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/morehao/starman/internal/tui/components/commandinput"
 	"github.com/morehao/starman/internal/tui/components/drawer"
 )
 
@@ -18,11 +19,25 @@ func (r *fakeRunner) Run(_ context.Context, _ string) (string, string, error) {
 func TestHandleCommandMode_EnterExecutesCommand(t *testing.T) {
 	run := &fakeRunner{stdout: "ok"}
 	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "sync --full",
-		runner:      run,
-		tasks:       newTasksHolder(),
+		mode:         modeCommand,
+		commandInput: commandinput.NewModel(),
+		runner:       run,
+		tasks:        newTasksHolder(),
 	}
+	m.commandInput.SetFocused(true)
+
+	m.handleCommandMode(tea.KeyPressMsg{Code: 's'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'y'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'n'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'c'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 32})
+	m.handleCommandMode(tea.KeyPressMsg{Code: '-'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: '-'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'f'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'u'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'l'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'l'})
+
 	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
 	if cmd == nil {
 		t.Fatal("expected a command")
@@ -34,16 +49,20 @@ func TestHandleCommandMode_EnterExecutesCommand(t *testing.T) {
 	if m.mode != modeNormal {
 		t.Fatal("mode should be normal after enter")
 	}
-	if m.searchQuery != "" {
-		t.Fatal("searchQuery should be cleared")
-	}
 }
 
 func TestHandleCommandMode_EscExitsCommandMode(t *testing.T) {
 	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "test",
+		mode:         modeCommand,
+		commandInput: commandinput.NewModel(),
 	}
+	m.commandInput.SetFocused(true)
+
+	m.handleCommandMode(tea.KeyPressMsg{Code: 't'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'e'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 's'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 't'})
+
 	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 27})
 	if cmd != nil {
 		t.Fatal("expected nil command")
@@ -51,18 +70,22 @@ func TestHandleCommandMode_EscExitsCommandMode(t *testing.T) {
 	if m.mode != modeNormal {
 		t.Fatal("mode should be normal after esc")
 	}
-	if m.searchQuery != "" {
-		t.Fatal("searchQuery should be cleared")
+	if m.commandInput.IsFocused() {
+		t.Fatal("command input should not be focused after esc")
 	}
 }
 
 func TestHandleCommandMode_QuitViaColonQ(t *testing.T) {
 	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "q",
-		runner:      &fakeRunner{},
-		tasks:       newTasksHolder(),
+		mode:         modeCommand,
+		commandInput: commandinput.NewModel(),
+		runner:       &fakeRunner{},
+		tasks:        newTasksHolder(),
 	}
+	m.commandInput.SetFocused(true)
+
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'q'})
+
 	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
 	if cmd == nil {
 		t.Fatal("expected quit command")
@@ -73,27 +96,44 @@ func TestHandleCommandMode_QuitViaColonQ(t *testing.T) {
 	}
 }
 
-func TestHandleCommandMode_BackspaceRemovesLastChar(t *testing.T) {
+func TestHandleCommandMode_QuitViaColonQuit(t *testing.T) {
 	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "sync",
+		mode:         modeCommand,
+		commandInput: commandinput.NewModel(),
+		runner:       &fakeRunner{},
+		tasks:        newTasksHolder(),
 	}
-	m.handleCommandMode(tea.KeyPressMsg{Code: 127})
-	if m.searchQuery != "syn" {
-		t.Fatalf("expected 'syn', got %q", m.searchQuery)
+	m.commandInput.SetFocused(true)
+
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'q'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'u'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 'i'})
+	m.handleCommandMode(tea.KeyPressMsg{Code: 't'})
+
+	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
+	if cmd == nil {
+		t.Fatal("expected quit command")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Fatalf("expected QuitMsg, got %T", msg)
 	}
 }
 
 func TestHandleCommandMode_EmptyCommandDoesNothing(t *testing.T) {
 	m := &Model{
-		mode:        modeCommand,
-		searchQuery: "",
-		runner:      &fakeRunner{},
-		tasks:       newTasksHolder(),
+		mode:         modeCommand,
+		commandInput: commandinput.NewModel(),
+		runner:       &fakeRunner{},
+		tasks:        newTasksHolder(),
 	}
+	m.commandInput.SetFocused(true)
 	cmd := m.handleCommandMode(tea.KeyPressMsg{Code: 13})
 	if cmd != nil {
 		t.Fatal("expected nil command for empty input")
+	}
+	if m.mode != modeNormal {
+		t.Fatal("expected mode to be normal after empty command")
 	}
 }
 

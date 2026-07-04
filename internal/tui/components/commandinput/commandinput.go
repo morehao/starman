@@ -1,4 +1,4 @@
-package searchinput
+package commandinput
 
 import (
 	tea "charm.land/bubbletea/v2"
@@ -6,23 +6,24 @@ import (
 	"github.com/morehao/starman/internal/tui/theme"
 )
 
-type SearchExecutedMsg struct {
-	Query string
+type CommandExecutedMsg struct {
+	Command string
 }
 
 type Model struct {
-	query       string
-	focused     bool
-	th          theme.Theme
-	width       int
-	height      int
-	sectionName string
+	query      string
+	focused    bool
+	th         theme.Theme
+	width      int
+	height     int
+	history    []string
+	historyPos int
 }
 
 func NewModel() Model {
 	return Model{
-		th:          theme.DefaultTheme(),
-		sectionName: "Stars",
+		th:         theme.DefaultTheme(),
+		historyPos: -1,
 	}
 }
 
@@ -35,17 +36,14 @@ func (m *Model) SetSize(width, height int) {
 	m.height = height
 }
 
-func (m *Model) SetSectionName(name string) {
-	m.sectionName = name
-}
-
 func (m Model) Init() tea.Cmd { return nil }
 
 func (m Model) IsFocused() bool { return m.focused }
 
 func (m *Model) SetFocused(focused bool) {
 	m.focused = focused
-	if !focused {
+	if focused {
+		m.historyPos = -1
 		m.query = ""
 	}
 }
@@ -54,6 +52,8 @@ const (
 	enterKey     = 13
 	escapeKey    = 27
 	backspaceKey = 127
+	upKey        = 65517
+	downKey      = 65516
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -66,12 +66,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case escapeKey:
 			m.focused = false
 			m.query = ""
+			m.historyPos = -1
 			return m, nil
 		case enterKey:
 			m.focused = false
-			q := m.query
+			cmd := m.query
 			m.query = ""
-			return m, func() tea.Msg { return SearchExecutedMsg{Query: q} }
+			if cmd != "" {
+				m.history = append(m.history, cmd)
+			}
+			m.historyPos = -1
+			return m, func() tea.Msg { return CommandExecutedMsg{Command: cmd} }
+		case upKey:
+			if len(m.history) == 0 {
+				return m, nil
+			}
+			if m.historyPos == -1 {
+				m.historyPos = len(m.history) - 1
+			} else if m.historyPos > 0 {
+				m.historyPos--
+			}
+			m.query = m.history[m.historyPos]
+			return m, nil
+		case downKey:
+			if m.historyPos == -1 {
+				return m, nil
+			}
+			if m.historyPos < len(m.history)-1 {
+				m.historyPos++
+				m.query = m.history[m.historyPos]
+			} else {
+				m.historyPos = -1
+				m.query = ""
+			}
+			return m, nil
 		case backspaceKey:
 			if len(m.query) > 0 {
 				m.query = m.query[:len(m.query)-1]
@@ -96,6 +124,5 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) renderOverlay() string {
-	title := "Search " + m.sectionName
-	return inputoverlay.RenderOverlay(m.th, m.width, m.height, title, m.query)
+	return inputoverlay.RenderOverlay(m.th, m.width, m.height, "Command", m.query)
 }

@@ -88,14 +88,15 @@ type ReleasesMarkedMsg struct {
 }
 
 type Model struct {
-	id        int
-	ctx       *tuicontext.ProgramContext
-	cfg       section.SectionConfig
-	filter    string
-	list      listviewport.Model
-	rows      []section.RowData
-	loaded    bool
-	isLoading bool
+	id          int
+	ctx         *tuicontext.ProgramContext
+	cfg         section.SectionConfig
+	filter      string
+	list        listviewport.Model
+	rows        []section.RowData
+	loaded      bool
+	isLoading   bool
+	allReleases []*store.Release
 }
 
 func NewModel(id int, ctx *tuicontext.ProgramContext, cfg section.SectionConfig, filter string) *Model {
@@ -210,6 +211,7 @@ func (m *Model) MarkAllRead() tea.Cmd {
 }
 
 func (m *Model) buildRows(releases []*store.Release) []section.RowData {
+	m.allReleases = releases
 	m.rows = make([]section.RowData, 0, len(releases))
 	rows := make([]section.RowData, 0, len(releases))
 	prevRepo := ""
@@ -232,6 +234,59 @@ func (m *Model) ResetRows() {
 	m.list.SetRows(nil)
 	m.loaded = false
 	m.isLoading = false
+	m.allReleases = nil
+}
+
+func (m *Model) FilterRows(query string) {
+	if query == "" {
+		if m.allReleases != nil {
+			listRows := m.buildRows(m.allReleases)
+			m.list.SetRows(listRows)
+		}
+		return
+	}
+	filtered := make([]*store.Release, 0)
+	for _, r := range m.allReleases {
+		if containsFold(r.RepoFullName, query) || containsFold(r.TagName, query) {
+			filtered = append(filtered, r)
+		}
+	}
+	listRows := m.buildRows(filtered)
+	m.list.SetRows(listRows)
+}
+
+func (m *Model) SupportsSearch() bool { return false }
+
+func (m *Model) SupportsFilter() bool { return true }
+
+func containsFold(s, substr string) bool {
+	if len(substr) == 0 {
+		return false
+	}
+	if len(s) < len(substr) {
+		return false
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		match := true
+		for j := 0; j < len(substr); j++ {
+			sc := s[i+j]
+			ss := substr[j]
+			if sc >= 'A' && sc <= 'Z' {
+				sc += 32
+			}
+			if ss >= 'A' && ss <= 'Z' {
+				ss += 32
+			}
+			if sc != ss {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Model) FilterLabel() string {

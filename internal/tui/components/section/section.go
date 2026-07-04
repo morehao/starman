@@ -39,4 +39,7 @@ type Section interface {
 	GetTotalCount() int
 	IsSearchFocused() bool
 	UpdateProgramContext(*context.ProgramContext)
+	FilterRows(query string)
+	SupportsSearch() bool
+	SupportsFilter() bool
 }

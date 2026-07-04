@@ -10,6 +10,7 @@ const (
 const (
 	Logo        = "starman"
 	SearchIcon  = "search"
+	OverlayIcon = "🔍"
 	FailureIcon = "x"
 	SuccessIcon = "ok"
 	StarIcon    = "*"
