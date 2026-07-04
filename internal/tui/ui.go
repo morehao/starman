@@ -502,6 +502,7 @@ func (m *Model) switchView(delta int) {
 	}
 	m.showSidebar = true
 	m.ctx.SidebarOpen = true
+	m.recalcLayout()
 	m.syncSidebar()
 }
 

@@ -35,6 +35,9 @@ func New(cols []Column, programContext *context.ProgramContext) Model {
 }
 
 func (m *Model) SetSize(w, h int) {
+	if m.width == w && m.height == h {
+		return
+	}
 	m.width = w
 	m.height = h
 	m.viewport.SetWidth(w)
@@ -118,6 +121,11 @@ func (m Model) renderTable() string {
 		return ""
 	}
 
+	cols, contentW := m.fitColumns(m.width)
+	if contentW < 1 {
+		return ""
+	}
+
 	theme := m.context.Theme
 	selectedBg := lipgloss.NewStyle().Background(theme.SelectedBackground)
 	selectedFg := lipgloss.NewStyle().Foreground(theme.PrimaryText).Background(theme.SelectedBackground)
@@ -126,21 +134,21 @@ func (m Model) renderTable() string {
 
 	var b strings.Builder
 
-	b.WriteString(borderStyle.Render(strings.Repeat("─", m.width)))
+	b.WriteString(borderStyle.Render(strings.Repeat("─", contentW)))
 	b.WriteString("\n")
 
-	for i, col := range m.columns {
+	for i, col := range cols {
 		title := col.Title
 		if len(title) > col.Width {
 			title = title[:col.Width]
 		}
 		b.WriteString(fmt.Sprintf("%-*s", col.Width, title))
-		if i < len(m.columns)-1 {
+		if i < len(cols)-1 {
 			b.WriteString(" ")
 		}
 	}
 	b.WriteString("\n")
-	b.WriteString(borderStyle.Render(strings.Repeat("─", m.width)))
+	b.WriteString(borderStyle.Render(strings.Repeat("─", contentW)))
 	b.WriteString("\n")
 
 	for rowIdx, row := range m.rows {
@@ -151,16 +159,16 @@ func (m Model) renderTable() string {
 
 		colVals := row.GetColumns()
 		lineStr := prefix
-		for colIdx, col := range m.columns {
+		for colIdx, col := range cols {
 			val := ""
 			if colIdx < len(colVals) {
 				val = colVals[colIdx]
 			}
-		if len(val) > col.Width {
-			val = val[:col.Width-1] + "…"
-		}
-		lineStr += fmt.Sprintf("%-*s", col.Width, val)
-			if colIdx < len(m.columns)-1 {
+			if len(val) > col.Width {
+				val = val[:col.Width-1] + "…"
+			}
+			lineStr += fmt.Sprintf("%-*s", col.Width, val)
+			if colIdx < len(cols)-1 {
 				lineStr += " "
 			}
 		}
@@ -179,4 +187,37 @@ func (m Model) renderTable() string {
 		}
 	}
 	return b.String()
+}
+
+func (m Model) fitColumns(availWidth int) ([]Column, int) {
+	if availWidth <= 0 {
+		return m.columns, 0
+	}
+	gap := len(m.columns) - 1
+	prefixW := 2
+	totalW := prefixW + gap
+	for _, c := range m.columns {
+		totalW += c.Width
+	}
+	if totalW <= availWidth {
+		return m.columns, totalW
+	}
+	scale := float64(availWidth-prefixW-gap) / float64(totalW-prefixW-gap)
+	if scale < 0.3 {
+		scale = 0.3
+	}
+	fitted := make([]Column, len(m.columns))
+	used := prefixW
+	for i, c := range m.columns {
+		w := int(float64(c.Width) * scale)
+		if w < 3 {
+			w = 3
+		}
+		fitted[i] = Column{Title: c.Title, Width: w}
+		used += w
+		if i < len(m.columns)-1 {
+			used++
+		}
+	}
+	return fitted, used
 }
