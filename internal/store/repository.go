@@ -276,6 +276,9 @@ func (s *sqliteStore) SetAnalysisFailed(ctx context.Context, repoID int64, faile
 }
 
 func (s *sqliteStore) DeleteAllRepositories(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM repo_vectors`); err != nil {
+		return err
+	}
 	_, err := s.db.ExecContext(ctx, `DELETE FROM repositories`)
 	return err
 }
@@ -305,25 +308,32 @@ func (s *sqliteStore) UpsertReposOnSync(ctx context.Context, rs []*Repository, f
 		for _, r := range rs {
 			incomingNames[r.FullName] = true
 		}
-		rows, err := tx.QueryContext(ctx, `SELECT full_name FROM repositories`)
+		rows, err := tx.QueryContext(ctx, `SELECT id, full_name FROM repositories`)
 		if err != nil {
 			return fmt.Errorf("query all repos for full sync: %w", err)
 		}
-		var toDelete []string
+		type repoRef struct {
+			id   int64
+			name string
+		}
+		var toDelete []repoRef
 		for rows.Next() {
-			var fn string
-			if err := rows.Scan(&fn); err != nil {
+			var ref repoRef
+			if err := rows.Scan(&ref.id, &ref.name); err != nil {
 				rows.Close()
 				return err
 			}
-			if !incomingNames[fn] {
-				toDelete = append(toDelete, fn)
+			if !incomingNames[ref.name] {
+				toDelete = append(toDelete, ref)
 			}
 		}
 		rows.Close()
-		for _, fn := range toDelete {
-			if _, err := tx.ExecContext(ctx, `DELETE FROM repositories WHERE full_name = ?`, fn); err != nil {
-				return fmt.Errorf("delete repo %s: %w", fn, err)
+		for _, ref := range toDelete {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM repo_vectors WHERE rowid = ?`, ref.id); err != nil {
+				return fmt.Errorf("delete vector for %s: %w", ref.name, err)
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM repositories WHERE id = ?`, ref.id); err != nil {
+				return fmt.Errorf("delete repo %s: %w", ref.name, err)
 			}
 		}
 	}
