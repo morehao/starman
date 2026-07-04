@@ -62,7 +62,7 @@ func (r TrendingRow) GetColumns() []string {
 	stars := formatStarCount(r.Repo.Stars)
 	lang := r.Repo.Language
 	if lang == "" {
-		lang = "—"
+		lang = "-"
 	}
 	desc := r.Repo.Description
 	if len(desc) > 30 {

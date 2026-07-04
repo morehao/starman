@@ -39,8 +39,8 @@ func TestTrendingRowEmptyFields(t *testing.T) {
 		},
 	}
 	cols := row.GetColumns()
-	if cols[2] != "—" {
-		t.Fatalf("expected — for empty language, got %s", cols[2])
+	if cols[2] != "-" {
+		t.Fatalf("expected - for empty language, got %s", cols[2])
 	}
 }
 

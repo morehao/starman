@@ -59,7 +59,7 @@ func (r RepoRow) GetColumns() []string {
 	stars := fmt.Sprintf("%d", r.Repo.StargazersCount)
 	lang := r.Repo.Language
 	if lang == "" {
-		lang = "—"
+		lang = "-"
 	}
 	if len(lang) > 12 {
 		lang = lang[:11] + "…"
@@ -69,7 +69,7 @@ func (r RepoRow) GetColumns() []string {
 		cat = r.Repo.CustomCategory
 	}
 	if cat == "" {
-		cat = "—"
+		cat = "-"
 	}
 	return []string{r.Repo.FullName, stars, lang, cat}
 }

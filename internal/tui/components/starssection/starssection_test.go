@@ -150,7 +150,7 @@ func TestSetGroupBy_RenderedViewContainsLangValues(t *testing.T) {
 	langView := m.View()
 	t.Logf("Language mode view:\n%s", langView)
 
-	for _, want := range []string{"Go", "Rust", "Ruby", "—"} {
+	for _, want := range []string{"Go", "Rust", "Ruby", "-"} {
 		if !strings.Contains(langView, want) {
 			t.Errorf("View should contain %q but doesn't", want)
 		}
