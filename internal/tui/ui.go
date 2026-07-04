@@ -777,7 +777,11 @@ func (m *Model) recalcLayout() {
 
 	switch m.ctx.PreviewPosition {
 	case "right":
-		sidebarWidth := max(28, int(float64(w)*0.38))
+		ratio := 0.42
+		if m.ctx.TUICfg != nil && m.ctx.TUICfg.Preview.Width > 0 {
+			ratio = m.ctx.TUICfg.Preview.Width
+		}
+		sidebarWidth := max(28, int(float64(w)*ratio))
 		m.ctx.DynamicPreviewWidth = sidebarWidth
 		m.ctx.DynamicPreviewHeight = mainHeight
 		m.ctx.MainContentWidth = w - sidebarWidth
