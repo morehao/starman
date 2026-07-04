@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/morehao/starman/internal/github"
 	"github.com/morehao/starman/internal/release"
@@ -101,7 +100,7 @@ func newReleaseSubscribeCmd() *cobra.Command {
 			fmt.Printf("Subscribed to %s\n", args[0])
 			cfg, _, err := loadConfig(cmd)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Initial pull skipped: %v\n", err)
+				fmt.Fprintf(cmd.ErrOrStderr(), "Initial pull skipped: %v\n", err)
 				return nil
 			}
 			token := resolveGitHubToken(cmd, cfg)
@@ -109,7 +108,7 @@ func newReleaseSubscribeCmd() *cobra.Command {
 			tracker := release.NewTracker(s, gh)
 			stats, err := tracker.PullReleases(ctx)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Initial pull failed: %v\n", err)
+				fmt.Fprintf(cmd.ErrOrStderr(), "Initial pull failed: %v\n", err)
 				return nil
 			}
 			fmt.Printf("Pulled %d releases\n", stats.NewReleases)
