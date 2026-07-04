@@ -16,6 +16,7 @@ type Repository struct {
 	OwnerLogin         string
 	OwnerAvatar        string
 	StarredAt          string
+	RepoUpdatedAt      string    // 仓库在 GitHub 上的最后更新时间 (RFC3339)
 	AISummary          string
 	AITags             []string
 	AIPlatforms        []string

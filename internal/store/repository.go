@@ -27,6 +27,24 @@ func (s *sqliteStore) UpsertRepositories(ctx context.Context, rs []*Repository) 
 	return tx.Commit()
 }
 
+func (s *sqliteStore) UpsertReposTouchOnly(ctx context.Context, repos []*Repository) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, r := range repos {
+		_, err := tx.ExecContext(ctx,
+			`UPDATE repositories SET repo_updated_at=?, updated_at=datetime('now') WHERE full_name=?`,
+			r.RepoUpdatedAt, r.FullName)
+		if err != nil {
+			return fmt.Errorf("touch repo %s: %w", r.FullName, err)
+		}
+	}
+	return tx.Commit()
+}
+
 func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 	topicsJSON, _ := json.Marshal(r.Topics)
 	tagsJSON, _ := json.Marshal(r.AITags)
@@ -58,17 +76,18 @@ func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO repositories (
 		id, full_name, name, description, url, language, homepage,
-		stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at,
+		stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at, repo_updated_at,
 		ai_summary, ai_tags, ai_platforms, ai_category, ai_search_text, analyzed_at, analysis_failed,
 		custom_description, custom_tags, custom_category, category_locked,
 		subscribed_releases, last_release_fetch, vector_indexed_at
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 	ON CONFLICT(id) DO UPDATE SET
 		full_name=excluded.full_name, name=excluded.name, description=excluded.description,
 		url=excluded.url, language=excluded.language, homepage=excluded.homepage,
 		stargazers_count=excluded.stargazers_count, forks_count=excluded.forks_count,
 		topics=excluded.topics, owner_login=excluded.owner_login, owner_avatar=excluded.owner_avatar,
 		starred_at=excluded.starred_at,
+		repo_updated_at=excluded.repo_updated_at,
 		ai_summary=excluded.ai_summary, ai_tags=excluded.ai_tags, ai_platforms=excluded.ai_platforms,
 		ai_category=excluded.ai_category, ai_search_text=excluded.ai_search_text,
 		analyzed_at=excluded.analyzed_at, analysis_failed=excluded.analysis_failed,
@@ -78,7 +97,7 @@ func upsertRepoTx(ctx context.Context, tx *sql.Tx, r *Repository) error {
 		vector_indexed_at=excluded.vector_indexed_at,
 		updated_at=datetime('now')`,
 		r.ID, r.FullName, r.Name, r.Description, r.URL, r.Language, r.Homepage,
-		r.StargazersCount, r.ForksCount, string(topicsJSON), r.OwnerLogin, r.OwnerAvatar, r.StarredAt,
+		r.StargazersCount, r.ForksCount, string(topicsJSON), r.OwnerLogin, r.OwnerAvatar, r.StarredAt, r.RepoUpdatedAt,
 		r.AISummary, string(tagsJSON), string(platJSON), r.AICategory, r.AISearchText, analyzedAt, analysisFailed,
 		r.CustomDescription, string(customTagsJSON), r.CustomCategory, categoryLocked,
 		subscribed, lastReleaseFetch, vectorIndexedAt,
@@ -95,10 +114,11 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 	var analyzedAt, lastReleaseFetch, vectorIndexedAt sql.NullString
 	var customDesc, customCat sql.NullString
 	var analysisFailed, categoryLocked, subscribed int
-	var searchText sql.NullString
+	var searchText, repoUpdatedAt sql.NullString
 	err := row.Scan(
 		&r.ID, &r.FullName, &r.Name, &r.Description, &r.URL, &r.Language, &r.Homepage,
 		&r.StargazersCount, &r.ForksCount, &topicsJSON, &r.OwnerLogin, &r.OwnerAvatar, &r.StarredAt,
+		&repoUpdatedAt,
 		&r.AISummary, &tagsJSON, &platJSON, &r.AICategory, &searchText, &analyzedAt, &analysisFailed,
 		&customDesc, &customTagsJSON, &customCat, &categoryLocked,
 		&subscribed, &lastReleaseFetch, &vectorIndexedAt,
@@ -126,6 +146,9 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 	}
 	if searchText.Valid {
 		r.AISearchText = searchText.String
+	}
+	if repoUpdatedAt.Valid {
+		r.RepoUpdatedAt = repoUpdatedAt.String
 	}
 	if analyzedAt.Valid {
 		t, err := time.Parse(time.RFC3339, analyzedAt.String)
@@ -161,13 +184,13 @@ func (s *sqliteStore) GetRepository(ctx context.Context, fullName string) (*Repo
 }
 
 const repositoryColumns = `SELECT id, full_name, name, description, url, language, homepage,
-	stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at,
+	stargazers_count, forks_count, topics, owner_login, owner_avatar, starred_at, repo_updated_at,
 	ai_summary, ai_tags, ai_platforms, ai_category, ai_search_text, analyzed_at, analysis_failed,
 	custom_description, custom_tags, custom_category, category_locked,
 	subscribed_releases, last_release_fetch, vector_indexed_at FROM repositories`
 
 func (s *sqliteStore) ListRepositories(ctx context.Context) ([]*Repository, error) {
-	rows, err := s.db.QueryContext(ctx, repositoryColumns+` ORDER BY full_name`)
+	rows, err := s.db.QueryContext(ctx, repositoryColumns+` ORDER BY repo_updated_at DESC NULLS LAST, full_name`)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +207,7 @@ func (s *sqliteStore) ListRepositories(ctx context.Context) ([]*Repository, erro
 }
 
 func (s *sqliteStore) ListUnanalyzed(ctx context.Context, limit int) ([]*Repository, error) {
-	query := repositoryColumns + ` WHERE analyzed_at IS NULL ORDER BY full_name`
+	query := repositoryColumns + ` WHERE analyzed_at IS NULL ORDER BY repo_updated_at DESC NULLS LAST, full_name`
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
@@ -208,7 +231,7 @@ func (s *sqliteStore) ListUnanalyzed(ctx context.Context, limit int) ([]*Reposit
 }
 
 func (s *sqliteStore) ListByCategory(ctx context.Context, category string) ([]*Repository, error) {
-	rows, err := s.db.QueryContext(ctx, repositoryColumns+` WHERE COALESCE(NULLIF(custom_category,''), NULLIF(ai_category,''), '其他') = ? ORDER BY full_name`, category)
+	rows, err := s.db.QueryContext(ctx, repositoryColumns+` WHERE COALESCE(NULLIF(custom_category,''), NULLIF(ai_category,''), '其他') = ? ORDER BY repo_updated_at DESC NULLS LAST, full_name`, category)
 	if err != nil {
 		return nil, err
 	}
@@ -253,6 +276,9 @@ func (s *sqliteStore) SetAnalysisFailed(ctx context.Context, repoID int64, faile
 }
 
 func (s *sqliteStore) DeleteAllRepositories(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM repo_vectors`); err != nil {
+		return err
+	}
 	_, err := s.db.ExecContext(ctx, `DELETE FROM repositories`)
 	return err
 }
@@ -282,25 +308,32 @@ func (s *sqliteStore) UpsertReposOnSync(ctx context.Context, rs []*Repository, f
 		for _, r := range rs {
 			incomingNames[r.FullName] = true
 		}
-		rows, err := tx.QueryContext(ctx, `SELECT full_name FROM repositories`)
+		rows, err := tx.QueryContext(ctx, `SELECT id, full_name FROM repositories`)
 		if err != nil {
 			return fmt.Errorf("query all repos for full sync: %w", err)
 		}
-		var toDelete []string
+		type repoRef struct {
+			id   int64
+			name string
+		}
+		var toDelete []repoRef
 		for rows.Next() {
-			var fn string
-			if err := rows.Scan(&fn); err != nil {
+			var ref repoRef
+			if err := rows.Scan(&ref.id, &ref.name); err != nil {
 				rows.Close()
 				return err
 			}
-			if !incomingNames[fn] {
-				toDelete = append(toDelete, fn)
+			if !incomingNames[ref.name] {
+				toDelete = append(toDelete, ref)
 			}
 		}
 		rows.Close()
-		for _, fn := range toDelete {
-			if _, err := tx.ExecContext(ctx, `DELETE FROM repositories WHERE full_name = ?`, fn); err != nil {
-				return fmt.Errorf("delete repo %s: %w", fn, err)
+		for _, ref := range toDelete {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM repo_vectors WHERE rowid = ?`, ref.id); err != nil {
+				return fmt.Errorf("delete vector for %s: %w", ref.name, err)
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM repositories WHERE id = ?`, ref.id); err != nil {
+				return fmt.Errorf("delete repo %s: %w", ref.name, err)
 			}
 		}
 	}

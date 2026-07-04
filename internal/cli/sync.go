@@ -14,14 +14,21 @@ func newSyncCmd() *cobra.Command {
 	var fullSync bool
 	var watch bool
 	var interval time.Duration
+	var touch bool
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Sync starred repositories from GitHub to local DB",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if touch && fullSync {
+				return fmt.Errorf("--touch and --full are mutually exclusive")
+			}
+			if touch && watch {
+				return fmt.Errorf("--touch and --watch are mutually exclusive")
+			}
 			if watch && interval < 5*time.Minute {
 				return fmt.Errorf("--interval must be at least 5m, got %v", interval)
 			}
-			if err := runSync(cmd, fullSync); err != nil {
+			if err := runSync(cmd, fullSync, touch); err != nil {
 				return err
 			}
 			if !watch {
@@ -33,10 +40,11 @@ func newSyncCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&fullSync, "full", false, "full sync: delete repos no longer starred on GitHub")
 	cmd.Flags().BoolVar(&watch, "watch", false, "enable watch mode: periodically sync")
 	cmd.Flags().DurationVar(&interval, "interval", 30*time.Minute, "sync interval in watch mode (min 5m)")
+	cmd.Flags().BoolVar(&touch, "touch", false, "only sync repo updated_at timestamps (lightweight)")
 	return cmd
 }
 
-func runSync(cmd *cobra.Command, fullSync bool) error {
+func runSync(cmd *cobra.Command, fullSync bool, touch bool) error {
 	cfg, _, err := loadConfig(cmd)
 	if err != nil {
 		return err
@@ -56,6 +64,18 @@ func runSync(cmd *cobra.Command, fullSync bool) error {
 
 	ctx := context.Background()
 	gh := github.New(token)
+
+	if touch {
+		repos, err := gh.ListStarred(ctx, cfg.GitHub.Username)
+		if err != nil {
+			return fmt.Errorf("list starred: %w", err)
+		}
+		if err := s.UpsertReposTouchOnly(ctx, repos); err != nil {
+			return fmt.Errorf("touch update: %w", err)
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "  %d repo timestamps touched\n", len(repos))
+		return nil
+	}
 
 	fmt.Fprintf(cmd.ErrOrStderr(), "Fetching starred repos...\n")
 	start := time.Now()
@@ -109,7 +129,7 @@ func runWatch(cmd *cobra.Command, fullSync bool, interval time.Duration) error {
 		case <-time.After(interval):
 			now := time.Now().UTC().Format(time.RFC3339)
 			fmt.Fprintf(cmd.ErrOrStderr(), "[%s] ", now)
-			if err := runSync(cmd, fullSync); err != nil {
+			if err := runSync(cmd, fullSync, false); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "Sync failed: %v\n", err)
 			}
 		}

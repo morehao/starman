@@ -18,6 +18,7 @@ func sampleRepo(id int64, name string) *Repository {
 		Topics:          []string{"go", "cli"},
 		OwnerLogin:      "owner",
 		StarredAt:       "2026-01-01T00:00:00Z",
+		RepoUpdatedAt:   "2026-01-15T00:00:00Z",
 	}
 }
 
@@ -40,6 +41,9 @@ func TestUpsertAndListRepositories(t *testing.T) {
 	if repos[0].FullName != "owner/repo1" {
 		t.Fatalf("unexpected first repo: %s", repos[0].FullName)
 	}
+	if repos[0].RepoUpdatedAt != "2026-01-15T00:00:00Z" {
+		t.Fatalf("expected repo_updated_at '2026-01-15T00:00:00Z', got %q", repos[0].RepoUpdatedAt)
+	}
 }
 
 func TestUpsertReposOnSyncPreservesAIFields(t *testing.T) {
@@ -59,6 +63,7 @@ func TestUpsertReposOnSyncPreservesAIFields(t *testing.T) {
 	r1Sync := sampleRepo(1, "owner/repo1")
 	r1Sync.Description = "updated desc"
 	r1Sync.StargazersCount = 20
+	r1Sync.RepoUpdatedAt = "2026-07-04T12:00:00Z"
 	if err := s.UpsertReposOnSync(ctx, []*Repository{r1Sync}, false); err != nil {
 		t.Fatal(err)
 	}
@@ -77,6 +82,9 @@ func TestUpsertReposOnSyncPreservesAIFields(t *testing.T) {
 	}
 	if got.AICategory != "dev-tools" {
 		t.Fatalf("AI category should be preserved, got %s", got.AICategory)
+	}
+	if got.RepoUpdatedAt != "2026-07-04T12:00:00Z" {
+		t.Fatalf("RepoUpdatedAt should be overwritten by sync, got %q", got.RepoUpdatedAt)
 	}
 }
 
@@ -211,6 +219,38 @@ func TestSetAnalysisFailed(t *testing.T) {
 	}
 	if r.AnalysisFailed {
 		t.Fatal("expected analysis_failed = false")
+	}
+}
+
+func TestUpsertReposTouchOnly(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	r1 := sampleRepo(1, "owner/repo1")
+	if err := s.UpsertRepository(ctx, r1); err != nil {
+		t.Fatal(err)
+	}
+
+	r1.RepoUpdatedAt = "2026-07-04T12:00:00Z"
+	if err := s.UpsertReposTouchOnly(ctx, []*Repository{r1}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetRepository(ctx, "owner/repo1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RepoUpdatedAt != "2026-07-04T12:00:00Z" {
+		t.Fatalf("expected repo_updated_at '2026-07-04T12:00:00Z', got %q", got.RepoUpdatedAt)
+	}
+	if got.Description != "test desc" {
+		t.Fatalf("touch should not modify description, got %q", got.Description)
+	}
+	if got.StargazersCount != 10 {
+		t.Fatalf("touch should not modify stargazers_count, got %d", got.StargazersCount)
+	}
+	if got.StarredAt != r1.StarredAt {
+		t.Fatalf("touch should not modify starred_at, got %q", got.StarredAt)
 	}
 }
 

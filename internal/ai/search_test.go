@@ -95,6 +95,7 @@ func (m *mockStore) Close() error { return nil }
 func (m *mockStore) UpsertRepository(ctx context.Context, r *store.Repository) error { return nil }
 func (m *mockStore) UpsertRepositories(ctx context.Context, rs []*store.Repository) error { return nil }
 func (m *mockStore) UpsertReposOnSync(ctx context.Context, rs []*store.Repository, fullSync bool) error { return nil }
+func (m *mockStore) UpsertReposTouchOnly(ctx context.Context, repos []*store.Repository) error { return nil }
 func (m *mockStore) GetRepository(ctx context.Context, fullName string) (*store.Repository, error) { return nil, nil }
 func (m *mockStore) ListRepositories(ctx context.Context) ([]*store.Repository, error) {
 	now := time.Now()

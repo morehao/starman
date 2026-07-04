@@ -106,6 +106,9 @@ func (s *sqliteStore) migrate(ctx context.Context) error {
 	if err := s.migrateAddColumn(ctx, "repositories", "vector_indexed_at", "TEXT"); err != nil {
 		return fmt.Errorf("migrate vector_indexed_at: %w", err)
 	}
+	if err := s.migrateAddColumn(ctx, "repositories", "repo_updated_at", "TEXT"); err != nil {
+		return fmt.Errorf("migrate repo_updated_at: %w", err)
+	}
 	if err := s.createFTSIndex(ctx); err != nil {
 		return fmt.Errorf("create fts index: %w", err)
 	}
