@@ -59,6 +59,7 @@ func newCategoryAddCmd() *cobra.Command {
 	var name string
 	var keywords string
 	var sortOrder int
+	var isHidden bool
 	cmd := &cobra.Command{
 		Use:   "add <id>",
 		Short: "Add a custom category",
@@ -105,6 +106,7 @@ func newCategoryAddCmd() *cobra.Command {
 				Keywords:  kws,
 				SortOrder: sortOrder,
 				IsCustom:  true,
+				IsHidden:  isHidden,
 			}); err != nil {
 				return err
 			}
@@ -115,6 +117,7 @@ func newCategoryAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "display name (defaults to id)")
 	cmd.Flags().StringVar(&keywords, "keywords", "", "comma-separated keywords")
 	cmd.Flags().IntVar(&sortOrder, "sort-order", 0, "sort order (default appends to end)")
+	cmd.Flags().BoolVar(&isHidden, "is-hidden", false, "hide from AI analysis")
 	return cmd
 }
 
@@ -122,6 +125,7 @@ func newCategoryEditCmd() *cobra.Command {
 	var name string
 	var keywords string
 	var sortOrder int
+	var isHidden bool
 	cmd := &cobra.Command{
 		Use:   "edit <id>",
 		Short: "Edit a category",
@@ -156,6 +160,9 @@ func newCategoryEditCmd() *cobra.Command {
 			if cmd.Flags().Changed("sort-order") {
 				target.SortOrder = sortOrder
 			}
+			if cmd.Flags().Changed("is-hidden") {
+				target.IsHidden = isHidden
+			}
 			if err := s.UpsertCategory(ctx, target); err != nil {
 				return err
 			}
@@ -166,6 +173,7 @@ func newCategoryEditCmd() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "new display name")
 	cmd.Flags().StringVar(&keywords, "keywords", "", "new keywords (comma-separated)")
 	cmd.Flags().IntVar(&sortOrder, "sort-order", 0, "new sort order")
+	cmd.Flags().BoolVar(&isHidden, "is-hidden", false, "hide from AI analysis")
 	return cmd
 }
 
