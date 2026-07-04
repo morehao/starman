@@ -1,8 +1,12 @@
 package cmdrunner
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
+
+	"github.com/morehao/starman/internal/cli"
 )
 
 var (
@@ -19,7 +23,32 @@ func NewRunner(version string) *Runner {
 }
 
 func (r *Runner) Run(ctx context.Context, input string) (stdout, stderr string, err error) {
-	return "", "", nil
+	args := shellSplit(input)
+	if len(args) == 0 {
+		return "", "", nil
+	}
+
+	if len(args) >= 2 && args[0] == "config" && args[1] == "init" {
+		return "", "", ErrInteractiveRequired
+	}
+
+	if args[0] == "sync" {
+		for _, a := range args[1:] {
+			if a == "--watch" || strings.HasPrefix(a, "--watch=") {
+				return "", "", ErrBlockingRequired
+			}
+		}
+	}
+
+	cmd := cli.NewRootCmd(r.version)
+	cmd.SetArgs(args)
+
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+
+	err = cmd.ExecuteContext(ctx)
+	return outBuf.String(), errBuf.String(), err
 }
 
 func shellSplit(input string) []string {
