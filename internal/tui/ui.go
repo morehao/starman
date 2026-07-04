@@ -62,7 +62,6 @@ type Model struct {
 	runner      CommandRunner
 	drawer      drawer.Model
 	showSidebar bool
-	showHelp    bool
 	ready       bool
 
 	searchInput searchinput.Model
@@ -78,7 +77,7 @@ type Model struct {
 
 func NewModel(ctx *tuicontext.ProgramContext) Model {
 	tabModel := tabs.NewModel(ctx)
-	tabModel.SetTitles([]string{"Stars", "Categories", "Trending", "Releases", "Stats"})
+	tabModel.SetTitles([]string{"⭐ Stars", "📂 Categories", "📈 Trending", "📦 Releases", "📊 Stats"})
 
 	footerModel := footer.NewModel(ctx)
 
@@ -371,8 +370,6 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 		m.showSidebar = !m.showSidebar
 		m.ctx.SidebarOpen = m.showSidebar
 		m.recalcLayout()
-	case key.Matches(typed, m.ctx.Keys.Help):
-		m.showHelp = !m.showHelp
 
 	case key.Matches(typed, m.ctx.Keys.ActionsMenu):
 		return m.openActionsMenu()
