@@ -44,8 +44,8 @@ func TestUIKeyBindingsFirstLastToggleSidebarAndHelp(t *testing.T) {
 	m = updated.(Model)
 
 	out := m.View().Content
-	if !strings.Contains(out, "[ Overview ]") {
-		t.Fatalf("sidebar should be visible by default, got: %q", out)
+	if !strings.Contains(out, "owner/repo1") {
+		t.Fatalf("sidebar should be visible with repo detail, got: %q", out)
 	}
 
 	updated, _ = m.Update(keyPress("?"))

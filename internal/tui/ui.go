@@ -21,7 +21,7 @@ import (
 	"github.com/morehao/starman/internal/tui/components/footer"
 	"github.com/morehao/starman/internal/tui/components/prompt"
 	"github.com/morehao/starman/internal/tui/components/releasessection"
-	"github.com/morehao/starman/internal/tui/components/repoview"
+	"github.com/morehao/starman/internal/tui/components/repodetail"
 	"github.com/morehao/starman/internal/tui/components/searchinput"
 	"github.com/morehao/starman/internal/tui/components/section"
 	"github.com/morehao/starman/internal/tui/components/sidebar"
@@ -56,7 +56,7 @@ type Model struct {
 	stats       *statssection.Model
 	currSection section.Section
 	actionsMenu actionsmenu.Model
-	repo        *repoview.Model
+	repo        *repodetail.Model
 	tasks       *tasksHolder
 	runner      CommandRunner
 	drawer      drawer.Model
@@ -99,7 +99,7 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		releases:    releasesModel,
 		stats:       statsModel,
 		currSection: starsModel,
-		repo:        repoview.NewModel(),
+		repo:        repodetail.NewModel(),
 		tasks:       newTasksHolder(),
 		drawer:      drawer.NewModel(),
 		showSidebar: ctx.SidebarOpen,
@@ -354,16 +354,10 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	case key.Matches(typed, m.ctx.Keys.PrevSection):
 		if m.ctx.View == tuicontext.StatsView {
 			m.stats.PrevTab()
-		} else {
-			m.repo.PrevTab()
-			m.syncSidebar()
 		}
 	case key.Matches(typed, m.ctx.Keys.NextSection):
 		if m.ctx.View == tuicontext.StatsView {
 			m.stats.NextTab()
-		} else {
-			m.repo.NextTab()
-			m.syncSidebar()
 		}
 	case key.Matches(typed, m.ctx.Keys.ToggleSidebar):
 		m.showSidebar = !m.showSidebar
