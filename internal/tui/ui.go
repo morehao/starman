@@ -732,6 +732,7 @@ func (m *Model) recalcLayout() {
 		drawerHeight := int(float64(h) * 0.35)
 		mainHeight -= drawerHeight
 		m.ctx.MainContentHeight = mainHeight
+		m.drawer.SetSize(w, drawerHeight)
 	}
 
 	if m.ctx.PreviewPosition == "auto" {
@@ -855,7 +856,12 @@ func (m Model) View() tea.View {
 	}
 	adjustedMainArea, _ := truncateLines(mainArea, fittingLines)
 
-	contentOutput := adjustedMainArea + m.renderErrorBar()
+	var drawerView string
+	if m.drawer.IsOpen() {
+		drawerView = "\n" + m.drawer.View().Content
+	}
+
+	contentOutput := adjustedMainArea + drawerView + m.renderErrorBar()
 
 	v := tea.NewView(contentOutput + "\n" + footerView)
 	v.AltScreen = true
