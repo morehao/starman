@@ -10,8 +10,8 @@ import (
 func TestViewEmpty(t *testing.T) {
 	m := NewModel()
 	out := m.View()
-	if !strings.Contains(out, "Overview") {
-		t.Fatalf("missing tab: %q", out)
+	if out != "" {
+		t.Fatalf("expected empty, got: %q", out)
 	}
 }
 
@@ -40,34 +40,6 @@ func TestViewWithRepo(t *testing.T) {
 	}
 	if !strings.Contains(out, "Go") {
 		t.Fatalf("missing language: %q", out)
-	}
-}
-
-func TestTabSwitching(t *testing.T) {
-	m := NewModel()
-	if m.ActiveTab() != 0 {
-		t.Fatalf("expected tab 0, got %d", m.ActiveTab())
-	}
-	m.NextTab()
-	if m.ActiveTab() != 1 {
-		t.Fatalf("expected tab 1, got %d", m.ActiveTab())
-	}
-	m.NextTab()
-	if m.ActiveTab() != 2 {
-		t.Fatalf("expected tab 2, got %d", m.ActiveTab())
-	}
-	m.NextTab()
-	if m.ActiveTab() != 0 {
-		t.Fatalf("expected tab 0 after wrap, got %d", m.ActiveTab())
-	}
-
-	m.PrevTab()
-	if m.ActiveTab() != 2 {
-		t.Fatalf("expected tab 2 after prev, got %d", m.ActiveTab())
-	}
-	m.PrevTab()
-	if m.ActiveTab() != 1 {
-		t.Fatalf("expected tab 1 after prev, got %d", m.ActiveTab())
 	}
 }
 
@@ -100,36 +72,33 @@ func TestOverviewRendersAllFields(t *testing.T) {
 	}
 }
 
-func TestReadmeTab(t *testing.T) {
+func TestReadmeSection(t *testing.T) {
 	m := NewModel()
 	m.SetRepo(&store.Repository{
 		AISummary: "Summary text",
 	})
-	m.NextTab()
 	out := m.View()
 	if !strings.Contains(out, "Summary text") {
 		t.Fatalf("missing summary: %q", out)
 	}
 }
 
-func TestReadmeTabEmpty(t *testing.T) {
+func TestReadmeSectionEmpty(t *testing.T) {
 	m := NewModel()
 	m.SetRepo(&store.Repository{})
-	m.NextTab()
 	out := m.View()
-	if !strings.Contains(out, "No README") {
-		t.Fatalf("missing empty message: %q", out)
+	if strings.Contains(out, "README") {
+		t.Fatalf("expected no README section when AISummary is empty: %q", out)
 	}
 }
 
-func TestReadmeTabGlamour(t *testing.T) {
+func TestReadmeSectionGlamour(t *testing.T) {
 	m := NewModel()
 	m.SetWidth(80)
 	m.SetRepo(&store.Repository{
 		FullName:      "test/repo",
 		AISummary:     "# Hello\n\nThis is a **test** README.\n\n- item 1\n- item 2",
 	})
-	m.NextTab()
 	out := m.View()
 	if !strings.Contains(out, "Hello") {
 		t.Fatalf("expected README content in render: %q", out)
@@ -139,39 +108,34 @@ func TestReadmeTabGlamour(t *testing.T) {
 	}
 }
 
-func TestReadmeTabGlamourNarrow(t *testing.T) {
+func TestReadmeSectionGlamourNarrow(t *testing.T) {
 	m := NewModel()
 	m.SetWidth(30)
 	m.SetRepo(&store.Repository{
 		FullName:      "test/repo",
 		AISummary:     "# Hello\n\nSome markdown content",
 	})
-	m.NextTab()
 	out := m.View()
 	if !strings.Contains(out, "Hello") {
 		t.Fatalf("expected README content in narrow render: %q", out)
 	}
 }
 
-func TestReleasesTab(t *testing.T) {
+func TestReleasesSection(t *testing.T) {
 	m := NewModel()
 	m.SetRepo(&store.Repository{
 		FullName:           "owner/repo",
 		SubscribedReleases: true,
 	})
-	m.NextTab()
-	m.NextTab()
 	out := m.View()
 	if !strings.Contains(out, "Subscribed") {
 		t.Fatalf("missing subscribed: %q", out)
 	}
 }
 
-func TestReleasesTabNotSubscribed(t *testing.T) {
+func TestReleasesSectionNotSubscribed(t *testing.T) {
 	m := NewModel()
 	m.SetRepo(&store.Repository{})
-	m.NextTab()
-	m.NextTab()
 	out := m.View()
 	if !strings.Contains(out, "Not subscribed") {
 		t.Fatalf("missing not subscribed: %q", out)
