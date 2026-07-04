@@ -67,6 +67,11 @@ func (m *Model) SetSize(width, height int) {
 func (m Model) IsOpen() bool    { return m.open }
 func (m Model) IsFocused() bool { return m.focused }
 
+func (m *Model) SetOpen(open bool) {
+	m.open = open
+	m.focused = open
+}
+
 func (m Model) Init() tea.Cmd { return nil }
 
 const (

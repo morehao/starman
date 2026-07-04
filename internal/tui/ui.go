@@ -172,6 +172,9 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TaskFinishedMsg:
 		m.tasks.finish(typed.TaskID, typed.Message, typed.Err)
 		m.footer.SetTask(m.buildTaskInfo())
+		if strings.HasPrefix(typed.TaskID, "cmd-") {
+			m.drawer.SetOpen(true)
+		}
 		if typed.Err != nil {
 			m.setError(typed.Message + ": " + typed.Err.Error())
 		} else {
