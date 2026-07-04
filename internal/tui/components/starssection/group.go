@@ -47,7 +47,15 @@ func (g GroupedRepos) KeysSorted() []string {
 	for k := range g.groups {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i] == "" {
+			return false
+		}
+		if keys[j] == "" {
+			return true
+		}
+		return keys[i] < keys[j]
+	})
 	return keys
 }
 
@@ -60,12 +68,22 @@ func seenAny(m map[string]bool) bool {
 	return false
 }
 
+func (g GroupedRepos) sortBucketsByRepoName() {
+	for k, bucket := range g.groups {
+		sort.Slice(bucket.Repos, func(i, j int) bool {
+			return bucket.Repos[i].FullName < bucket.Repos[j].FullName
+		})
+		g.groups[k] = bucket
+	}
+}
+
 func GroupByLanguage(repos []*store.Repository) GroupedRepos {
 	g := newGroupedRepos()
 	for _, r := range repos {
 		lang := strings.TrimSpace(r.Language)
 		g.add(lang, r)
 	}
+	g.sortBucketsByRepoName()
 	return g
 }
 

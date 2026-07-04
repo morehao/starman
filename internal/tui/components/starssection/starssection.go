@@ -103,6 +103,7 @@ type Model struct {
 	loaded    bool
 	isLoading bool
 	groupData *GroupedRepos
+	repos     []*store.Repository
 }
 
 func NewModel(id int, ctx *tuicontext.ProgramContext, cfg section.SectionConfig, groupBy string) *Model {
@@ -169,6 +170,7 @@ func (m *Model) Update(msg tea.Msg) (section.Section, tea.Cmd) {
 		if typed.SectionID != m.id {
 			return m, nil
 		}
+		m.repos = typed.Repos
 		listRows := m.buildRows(typed.Repos)
 		m.list.SetRows(listRows)
 		m.loaded = true
@@ -243,10 +245,16 @@ func groupReposBy(groupBy string, repos []*store.Repository) GroupedRepos {
 }
 
 func (m *Model) SetGroupBy(groupBy string) {
-	if m.groupBy != groupBy {
-		m.groupBy = groupBy
-		m.ResetRows()
+	if m.groupBy == groupBy {
+		return
 	}
+	m.groupBy = groupBy
+	if !m.loaded || len(m.repos) == 0 {
+		m.ResetRows()
+		return
+	}
+	listRows := m.buildRows(m.repos)
+	m.list.SetRows(listRows)
 }
 
 func (m *Model) ResetRows() {

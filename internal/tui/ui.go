@@ -709,7 +709,7 @@ func (m *Model) recalcLayout() {
 		return
 	}
 
-	mainHeight := h - constants.TabsHeight - constants.FooterHeight
+	mainHeight := h - constants.TabsHeight - constants.FooterHeight - 1
 	m.ctx.MainContentHeight = mainHeight
 
 	if m.drawer.IsOpen() {

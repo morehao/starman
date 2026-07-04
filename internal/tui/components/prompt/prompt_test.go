@@ -145,10 +145,38 @@ func TestPrompt_CategorySelect_JK(t *testing.T) {
 	}
 }
 
+func TestPrompt_CategorySelect_Arrows(t *testing.T) {
+	cats := []string{"dev-tools", "frameworks", "libraries", "cli"}
+	m := NewCategorySelectModel("Select category", cats, "")
+	if m.cursor != 0 {
+		t.Errorf("expected cursor 0, got %d", m.cursor)
+	}
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	pm := updated.(Model)
+	if pm.cursor != 1 {
+		t.Errorf("expected cursor 1 after Down, got %d", pm.cursor)
+	}
+	updated2, _ := pm.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	pm2 := updated2.(Model)
+	if pm2.cursor != 0 {
+		t.Errorf("expected cursor 0 after Up, got %d", pm2.cursor)
+	}
+}
+
 func TestPrompt_CategorySelect_ClampTop(t *testing.T) {
 	cats := []string{"dev-tools", "frameworks"}
 	m := NewCategorySelectModel("Select category", cats, "")
 	updated, _ := m.Update(tea.KeyPressMsg{Code: kKey})
+	pm := updated.(Model)
+	if pm.cursor != 0 {
+		t.Errorf("expected cursor clamped at 0, got %d", pm.cursor)
+	}
+}
+
+func TestPrompt_CategorySelect_ClampTopArrow(t *testing.T) {
+	cats := []string{"dev-tools", "frameworks"}
+	m := NewCategorySelectModel("Select category", cats, "")
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	pm := updated.(Model)
 	if pm.cursor != 0 {
 		t.Errorf("expected cursor clamped at 0, got %d", pm.cursor)
@@ -160,6 +188,17 @@ func TestPrompt_CategorySelect_ClampBottom(t *testing.T) {
 	m := NewCategorySelectModel("Select category", cats, "")
 	updated, _ := m.Update(tea.KeyPressMsg{Code: jKey})
 	updated2, _ := updated.(Model).Update(tea.KeyPressMsg{Code: jKey})
+	pm := updated2.(Model)
+	if pm.cursor != 1 {
+		t.Errorf("expected cursor clamped at 1, got %d", pm.cursor)
+	}
+}
+
+func TestPrompt_CategorySelect_ClampBottomArrow(t *testing.T) {
+	cats := []string{"dev-tools", "frameworks"}
+	m := NewCategorySelectModel("Select category", cats, "")
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	updated2, _ := updated.(Model).Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	pm := updated2.(Model)
 	if pm.cursor != 1 {
 		t.Errorf("expected cursor clamped at 1, got %d", pm.cursor)

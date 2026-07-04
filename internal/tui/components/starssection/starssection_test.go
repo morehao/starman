@@ -3,11 +3,13 @@ package starssection
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/morehao/starman/internal/store"
 	"github.com/morehao/starman/internal/tui/components/section"
 	tuicontext "github.com/morehao/starman/internal/tui/context"
+	"github.com/morehao/starman/internal/tui/theme"
 )
 
 type mockStore struct {
@@ -82,6 +84,76 @@ func TestStarsSectionFetchGroupsByLanguageWhenConfigured(t *testing.T) {
 	updated.LastItem()
 	if updated.CurrRow().GetTitle() != "owner/zig" {
 		t.Fatalf("last row=%q want=owner/zig", updated.CurrRow().GetTitle())
+	}
+}
+
+func TestSetGroupBy_LangColumnHasValue(t *testing.T) {
+	ctx := &tuicontext.ProgramContext{Store: &mockStore{repos: []*store.Repository{
+		{FullName: "owner/go1", Language: "Go", StargazersCount: 100, AICategory: "dev-tools"},
+		{FullName: "owner/rust1", Language: "Rust", StargazersCount: 50, AICategory: "libraries"},
+	}}}
+
+	s := NewModel(1, ctx, section.SectionConfig{Title: "All"}, GroupAll)
+	cmds := s.FetchNextPageSectionRows()
+	updated, _ := s.Update(cmds[0]())
+	m := updated.(*Model)
+
+	// Verify ALL mode shows lang column correctly
+	for _, row := range m.rows {
+		if re, ok := row.(RepoRow); ok {
+			cols := re.GetColumns()
+			if cols[2] != re.Repo.Language {
+				t.Errorf("ALL mode: lang column mismatch for %s: cols[2]=%q want=%q", re.Repo.FullName, cols[2], re.Repo.Language)
+			}
+		}
+	}
+
+	// Switch to Language grouping
+	m.SetGroupBy(GroupLanguage)
+
+	for i, row := range m.rows {
+		if re, ok := row.(RepoRow); ok {
+			cols := re.GetColumns()
+			t.Logf("Row %d (%s): columns=%v lang=%q colIdx2=%q", i, re.GetTitle(), cols, re.Repo.Language, cols[2])
+			if cols[2] != re.Repo.Language {
+				t.Errorf("Row %d (%s): lang column mismatch: cols[2]=%q want=%q", i, re.GetTitle(), cols[2], re.Repo.Language)
+			}
+		}
+	}
+}
+
+func TestSetGroupBy_RenderedViewContainsLangValues(t *testing.T) {
+	ctx := &tuicontext.ProgramContext{
+		Store: &mockStore{repos: []*store.Repository{
+			{FullName: "owner/go1", Language: "Go", StargazersCount: 100, AICategory: "dev-tools"},
+			{FullName: "owner/rust1", Language: "Rust", StargazersCount: 50, AICategory: "libraries"},
+			{FullName: "owner/ruby1", Language: "Ruby", StargazersCount: 200, AICategory: "frameworks"},
+			{FullName: "owner/nolang", Language: "", StargazersCount: 10, AICategory: ""},
+		}},
+		Theme: theme.DefaultTheme(),
+	}
+
+	s := NewModel(1, ctx, section.SectionConfig{Title: "All"}, GroupAll)
+	s.SetSize(80, 20)
+
+	cmds := s.FetchNextPageSectionRows()
+	updated, _ := s.Update(cmds[0]())
+	m := updated.(*Model)
+
+	// ALL mode view
+	allView := m.View()
+	t.Logf("ALL mode view:\n%s", allView)
+
+	// Switch to Language grouping
+	m.SetGroupBy(GroupLanguage)
+
+	langView := m.View()
+	t.Logf("Language mode view:\n%s", langView)
+
+	for _, want := range []string{"Go", "Rust", "Ruby", "—"} {
+		if !strings.Contains(langView, want) {
+			t.Errorf("View should contain %q but doesn't", want)
+		}
 	}
 }
 

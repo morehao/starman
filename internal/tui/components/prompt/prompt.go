@@ -123,9 +123,17 @@ func (m Model) handleCategoryKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg {
 			return PromptResultMsg{Type: PromptCategorySelect, Confirmed: true, Value: m.options[m.cursor]}
 		}
+	case tea.KeyDown:
+		if m.cursor < len(m.options)-1 {
+			m.cursor++
+		}
 	case jKey:
 		if m.cursor < len(m.options)-1 {
 			m.cursor++
+		}
+	case tea.KeyUp:
+		if m.cursor > 0 {
+			m.cursor--
 		}
 	case kKey:
 		if m.cursor > 0 {

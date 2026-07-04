@@ -57,10 +57,18 @@ func (m *Model) SetRows(rows []section.RowData) {
 
 func (m *Model) Cursor() int { return m.cursor }
 
+const tableHeaderLines = 3
+
+func (m *Model) scrollToCursor() {
+	cursorLine := tableHeaderLines + m.cursor
+	m.viewport.EnsureVisible(cursorLine, 0, 0)
+}
+
 func (m *Model) NextRow() {
 	if m.cursor < len(m.rows)-1 {
 		m.cursor++
 		m.viewport.SetContent(m.render())
+		m.scrollToCursor()
 	}
 }
 
@@ -68,6 +76,7 @@ func (m *Model) PrevRow() {
 	if m.cursor > 0 {
 		m.cursor--
 		m.viewport.SetContent(m.render())
+		m.scrollToCursor()
 	}
 }
 
@@ -75,6 +84,7 @@ func (m *Model) FirstItem() {
 	if len(m.rows) > 0 {
 		m.cursor = 0
 		m.viewport.SetContent(m.render())
+		m.scrollToCursor()
 	}
 }
 
@@ -82,6 +92,7 @@ func (m *Model) LastItem() {
 	if len(m.rows) > 0 {
 		m.cursor = len(m.rows) - 1
 		m.viewport.SetContent(m.render())
+		m.scrollToCursor()
 	}
 }
 
@@ -158,29 +169,58 @@ func (m Model) renderTable() string {
 		}
 
 		colVals := row.GetColumns()
-		lineStr := prefix
-		for colIdx, col := range cols {
-			val := ""
-			if colIdx < len(colVals) {
-				val = colVals[colIdx]
-			}
-			if len(val) > col.Width {
-				val = val[:col.Width-1] + "…"
-			}
-			lineStr += fmt.Sprintf("%-*s", col.Width, val)
-			if colIdx < len(cols)-1 {
-				lineStr += " "
-			}
-		}
-
-		if rowIdx == m.cursor {
-			if len(lineStr) > 2 {
-				b.WriteString(selectedBg.Render(lineStr))
+		var lineStr string
+		if len(colVals) == 0 {
+			title := row.GetTitle()
+			avail := contentW - len(prefix)
+			if avail < 4 {
+				lineStr = prefix + title
 			} else {
-				b.WriteString(selectedFg.Render(lineStr))
+				inner := "── " + title + " ──"
+				if len(inner) > avail {
+					inner = "── " + title
+					if len(inner) > avail-1 {
+						inner = title
+						if len(inner) > avail {
+							inner = inner[:avail]
+						}
+					} else {
+						inner += " ─"
+					}
+				}
+				fill := avail - len(inner)
+				if fill > 0 {
+					lineStr = prefix + inner + strings.Repeat("─", fill)
+				} else {
+					lineStr = prefix + inner
+				}
 			}
+			b.WriteString(borderStyle.Render(lineStr))
 		} else {
-			b.WriteString(faintStyle.Render(lineStr))
+			lineStr = prefix
+			for colIdx, col := range cols {
+				val := ""
+				if colIdx < len(colVals) {
+					val = colVals[colIdx]
+				}
+				if len(val) > col.Width {
+					val = val[:col.Width-1] + "…"
+				}
+				lineStr += fmt.Sprintf("%-*s", col.Width, val)
+				if colIdx < len(cols)-1 {
+					lineStr += " "
+				}
+			}
+
+			if rowIdx == m.cursor {
+				if len(lineStr) > 2 {
+					b.WriteString(selectedBg.Render(lineStr))
+				} else {
+					b.WriteString(selectedFg.Render(lineStr))
+				}
+			} else {
+				b.WriteString(faintStyle.Render(lineStr))
+			}
 		}
 		if rowIdx < len(m.rows)-1 {
 			b.WriteString("\n")
