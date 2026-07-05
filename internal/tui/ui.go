@@ -338,6 +338,7 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 
 	switch {
 	case key.Matches(typed, m.ctx.Keys.Escape):
+		m.currSection.ResetFilters()
 		return nil
 
 	case key.Matches(typed, m.ctx.Keys.Quit):
@@ -621,6 +622,12 @@ func sectionIndexToTrendingPeriod(idx int) string {
 func (m *Model) executeSearch(query string) tea.Cmd {
 	query = strings.TrimSpace(query)
 	if query == "" {
+		switch m.ctx.View {
+		case tuicontext.CategoriesView:
+			m.categories.ResetFilters()
+		case tuicontext.StarsView:
+			m.stars.ResetFilters()
+		}
 		return nil
 	}
 	if m.ctx.View == tuicontext.CategoriesView {
