@@ -127,34 +127,67 @@ func (c *Client) UpdateReadmeFile(ctx context.Context, owner, repo, content, mes
 }
 
 func (c *Client) CommitFile(ctx context.Context, owner, repo, path string, content []byte, message string) error {
-	if len(content) > 1*1024*1024 {
-		return fmt.Errorf("file too large (%d bytes) for GitHub Contents API (max 1MB); use 'starman backup webdav --push'", len(content))
-	}
 	if _, _, err := c.client.Repositories.Get(ctx, owner, repo); err != nil {
 		return fmt.Errorf("repo %s/%s not accessible: %w", owner, repo, err)
 	}
 
-	fileContent, _, resp, err := c.client.Repositories.GetContents(ctx, owner, repo, path, nil)
-	if err != nil && resp != nil && resp.StatusCode != http.StatusNotFound {
-		return fmt.Errorf("get contents: %w", err)
-	}
-
-	opts := &gh.RepositoryContentFileOptions{
-		Message: gh.Ptr(message),
-		Content: content,
-	}
-	if fileContent != nil {
-		opts.SHA = fileContent.SHA
-	}
-
-	if fileContent == nil {
-		_, _, err = c.client.Repositories.CreateFile(ctx, owner, repo, path, opts)
-	} else {
-		_, _, err = c.client.Repositories.UpdateFile(ctx, owner, repo, path, opts)
-	}
+	blob, _, err := c.client.Git.CreateBlob(ctx, owner, repo, &gh.Blob{
+		Content:  gh.Ptr(string(content)),
+		Encoding: gh.Ptr("utf-8"),
+	})
 	if err != nil {
-		return fmt.Errorf("commit file: %w", err)
+		return fmt.Errorf("create blob: %w", err)
 	}
+
+	ref, _, err := c.client.Git.GetRef(ctx, owner, repo, "refs/heads/main")
+	if err != nil {
+		masterRef, _, masterErr := c.client.Git.GetRef(ctx, owner, repo, "refs/heads/master")
+		if masterErr != nil {
+			return fmt.Errorf("get ref: %w", err)
+		}
+		ref = masterRef
+	}
+
+	baseCommit, _, err := c.client.Git.GetCommit(ctx, owner, repo, ref.GetObject().GetSHA())
+	if err != nil {
+		return fmt.Errorf("get commit: %w", err)
+	}
+
+	tree, _, err := c.client.Git.CreateTree(ctx, owner, repo, baseCommit.GetTree().GetSHA(), []*gh.TreeEntry{{
+		Path: gh.Ptr(path),
+		Mode: gh.Ptr("100644"),
+		Type: gh.Ptr("blob"),
+		SHA:  blob.SHA,
+	}})
+	if err != nil {
+		return fmt.Errorf("create tree: %w", err)
+	}
+
+	now := time.Now()
+	newCommit, _, err := c.client.Git.CreateCommit(ctx, owner, repo, &gh.Commit{
+		Message: gh.Ptr(message),
+		Tree:    tree,
+		Parents: []*gh.Commit{baseCommit},
+		Author: &gh.CommitAuthor{
+			Name:  gh.Ptr("starman"),
+			Email: gh.Ptr("starman@users.noreply.github.com"),
+			Date:  &gh.Timestamp{Time: now},
+		},
+	}, nil)
+	if err != nil {
+		return fmt.Errorf("create commit: %w", err)
+	}
+
+	_, _, err = c.client.Git.UpdateRef(ctx, owner, repo, &gh.Reference{
+		Ref: gh.Ptr("refs/heads/" + ref.GetRef()[11:]),
+		Object: &gh.GitObject{
+			SHA: newCommit.SHA,
+		},
+	}, false)
+	if err != nil {
+		return fmt.Errorf("update ref: %w", err)
+	}
+
 	return nil
 }
 
