@@ -4,17 +4,16 @@
 
 A CLI and TUI tool to manage your GitHub stars with AI — sync, analyze, categorize, search, and generate awesome lists.
 
-starman syncs your GitHub stars, analyzes them with AI, generates awesome lists, tracks releases, and backs up your data — all from the CLI or TUI.
+starman syncs your GitHub stars, analyzes them with AI, generates awesome lists, and backs up your data — all from the CLI or TUI.
 
 ## Features
 
-- **TUI** — Terminal user interface with Stars, Categories, Trending, Releases, and Stats views. Search overlay, command mode (`:`), sidebar preview, configurable keybindings, dark/light themes.
+- **TUI** — Terminal user interface with Stars, Categories, Trending, and Stats views. Search overlay, command mode (`:`), sidebar preview, configurable keybindings, dark/light themes.
 - **Sync** — Concurrent paginated pull of GitHub starred repos into local SQLite (preserves AI analysis on re-sync). Supports `--watch` mode for periodic auto-sync.
 - **Analyze** — Batch AI analysis (OpenAI-compatible): summaries, tags, categories with bidirectional keyword matching, plus embedding vector generation for semantic search and `search_text` for full-text index.
 - **Search** — Three-tier hybrid search (vector semantic matching > AI query understanding + text retrieval > basic text search), structured filtering (`--lang`/`--category`/`--platform`/`--tag`), `--sort` options, and `--json` output.
 - **Generate** — Markdown Awesome List in 3 modes: by language, by AI category, or flat (auto-push to GitHub repo).
 - **Category Management** — List, add, edit, delete custom categories. Built-in categories with keyword matching for AI auto-classification.
-- **Release Tracking** — Subscribe to repos and pull new releases with incremental watermark.
 - **Star/Unstar** — Star management with local DB sync.
 - **Backup** — Push `starman.db` as a SQLite binary file to any GitHub repository via Git Data API.
 - **Config** — Interactive config with env var resolution for secrets.
@@ -151,7 +150,7 @@ Three-tier hybrid search: attempts vector semantic matching first (requires embe
 starman
 ```
 
-Running `starman` without subcommands launches the terminal user interface with Stars, Categories, Trending, Releases, and Stats views. Use `Tab` to switch views, `:` for commands, `/` for search.
+Running `starman` without subcommands launches the terminal user interface with Stars, Categories, Trending, and Stats views. Use `Tab` to switch views, `:` for commands, `/` for search.
 
 ### 7. Discover trending repos
 
@@ -179,7 +178,6 @@ Running `starman` without any subcommands starts the terminal user interface bui
 | Stars | Browse, filter, and manage your starred repos. Sections: All / Language / Category / Tag. `m` for Actions menu (sync, analyze, star/unstar, edit category/tags, open in browser) |
 | Categories | Manage custom category definitions — list, add, edit, delete categories with keywords and sort order. `m` for Actions menu |
 | Trending | Browse GitHub trending repositories. Sections: Daily / Weekly / Monthly. `m` for Actions menu (star, refresh, sync) |
-| Releases | Track new releases from subscribed repos with read/unread filtering. `m` for Actions menu (mark read, show all/unread, refresh, sync, open in browser) |
 | Stats | Full-screen distribution charts by language, category, or tag. `h`/`l` to switch dimensions |
 
 ### Key Bindings
@@ -319,23 +317,6 @@ starman config show   # Display current config (secrets masked)
 **`config init`** walks through GitHub username/token, AI BaseURL/API Key/Model, and writes `~/.starman/config.yaml`.
 
 **`config show`** prints full config with token/key showing only first and last 2 characters.
-
----
-
-### `starman release`
-
-Track repository releases with incremental watermark.
-
-```bash
-starman release list [--all]                        # List unread (or all) releases
-starman release pull                                 # Pull new releases for subscribed repos
-starman release subscribe <owner/repo>               # Subscribe + pull initial releases
-starman release unsubscribe <owner/repo>             # Unsubscribe
-```
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--all` | bool | `false` | `list` subcommand: show all releases including read |
 
 ---
 
@@ -542,7 +523,7 @@ generate:
   sort: "language"    # language | category | flat
 
 tui:
-  default_view: stars  # stars | categories | trending | releases | stats
+  default_view: stars  # stars | categories | trending | stats
   confirm_quit: false
   theme: dark          # dark | light
   preview:
@@ -591,7 +572,6 @@ Embedding also works with any OpenAI-compatible embedding API endpoint (`/v1/emb
 - **Category locking** — Lock a repo's category with `category_locked` to prevent AI from overwriting your manual assignment.
 - **Three-tier hybrid search** — Search first attempts vector semantic matching (sqlite-vec), degrades to AI query understanding + full-text retrieval, then falls back to basic text search. Transparent degradation when vector config is absent — zero-cost operation. The `ai_search_text` field generated by LLM during analysis enriches the search index for better recall.
 - **Analyze failure isolation** — If AI analysis fails for one repo, the batch continues. Failed repos are marked with `analysis_failed` for retry.
-- **Release watermark** — Subscribed repos track the latest fetched release timestamp, so `release pull` only retrieves new releases.
 - **Generate reads from local DB** — `generate` never calls the GitHub API for data; it reads from SQLite. Run `sync` first, then `analyze` for AI categories.
 - **Stats are free** — `stats`, `info`, and `search` (without AI) only read from the local SQLite database. No API calls, no token needed.
 - **Trending dual source** — `trending` defaults to RSS via GitHubTrendingRSS. `--source search` falls back to the official GitHub Search API.
@@ -660,7 +640,6 @@ internal/
   ai/                        # OpenAI-compatible client + analysis/categorization/search
   discovery/                 # Trending repos (RSS + search API fallback)
   generate/                  # Markdown template rendering
-  release/                   # Release tracker with watermark
   backup/                    # Git Data API backup (SQLite binary push)
   tui/                       # Bubble Tea terminal UI
     cmdrunner/               # Headless cobra command execution

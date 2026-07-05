@@ -26,7 +26,6 @@ func NewRootCmd(ver string) *cobra.Command {
 	root.AddCommand(newGenerateCmd())
 	root.AddCommand(newAnalyzeCmd())
 	root.AddCommand(newSearchCmd())
-	root.AddCommand(newReleaseCmd())
 	root.AddCommand(newStarCmd())
 	root.AddCommand(newUnstarCmd())
 	root.AddCommand(newBackupCmd())

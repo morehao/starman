@@ -21,7 +21,6 @@ import (
 	"github.com/morehao/starman/internal/tui/components/commandmode"
 	"github.com/morehao/starman/internal/tui/components/footer"
 	"github.com/morehao/starman/internal/tui/components/prompt"
-	"github.com/morehao/starman/internal/tui/components/releasessection"
 	"github.com/morehao/starman/internal/tui/components/repoview"
 	"github.com/morehao/starman/internal/tui/components/searchinput"
 	"github.com/morehao/starman/internal/tui/components/section"
@@ -54,7 +53,6 @@ type Model struct {
 	stars       *starssection.Model
 	categories  *categoriessection.Model
 	trending    *trendingsection.Model
-	releases    *releasessection.Model
 	stats       *statssection.Model
 	currSection section.Section
 	actionsMenu actionsmenu.Model
@@ -83,15 +81,14 @@ type Model struct {
 
 func NewModel(ctx *tuicontext.ProgramContext) Model {
 	tabModel := tabs.NewModel(ctx)
-	tabModel.SetTitles([]string{"⭐ Stars", "📂 Categories", "📈 Trending", "📦 Releases", "📊 Stats"})
+	tabModel.SetTitles([]string{"⭐ Stars", "📂 Categories", "📈 Trending", "📊 Stats"})
 
 	footerModel := footer.NewModel(ctx)
 
 	starsModel := starssection.NewModel(1, ctx, section.SectionConfig{Title: "Stars"}, starssection.GroupAll)
 	categoriesModel := categoriessection.NewModel(2, ctx, section.SectionConfig{Title: "Categories"})
 	trendingModel := trendingsection.NewModel(3, ctx, section.SectionConfig{Title: "Trending"}, trendingsection.PeriodDaily)
-	releasesModel := releasessection.NewModel(4, ctx, section.SectionConfig{Title: "Releases"}, releasessection.ShowUnread)
-	statsModel := statssection.NewModel(5, ctx, section.SectionConfig{Title: "Stats"})
+	statsModel := statssection.NewModel(4, ctx, section.SectionConfig{Title: "Stats"})
 
 	tabModel.SetSectionTabs([]string{"All", "Language", "Category", "Tag"})
 
@@ -103,7 +100,6 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		stars:       starsModel,
 		categories:  categoriesModel,
 		trending:    trendingModel,
-		releases:    releasesModel,
 		stats:       statsModel,
 		currSection: starsModel,
 		repo:        repoview.NewModel(),
@@ -125,9 +121,6 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 	case tuicontext.TrendingView:
 		m.currSection = m.trending
 		m.tabs.SetSectionTabs([]string{"Daily", "Weekly", "Monthly"})
-	case tuicontext.ReleasesView:
-		m.currSection = m.releases
-		m.tabs.SetSectionTabs(nil)
 	case tuicontext.StatsView:
 		m.currSection = m.stats
 		m.tabs.SetSectionTabs(nil)
@@ -140,7 +133,6 @@ func (m Model) Init() tea.Cmd {
 	cmds := m.stars.FetchNextPageSectionRows()
 	cmds = append(cmds, m.categories.FetchNextPageSectionRows()...)
 	cmds = append(cmds, m.trending.FetchNextPageSectionRows()...)
-	cmds = append(cmds, m.releases.FetchNextPageSectionRows()...)
 	cmds = append(cmds, m.stats.FetchNextPageSectionRows()...)
 	cmds = append(cmds, tickSpinner())
 	if len(cmds) == 0 {
@@ -194,10 +186,7 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tuicontext.TrendingView:
 				m.trending.ResetRows()
 				m.currSection = m.trending
-			case tuicontext.ReleasesView:
-				m.releases.ResetRows()
-				m.currSection = m.releases
-			}
+		}
 			cmds := m.currSection.FetchNextPageSectionRows()
 			return m, tea.Batch(append(cmds, clearAfterDelay(typed.TaskID))...)
 		}
@@ -242,15 +231,6 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncSidebar()
 		if typed.Err != nil {
 			m.setError("trending fetch failed: " + typed.Err.Error())
-		}
-		return m, cmd
-
-	case releasessection.ReleasesFetchedMsg:
-		updated, cmd := m.releases.Update(typed)
-		m.releases = updated.(*releasessection.Model)
-		m.syncSidebar()
-		if typed.Err != nil {
-			m.setError("releases fetch failed: " + typed.Err.Error())
 		}
 		return m, cmd
 
@@ -704,7 +684,6 @@ func (m *Model) switchView(delta int) {
 		tuicontext.StarsView,
 		tuicontext.CategoriesView,
 		tuicontext.TrendingView,
-		tuicontext.ReleasesView,
 		tuicontext.StatsView,
 	}
 	currentIdx := 0
@@ -728,9 +707,6 @@ func (m *Model) switchView(delta int) {
 	case tuicontext.TrendingView:
 		m.currSection = m.trending
 		m.tabs.SetSectionTabs([]string{"Daily", "Weekly", "Monthly"})
-	case tuicontext.ReleasesView:
-		m.currSection = m.releases
-		m.tabs.SetSectionTabs(nil)
 	case tuicontext.StatsView:
 		m.currSection = m.stats
 		m.tabs.SetSectionTabs(nil)
@@ -1055,8 +1031,7 @@ func (m Model) renderEmptyView(view tuicontext.ViewType) string {
 
 	labels := map[tuicontext.ViewType]string{
 		tuicontext.TrendingView: "Trending Repos",
-		tuicontext.ReleasesView: "Release Updates",
-		tuicontext.StatsView:    "Stats Dashboard",
+		tuicontext.StatsView: "Stats Dashboard",
 	}
 
 	label := labels[view]
@@ -1138,8 +1113,6 @@ func (m *Model) syncSidebar() {
 	} else if tRow, ok := row.(trendingsection.TrendingRow); ok {
 		m.repo.SetRepo(trendingsection.TrendingToStoreRepo(tRow.Repo))
 		m.sidebar.SetContent(m.repo.View())
-	} else if rRow, ok := row.(releasessection.ReleaseRow); ok {
-		m.sidebar.SetContent(releasessection.ReleaseSummary(rRow.Release))
 	} else {
 		m.repo.SetRepo(&store.Repository{FullName: row.GetTitle()})
 		m.sidebar.SetContent(m.repo.View())
@@ -1252,14 +1225,6 @@ func (m *Model) handleActionsMenuResult(result actionsmenu.ActionsMenuResultMsg)
 		m.currSection.ResetRows()
 		return tea.Batch(m.currSection.FetchNextPageSectionRows()...)
 
-	// ===== Releases =====
-	case "mark_read":
-		return m.releases.MarkCurrentRead()
-	case "mark_all_read":
-		return m.releases.MarkAllRead()
-	case "toggle_filter":
-		return m.handleReleaseFilterToggle()
-
 	// ===== Common =====
 	case "open_browser":
 		return m.openInBrowser()
@@ -1280,8 +1245,6 @@ func (m *Model) openActionsMenu() tea.Cmd {
 		title, items = m.buildCategoriesMenuItems(hasRow)
 	case tuicontext.TrendingView:
 		title, items = m.buildTrendingMenuItems(hasRow)
-	case tuicontext.ReleasesView:
-		title, items = m.buildReleasesMenuItems(hasRow)
 	default:
 		return nil
 	}
@@ -1328,22 +1291,6 @@ func (m *Model) buildTrendingMenuItems(hasRow bool) (string, []actionsmenu.MenuI
 		{Action: "---", Label: "────", NeedRow: false, Separator: true},
 		{Action: "refresh", Label: "Refresh", NeedRow: false},
 		{Action: "sync", Label: "Sync", NeedRow: false},
-	}
-}
-
-func (m *Model) buildReleasesMenuItems(hasRow bool) (string, []actionsmenu.MenuItem) {
-	filterLabel := "Show All"
-	if m.releases.FilterLabel() == "All" {
-		filterLabel = "Show Unread"
-	}
-	return "Releases 操作", []actionsmenu.MenuItem{
-		{Action: "mark_read", Label: "Mark as Read", NeedRow: true},
-		{Action: "mark_all_read", Label: "Mark All Read", NeedRow: false},
-		{Action: "toggle_filter", Label: filterLabel, NeedRow: false},
-		{Action: "---", Label: "────", NeedRow: false, Separator: true},
-		{Action: "refresh", Label: "Refresh", NeedRow: false},
-		{Action: "sync", Label: "Sync", NeedRow: false},
-		{Action: "open_browser", Label: "Open in Browser", NeedRow: true},
 	}
 }
 
@@ -1421,16 +1368,6 @@ func (m *Model) handleAnalyzeAction() tea.Cmd {
 	m.prompt.SetTheme(m.ctx.Theme)
 	m.mode = modePrompt
 	return nil
-}
-
-func (m *Model) handleReleaseFilterToggle() tea.Cmd {
-	if m.releases.FilterLabel() == "All" {
-		m.releases.SetFilter("unread")
-	} else {
-		m.releases.SetFilter("all")
-	}
-	m.releases.ResetRows()
-	return tea.Batch(m.releases.FetchNextPageSectionRows()...)
 }
 
 func (m *Model) openInBrowser() tea.Cmd {

@@ -14,7 +14,6 @@ const (
 	StarsView      ViewType = "stars"
 	CategoriesView ViewType = "categories"
 	TrendingView   ViewType = "trending"
-	ReleasesView ViewType = "releases"
 	StatsView    ViewType = "stats"
 )
 

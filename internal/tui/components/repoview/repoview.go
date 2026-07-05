@@ -42,14 +42,6 @@ func (m Model) View() string {
 		b.WriteString(readme)
 	}
 
-	releases := m.renderReleases()
-	if releases != "" {
-		b.WriteString("\n\n")
-		b.WriteString(lipgloss.NewStyle().Bold(true).Render("Releases"))
-		b.WriteString("\n")
-		b.WriteString(releases)
-	}
-
 	return b.String()
 }
 
@@ -194,17 +186,6 @@ func (m Model) renderReadme() string {
 		return wordWrap(m.repo.AISummary, wrapW)
 	}
 	return m.repo.AISummary
-}
-
-func (m Model) renderReleases() string {
-	if m.repo == nil {
-		return ""
-	}
-
-	if m.repo.SubscribedReleases {
-		return fmt.Sprintf("Subscribed to releases for %s\n\nLast fetched: %v", m.repo.FullName, m.repo.LastReleaseFetch)
-	}
-	return "Not subscribed to releases."
 }
 
 func (m Model) wrapWidth() int {

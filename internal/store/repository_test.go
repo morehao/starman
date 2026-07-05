@@ -263,7 +263,6 @@ func TestDeleteAllRepositories(t *testing.T) {
 	if err := s.UpsertRepository(ctx, sampleRepo(2, "owner/repo2")); err != nil {
 		t.Fatal(err)
 	}
-	s.UpsertRelease(ctx, &Release{ID: 100, RepoID: 1, RepoFullName: "owner/repo1", TagName: "v1.0.0", PublishedAt: "2026-01-01T00:00:00Z"})
 	if err := s.DeleteAllRepositories(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -273,12 +272,5 @@ func TestDeleteAllRepositories(t *testing.T) {
 	}
 	if len(repos) != 0 {
 		t.Fatalf("expected 0 repos after delete all, got %d", len(repos))
-	}
-	rels, err := s.ListAllReleases(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rels) != 0 {
-		t.Fatalf("expected 0 releases after cascade delete, got %d", len(rels))
 	}
 }

@@ -122,27 +122,6 @@ func TestReadmeSectionGlamourNarrow(t *testing.T) {
 	}
 }
 
-func TestReleasesSection(t *testing.T) {
-	m := NewModel()
-	m.SetRepo(&store.Repository{
-		FullName:           "owner/repo",
-		SubscribedReleases: true,
-	})
-	out := m.View()
-	if !strings.Contains(out, "Subscribed") {
-		t.Fatalf("missing subscribed: %q", out)
-	}
-}
-
-func TestReleasesSectionNotSubscribed(t *testing.T) {
-	m := NewModel()
-	m.SetRepo(&store.Repository{})
-	out := m.View()
-	if !strings.Contains(out, "Not subscribed") {
-		t.Fatalf("missing not subscribed: %q", out)
-	}
-}
-
 func TestOverviewWithUpdatedAndAnalyzed(t *testing.T) {
 	now := time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)
 	m := NewModel()

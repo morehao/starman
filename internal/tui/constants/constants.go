@@ -24,6 +24,5 @@ var ViewIcons = map[string]string{
 	"stars":      "*",
 	"categories": "@",
 	"trending":   "^",
-	"releases": "#",
 	"stats":    "%",
 }

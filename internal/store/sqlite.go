@@ -61,26 +61,8 @@ func (s *sqliteStore) migrate(ctx context.Context) error {
 			custom_tags         TEXT DEFAULT '[]',
 			custom_category     TEXT DEFAULT '',
 			category_locked     INTEGER DEFAULT 0,
-			subscribed_releases INTEGER DEFAULT 0,
-			last_release_fetch  TEXT,
 			created_at          TEXT DEFAULT (datetime('now')),
 			updated_at          TEXT DEFAULT (datetime('now'))
-		)`,
-		`CREATE TABLE IF NOT EXISTS releases (
-			id              INTEGER PRIMARY KEY,
-			repo_id         INTEGER NOT NULL,
-			repo_full_name  TEXT NOT NULL,
-			tag_name        TEXT NOT NULL,
-			name            TEXT,
-			body            TEXT,
-			html_url        TEXT,
-			published_at    TEXT,
-			is_prerelease   INTEGER DEFAULT 0,
-			is_draft        INTEGER DEFAULT 0,
-			is_read         INTEGER DEFAULT 0,
-			assets          TEXT,
-			fetched_at      TEXT DEFAULT (datetime('now')),
-			FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
 		)`,
 		`CREATE TABLE IF NOT EXISTS categories (
 			id          TEXT PRIMARY KEY,

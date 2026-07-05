@@ -37,15 +37,6 @@ type Store interface {
 	ListVectorUnindexed(ctx context.Context, limit int) ([]*Repository, error)
 	EnsureVec0Dimension(ctx context.Context, dim int) error
 
-	UpsertRelease(ctx context.Context, r *Release) error
-	ListUnreadReleases(ctx context.Context) ([]*Release, error)
-	ListAllReleases(ctx context.Context) ([]*Release, error)
-	ListReleasesByRepo(ctx context.Context, repoFullName string) ([]*Release, error)
-	MarkReleaseRead(ctx context.Context, releaseID int64) error
-	MarkAllReleasesRead(ctx context.Context) error
-	SetReleaseSubscription(ctx context.Context, repoFullName string, subscribed bool) error
-	UpdateReleaseWatermark(ctx context.Context, repoID int64, t time.Time) error
-
 	ListCategories(ctx context.Context, visibleOnly bool) ([]*Category, error)
 	UpsertCategory(ctx context.Context, c *Category) error
 	DeleteCategory(ctx context.Context, id string) (int, error)

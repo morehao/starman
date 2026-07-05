@@ -12,9 +12,7 @@ var LocalRepoFields = []string{
 	"custom_tags",
 	"custom_category",
 	"category_locked",
-	"last_released",
-	"subscribed_releases",
-	"last_release_fetch",
+
 }
 
 var GitHubSourceFields = []string{
