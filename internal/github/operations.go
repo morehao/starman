@@ -9,12 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/morehao/starman/internal/store"
 	gh "github.com/google/go-github/v71/github"
 )
-
-type Release = store.Release
-type ReleaseAsset = store.ReleaseAsset
 
 func (c *Client) Star(ctx context.Context, owner, repo string) error {
 	_, err := c.client.Activity.Star(ctx, owner, repo)
@@ -32,56 +28,6 @@ func (c *Client) GetRepository(ctx context.Context, owner, repo string) (*Reposi
 		return nil, err
 	}
 	return convertRepo(r), nil
-}
-
-func (c *Client) ListReleases(ctx context.Context, owner, repo string) ([]*Release, error) {
-	opts := &gh.ListOptions{PerPage: 100}
-	var all []*Release
-	for {
-		releases, resp, err := c.client.Repositories.ListReleases(ctx, owner, repo, opts)
-		if err != nil {
-			return nil, fmt.Errorf("list releases %s/%s: %w", owner, repo, err)
-		}
-		for _, rel := range releases {
-			all = append(all, convertRelease(rel, owner+"/"+repo))
-		}
-		if resp.NextPage == 0 {
-			break
-		}
-		opts.Page = resp.NextPage
-	}
-	return all, nil
-}
-
-func (c *Client) ListReleasesIncremental(ctx context.Context, owner, repo string, watermark *time.Time) ([]*Release, error) {
-	opts := &gh.ListOptions{PerPage: perPage}
-	var allReleases []*Release
-
-	for {
-		ghReleases, resp, err := c.client.Repositories.ListReleases(ctx, owner, repo, &gh.ListOptions{
-			Page:    opts.Page,
-			PerPage: opts.PerPage,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("list releases page %d: %w", opts.Page, err)
-		}
-
-		for _, ghRel := range ghReleases {
-			rel := convertRelease(ghRel, owner+"/"+repo)
-			pubTime, err := time.Parse(time.RFC3339, rel.PublishedAt)
-			if err == nil && watermark != nil && !pubTime.After(*watermark) {
-				return allReleases, nil
-			}
-			allReleases = append(allReleases, rel)
-		}
-
-		if resp.NextPage == 0 {
-			break
-		}
-		opts.Page = resp.NextPage
-	}
-
-	return allReleases, nil
 }
 
 func (c *Client) GetReadme(ctx context.Context, owner, repo string) (string, error) {
@@ -289,28 +235,4 @@ func (c *Client) SearchRepositories(ctx context.Context, query string) ([]*Repos
 	return repos, nil
 }
 
-func convertRelease(rel *gh.RepositoryRelease, repoFullName string) *Release {
-	var assets []ReleaseAsset
-	for _, a := range rel.Assets {
-		assets = append(assets, ReleaseAsset{
-			Name:        a.GetName(),
-			URL:         a.GetBrowserDownloadURL(),
-			Size:        int64(a.GetSize()),
-			ContentType: a.GetContentType(),
-		})
-	}
-	repoID := int64(0)
-	return &Release{
-		ID:           rel.GetID(),
-		RepoID:       repoID,
-		RepoFullName: repoFullName,
-		TagName:      rel.GetTagName(),
-		Name:         rel.GetName(),
-		Body:         rel.GetBody(),
-		HTMLURL:      rel.GetHTMLURL(),
-		PublishedAt:  rel.GetPublishedAt().Format(time.RFC3339),
-		IsPrerelease: rel.GetPrerelease(),
-		IsDraft:      rel.GetDraft(),
-		Assets:       assets,
-	}
-}
+

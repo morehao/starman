@@ -23,7 +23,7 @@ func overlayOnBackground(bg string, dialog string, screenW, screenH int, dimBg c
 	startX := (screenW - dW) / 2
 
 	dimStyle := lipgloss.NewStyle().Faint(true).Background(dimBg)
-	spaceStyle := lipgloss.NewStyle().Background(dimBg)
+	spaceStyle := lipgloss.NewStyle().Faint(true).Background(dimBg)
 
 	result := make([]string, 0, screenH)
 	for y := 0; y < screenH && y < len(bgLines); y++ {

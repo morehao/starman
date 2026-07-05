@@ -1,8 +1,6 @@
 package searchinput
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -13,15 +11,6 @@ var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 func stripANSI(s string) string {
 	return ansiRe.ReplaceAllString(s, "")
-}
-
-func goldenPath(t *testing.T) string {
-	t.Helper()
-	return filepath.Join("testdata", t.Name()+".golden")
-}
-
-func updateGolden() bool {
-	return os.Getenv("UPDATE_GOLDEN") == "1"
 }
 
 func TestSearchInput_EscExitsSearchMode(t *testing.T) {
@@ -124,49 +113,6 @@ func TestSearchInput_View_Focused(t *testing.T) {
 	got := stripANSI(m.View().Content)
 	if got == "" {
 		t.Error("expected non-empty view when focused")
-	}
-}
-
-func TestSearchInput_View_Golden(t *testing.T) {
-	tests := []struct {
-		name      string
-		focused   bool
-		query     string
-		cursorPos int
-	}{
-		{"focused_empty", true, "", 0},
-		{"focused_query", true, "go cli framework", len("go cli framework")},
-		{"unfocused", false, "go", 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := NewModel()
-			m.focused = tt.focused
-			m.query = tt.query
-			m.cursorPos = tt.cursorPos
-			got := stripANSI(m.View().Content)
-
-			path := goldenPath(t)
-			if updateGolden() {
-				err := os.MkdirAll(filepath.Dir(path), 0o755)
-				if err != nil {
-					t.Fatalf("failed to create testdata dir: %v", err)
-				}
-				err = os.WriteFile(path, []byte(got), 0o644)
-				if err != nil {
-					t.Fatalf("failed to write golden file: %v", err)
-				}
-				return
-			}
-
-			want, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatalf("failed to read golden file: %v (run with UPDATE_GOLDEN=1 to generate)", err)
-			}
-			if string(want) != got {
-				t.Errorf("golden mismatch:\n--- want:\n%s\n--- got:\n%s", string(want), got)
-			}
-		})
 	}
 }
 

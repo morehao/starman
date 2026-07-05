@@ -28,8 +28,6 @@ type Repository struct {
 	CustomTags         []string
 	CustomCategory     string
 	CategoryLocked     bool
-	SubscribedReleases bool
-	LastReleaseFetch   *time.Time
 	VectorIndexedAt    *time.Time
 }
 
@@ -51,28 +49,6 @@ type SearchFilters struct {
 	Limit          int
 	Analyzed       *bool
 	AnalysisFailed *bool
-}
-
-type Release struct {
-	ID           int64
-	RepoID       int64
-	RepoFullName string
-	TagName      string
-	Name         string
-	Body         string
-	HTMLURL      string
-	PublishedAt  string
-	IsPrerelease bool
-	IsDraft      bool
-	IsRead       bool
-	Assets       []ReleaseAsset
-}
-
-type ReleaseAsset struct {
-	Name        string `json:"name"`
-	URL         string `json:"url"`
-	Size        int64  `json:"size"`
-	ContentType string `json:"content_type"`
 }
 
 type Category struct {

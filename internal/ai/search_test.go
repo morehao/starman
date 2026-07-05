@@ -109,14 +109,6 @@ func (m *mockStore) UpdateAIResult(ctx context.Context, repoID int64, res *store
 func (m *mockStore) UpdateCustomFields(ctx context.Context, repoID int64, f *store.CustomFields) error { return nil }
 func (m *mockStore) SetAnalysisFailed(ctx context.Context, repoID int64, failed bool) error { return nil }
 func (m *mockStore) DeleteAllRepositories(ctx context.Context) error { return nil }
-func (m *mockStore) UpsertRelease(ctx context.Context, r *store.Release) error { return nil }
-func (m *mockStore) ListUnreadReleases(ctx context.Context) ([]*store.Release, error) { return nil, nil }
-func (m *mockStore) ListAllReleases(ctx context.Context) ([]*store.Release, error) { return nil, nil }
-func (m *mockStore) ListReleasesByRepo(ctx context.Context, repoFullName string) ([]*store.Release, error) { return nil, nil }
-func (m *mockStore) MarkReleaseRead(ctx context.Context, releaseID int64) error { return nil }
-func (m *mockStore) MarkAllReleasesRead(ctx context.Context) error { return nil }
-func (m *mockStore) SetReleaseSubscription(ctx context.Context, repoFullName string, subscribed bool) error { return nil }
-func (m *mockStore) UpdateReleaseWatermark(ctx context.Context, repoID int64, t time.Time) error { return nil }
 func (m *mockStore) ListCategories(ctx context.Context, visibleOnly bool) ([]*store.Category, error) { return nil, nil }
 func (m *mockStore) UpsertCategory(ctx context.Context, c *store.Category) error { return nil }
 func (m *mockStore) DeleteCategory(ctx context.Context, id string) (int, error) { return 0, nil }
