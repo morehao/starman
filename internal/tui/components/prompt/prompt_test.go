@@ -258,6 +258,10 @@ func TestTagEdit_CharInput(t *testing.T) {
 	if nm.input != "k" {
 		t.Errorf("expected 'k', got %q", nm.input)
 	}
+	// Cursor should advance
+	if nm.cursorPos != 1 {
+		t.Errorf("expected cursorPos=1 after typing 'k', got %d", nm.cursorPos)
+	}
 }
 
 func TestTagEdit_Backspace(t *testing.T) {
@@ -265,11 +269,50 @@ func TestTagEdit_Backspace(t *testing.T) {
 	m.ptype = PromptTagEdit
 	m.active = true
 	m.input = "ab"
+	m.cursorPos = len(m.input)
 
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 127})
 	nm := updated.(Model)
 	if nm.input != "a" {
 		t.Errorf("expected 'a', got %q", nm.input)
+	}
+	if nm.cursorPos != 1 {
+		t.Errorf("expected cursorPos=1 after backspace, got %d", nm.cursorPos)
+	}
+}
+
+func TestTagEdit_LeftRightMovesCursor(t *testing.T) {
+	m := testModel()
+	m.ptype = PromptTagEdit
+	m.active = true
+	m.input = "abc"
+	m.cursorPos = len(m.input)
+
+	m1, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if m1.(Model).cursorPos != 2 {
+		t.Errorf("expected cursorPos=2 after Left, got %d", m1.(Model).cursorPos)
+	}
+
+	m2, _ := m1.(Model).Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if m2.(Model).cursorPos != 3 {
+		t.Errorf("expected cursorPos=3 after Right, got %d", m2.(Model).cursorPos)
+	}
+}
+
+func TestTagEdit_InsertAtCursor(t *testing.T) {
+	m := testModel()
+	m.ptype = PromptTagEdit
+	m.active = true
+	m.input = "ab"
+	m.cursorPos = 1
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'X'})
+	nm := updated.(Model)
+	if nm.input != "aXb" {
+		t.Errorf("expected 'aXb' after insert at pos 1, got %q", nm.input)
+	}
+	if nm.cursorPos != 2 {
+		t.Errorf("expected cursorPos=2 after insert, got %d", nm.cursorPos)
 	}
 }
 
@@ -397,11 +440,64 @@ func TestCategoryForm_TypeInDifferentField(t *testing.T) {
 func TestCategoryForm_Backspace(t *testing.T) {
 	m := testCategoryFormModel()
 	m.formFields[0].Value = "ab"
+	m.cursorPos = len(m.formFields[0].Value)
 
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 127})
 	nm := updated.(Model)
 	if nm.formFields[0].Value != "a" {
 		t.Errorf("expected 'a', got %q", nm.formFields[0].Value)
+	}
+	if nm.cursorPos != 1 {
+		t.Errorf("expected cursorPos=1 after backspace, got %d", nm.cursorPos)
+	}
+}
+
+func TestCategoryForm_LeftRightMovesCursor(t *testing.T) {
+	m := testCategoryFormModel()
+	m.formFields[0].Value = "abc"
+	m.cursorPos = len(m.formFields[0].Value)
+
+	m1, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	nm := m1.(Model)
+	if nm.cursorPos != 2 {
+		t.Errorf("expected cursorPos=2 after Left, got %d", nm.cursorPos)
+	}
+
+	m2, _ := nm.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if m2.(Model).cursorPos != 3 {
+		t.Errorf("expected cursorPos=3 after Right, got %d", m2.(Model).cursorPos)
+	}
+}
+
+func TestCategoryForm_NavigateFieldResetsCursor(t *testing.T) {
+	m := testCategoryFormModel()
+	m.formFields[0].Value = "abc"
+	m.formFields[1].Value = "xy"
+	m.cursorPos = 1
+
+	// Move down, cursor should reset to end of field 1's value
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	nm := updated.(Model)
+	if nm.formFieldIdx != 1 {
+		t.Errorf("expected formFieldIdx=1, got %d", nm.formFieldIdx)
+	}
+	if nm.cursorPos != 2 {
+		t.Errorf("expected cursorPos=2 (len of 'xy'), got %d", nm.cursorPos)
+	}
+}
+
+func TestCategoryForm_InsertAtCursor(t *testing.T) {
+	m := testCategoryFormModel()
+	m.formFields[0].Value = "ab"
+	m.cursorPos = 1
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'X'})
+	nm := updated.(Model)
+	if nm.formFields[0].Value != "aXb" {
+		t.Errorf("expected 'aXb' after insert at pos 1, got %q", nm.formFields[0].Value)
+	}
+	if nm.cursorPos != 2 {
+		t.Errorf("expected cursorPos=2 after insert, got %d", nm.cursorPos)
 	}
 }
 

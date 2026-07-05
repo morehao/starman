@@ -2,25 +2,27 @@
 
 [English](README.md) | [简体中文](README.zh.md)
 
-A CLI tool to manage your GitHub stars with AI — sync, analyze, categorize, search, and generate awesome lists.
+A CLI and TUI tool to manage your GitHub stars with AI — sync, analyze, categorize, search, and generate awesome lists.
 
-starman syncs your GitHub stars, analyzes them with AI, generates awesome lists, tracks releases, and backs up your data — all from the CLI.
+starman syncs your GitHub stars, analyzes them with AI, generates awesome lists, tracks releases, and backs up your data — all from the CLI or TUI.
 
 ## Features
 
+- **TUI** — Terminal user interface with Stars, Categories, Trending, Releases, and Stats views. Search overlay, command mode (`:`), sidebar preview, configurable keybindings, dark/light themes.
 - **Sync** — Concurrent paginated pull of GitHub starred repos into local SQLite (preserves AI analysis on re-sync). Supports `--watch` mode for periodic auto-sync.
-- **Analyze** — Batch AI analysis (OpenAI-compatible): summaries, tags, categories with bidirectional keyword matching, plus embedding vector generation for semantic search and `search_text` for full-text index
-- **Search** — Three-tier hybrid search (vector semantic matching > AI query understanding + text retrieval > basic text search), structured filtering (`--lang`/`--category`/`--platform`/`--tag`), `--sort` options, and `--json` output
-- **Generate** — Markdown Awesome List in 3 modes: by language, by AI category, or flat (auto-push to GitHub repo)
-- **Release Tracking** — Subscribe to repos and pull new releases with incremental watermark
-- **Star/Unstar** — Star management with local DB sync
-- **Backup** — JSON export/import + WebDAV push/pull + GitHub repo push
-- **Config** — Interactive config with env var resolution for secrets
-- **Stats** — View distribution of synced repos by language, category, or tag
-- **Info** — Inspect repo details including AI summary, README with multi-language variant support
-- **Trending** — Browse GitHub trending repositories (RSS or search API) with interactive starring
-- **Tag & Categorize** — Batch manage custom tags and categories on local repos, with category locking
-- **Completion** — Shell auto-completion for bash, zsh, fish, and PowerShell
+- **Analyze** — Batch AI analysis (OpenAI-compatible): summaries, tags, categories with bidirectional keyword matching, plus embedding vector generation for semantic search and `search_text` for full-text index.
+- **Search** — Three-tier hybrid search (vector semantic matching > AI query understanding + text retrieval > basic text search), structured filtering (`--lang`/`--category`/`--platform`/`--tag`), `--sort` options, and `--json` output.
+- **Generate** — Markdown Awesome List in 3 modes: by language, by AI category, or flat (auto-push to GitHub repo).
+- **Category Management** — List, add, edit, delete custom categories. Built-in categories with keyword matching for AI auto-classification.
+- **Release Tracking** — Subscribe to repos and pull new releases with incremental watermark.
+- **Star/Unstar** — Star management with local DB sync.
+- **Backup** — Push `starman.db` as a SQLite binary file to any GitHub repository via Git Data API.
+- **Config** — Interactive config with env var resolution for secrets.
+- **Stats** — View distribution of synced repos by language, category, or tag.
+- **Info** — Inspect repo details including AI summary, README with multi-language variant support.
+- **Trending** — Browse GitHub trending repositories (RSS or search API) with interactive starring.
+- **Tag & Categorize** — Batch manage custom tags and categories on local repos, with category locking.
+- **Completion** — Shell auto-completion for bash, zsh, fish, and PowerShell.
 
 ## Installation
 
@@ -92,7 +94,6 @@ You can also set sensitive fields via environment variables instead of the confi
 | `STARMAN_GITHUB_TOKEN` | GitHub token (falls back to `GITHUB_TOKEN`) |
 | `STARMAN_AI_API_KEY` | AI API key |
 | `STARMAN_EMBEDDING_API_KEY` | Embedding API key (for vector search) |
-| `STARMAN_WEBDAV_PASSWORD` | WebDAV password |
 
 ### 2. Sync starred repos
 
@@ -144,7 +145,15 @@ starman search "machine learning" --json
 
 Three-tier hybrid search: attempts vector semantic matching first (requires embedding config), degrades to AI query understanding + full-text retrieval, then falls back to basic text search. Matches against full_name, description, AI summary, search_text, tags, and topics with weighted scoring.
 
-### 6. Discover trending repos
+### 6. Launch TUI
+
+```bash
+starman
+```
+
+Running `starman` without subcommands launches the terminal user interface with Stars, Categories, Trending, Releases, and Stats views. Use `Tab` to switch views, `:` for commands, `/` for search.
+
+### 7. Discover trending repos
 
 ```bash
 # Browse weekly trending repos
@@ -157,6 +166,38 @@ starman trending --since daily --lang Rust
 starman trending --star
 ```
 
+## TUI
+
+Running `starman` without any subcommands starts the terminal user interface built with [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+
+### Views
+
+| View | Description |
+|------|-------------|
+| Stars | Browse, filter, and manage your starred repos. `s` to sync, `a` to analyze, `x` to star/unstar, `c`/`t` to edit category/tags |
+| Categories | Browse repositories grouped by category |
+| Trending | Browse GitHub trending repositories, `x` to star |
+| Releases | Track new releases from subscribed repos |
+| Stats | Full-screen distribution charts by language, category, or tag |
+
+### Key Bindings
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Switch view |
+| `j`/`k` | Move up/down |
+| `g`/`G` | First/last item |
+| `]]`/`[[` | Next/previous section tab |
+| `/` | Search overlay |
+| `:` | Command mode (headless cobra execution) |
+| `p` | Toggle sidebar |
+| `?` | Help |
+| `q` | Quit |
+
+### Command Mode
+
+Press `:` to enter command mode — runs any `starman` subcommand directly via headless cobra command tree (e.g. `:sync --full`, `:analyze --all`, `:search "term" --lang Go`). The output is shown in a viewport overlay.
+
 ## Command Reference
 
 ### Global Flags
@@ -168,6 +209,7 @@ Available on every command:
 | `--config` | string | `~/.starman/config.yaml` | Config file path |
 | `--token` | string | `""` | GitHub token (overrides config/env) |
 | `--verbose` | bool | `false` | Verbose output |
+| `--version` | bool | `false` | Print version |
 
 ---
 
@@ -176,7 +218,7 @@ Available on every command:
 Sync starred repos from GitHub to local SQLite.
 
 ```bash
-starman sync [--full] [--watch] [--interval 30m]
+starman sync [--full] [--watch] [--interval 30m] [--touch]
 ```
 
 | Flag | Type | Default | Description |
@@ -184,6 +226,7 @@ starman sync [--full] [--watch] [--interval 30m]
 | `--full` | bool | `false` | Full sync: remove repos that are no longer starred on GitHub |
 | `--watch` | bool | `false` | Watch mode: periodic auto-sync |
 | `--interval` | duration | `30m` | Watch mode sync interval (minimum 5m) |
+| `--touch` | bool | `false` | Lightweight sync: only update repo timestamps (exclusive with `--full`/`--watch`) |
 
 AI analysis results and custom fields are preserved across syncs.
 
@@ -271,7 +314,7 @@ starman config show   # Display current config (secrets masked)
 
 **`config init`** walks through GitHub username/token, AI BaseURL/API Key/Model, and writes `~/.starman/config.yaml`.
 
-**`config show`** prints full config with token/key/password showing only first and last 2 characters.
+**`config show`** prints full config with token/key showing only first and last 2 characters.
 
 ---
 
@@ -314,28 +357,18 @@ starman unstar <owner/repo>
 
 ### `starman backup`
 
-Backup and restore data via JSON, WebDAV, or GitHub repo push.
+Backup `starman.db` as a SQLite binary file to a GitHub repository via Git Data API.
 
 ```bash
-starman backup json --export [-o file]                # Export to JSON (stdout if -o omitted)
-starman backup json --import <file> [--mode merge|replace]  # Import from JSON
-starman backup webdav --push                          # Push backup to WebDAV
-starman backup webdav --pull                          # Pull latest from WebDAV
-starman backup webdav --test                          # Test WebDAV connection
-starman backup --repo <name> [-m "msg"]               # Push backup to GitHub repo
+starman backup --repo <name> [-m "message"]
 ```
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--export` | bool | `false` | `json` subcommand: export mode |
-| `--import` | string | `""` | `json` subcommand: import from file path |
-| `-o, --output` | string | `""` | `json` export output path (default: stdout) |
-| `--mode` | string | `merge` | `json` import mode: `merge` / `replace` |
-| `--push` | bool | `false` | `webdav` subcommand: push backup |
-| `--pull` | bool | `false` | `webdav` subcommand: pull backup |
-| `--test` | bool | `false` | `webdav` subcommand: test connection |
-| `--repo` | string | `""` | Backup to GitHub repo (root command) |
-| `-m, --message` | string | auto | Commit message for `--repo` backup |
+| `--repo` | string | `""` | GitHub repo to push backup to (e.g. `awesome-stars`) |
+| `-m, --message` | string | `"backup starman data"` | Commit message |
+
+Backup pushes `starman.db` to `starman-backup/starman.db` in the target repository using GitHub's Git Data API (blobs, trees, commits, refs).
 
 ---
 
@@ -422,6 +455,31 @@ starman categorize --cat-filter "web-app" "其他"
 
 ---
 
+### `starman category`
+
+Manage custom category definitions.
+
+```bash
+starman category list                                    # List all categories
+starman category add <id> [--name "Display Name"]        # Add a custom category
+  [--keywords "kw1,kw2"] [--sort-order N] [--is-hidden]
+starman category edit <id> [--name "New Name"]           # Edit a category
+  [--keywords "kw1,kw2"] [--sort-order N] [--is-hidden]
+starman category delete <id> [--force]                   # Delete a custom category
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--name` | string | `""` | Display name (defaults to id for add) |
+| `--keywords` | string | `""` | Comma-separated keywords for auto-classification |
+| `--sort-order` | int | `0` | Sort order (0 appends to end for add) |
+| `--is-hidden` | bool | `false` | Hide from AI analysis |
+| `--force` | bool | `false` | Skip delete confirmation |
+
+Built-in categories cannot be deleted. Custom categories can be added, edited, and deleted.
+
+---
+
 ### `starman trending`
 
 Browse GitHub trending repositories.
@@ -476,14 +534,32 @@ embedding:
   api_key: ""         # or use STARMAN_EMBEDDING_API_KEY
   model: "text-embedding-3-small"
 
-webdav:
-  url: ""
-  username: ""
-  password: ""        # or use STARMAN_WEBDAV_PASSWORD
-  path: "/starman"
-
 generate:
   sort: "language"    # language | category | flat
+
+tui:
+  default_view: stars  # stars | categories | trending | releases | stats
+  confirm_quit: false
+  theme: dark          # dark | light
+  preview:
+    open: true
+    position: right    # right | bottom
+    width: 0.42
+    height: 0.4
+  keybindings:
+    universal:
+      quit: q
+      refresh: r
+      search: /
+      command: ":"
+      toggle_sidebar: p
+      help: "?"
+    stars:
+      sync: s
+      analyze: a
+      toggle_star: x
+      edit_category: c
+      edit_tag: t
 ```
 
 **Priority:** CLI flag > environment variable > config file > default value.
@@ -506,6 +582,7 @@ Embedding also works with any OpenAI-compatible embedding API endpoint (`/v1/emb
 
 ## Key Design
 
+- **TUI with headless command execution** — The TUI reuses the cobra command tree via `cmdrunner`, so every CLI subcommand is automatically available in command mode (`:`) without additional implementation. See [ADR-001](docs/adr-001-headless-cli-command-execution.md).
 - **Incremental sync preserves analysis** — Re-syncing from GitHub never overwrites AI summaries, tags, categories, or custom fields you've set.
 - **Category locking** — Lock a repo's category with `category_locked` to prevent AI from overwriting your manual assignment.
 - **Three-tier hybrid search** — Search first attempts vector semantic matching (sqlite-vec), degrades to AI query understanding + full-text retrieval, then falls back to basic text search. Transparent degradation when vector config is absent — zero-cost operation. The `ai_search_text` field generated by LLM during analysis enriches the search index for better recall.
@@ -514,12 +591,15 @@ Embedding also works with any OpenAI-compatible embedding API endpoint (`/v1/emb
 - **Generate reads from local DB** — `generate` never calls the GitHub API for data; it reads from SQLite. Run `sync` first, then `analyze` for AI categories.
 - **Stats are free** — `stats`, `info`, and `search` (without AI) only read from the local SQLite database. No API calls, no token needed.
 - **Trending dual source** — `trending` defaults to RSS via GitHubTrendingRSS. `--source search` falls back to the official GitHub Search API.
+- **Backup via Git Data API** — `backup` pushes the raw `starman.db` file to any GitHub repository using blob/tree/commit/ref operations — no WebDAV needed.
 
 ## Tech Stack
 
 | Component | Library |
 |-----------|---------|
 | CLI framework | [cobra](https://github.com/spf13/cobra) + [pflag](https://github.com/spf13/pflag) |
+| TUI framework | [bubbletea v2](https://github.com/charmbracelet/bubbletea) + [lipgloss v2](https://github.com/charmbracelet/lipgloss) + [bubbles v2](https://github.com/charmbracelet/bubbles) |
+| Markdown rendering | [glamour](https://github.com/charmbracelet/glamour) |
 | GitHub API | [go-github v71](https://github.com/google/go-github) + [httpcache](https://github.com/gregjones/httpcache) |
 | Concurrency | [conc](https://github.com/sourcegraph/conc) |
 | SQLite | [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) + [modernc.org/sqlite/vec](https://pkg.go.dev/modernc.org/sqlite/vec) (pure Go, no CGO) |
@@ -529,8 +609,30 @@ Embedding also works with any OpenAI-compatible embedding API endpoint (`/v1/emb
 ## Development
 
 ```bash
+# Build (optimized, stripped)
+make build
+
+# Install
+make install
+
+# Test
+make test
+
+# Lint
+make lint
+
+# Build and run
+make run
+
+# Clean
+make clean
+```
+
+Or use Go directly:
+
+```bash
 # Build
-go build -o starman ./cmd/starman
+CGO_ENABLED=0 go build -ldflags="-s -w" -trimpath -o starman ./cmd/starman/
 
 # Test
 go test ./...
@@ -552,12 +654,20 @@ internal/
   discovery/                 # Trending repos (RSS + search API fallback)
   generate/                  # Markdown template rendering
   release/                   # Release tracker with watermark
-  backup/                    # JSON + WebDAV + GitHub backup
+  backup/                    # Git Data API backup (SQLite binary push)
+  tui/                       # Bubble Tea terminal UI
+    cmdrunner/               # Headless cobra command execution
+    components/              # Reusable UI components (15 packages)
+    constants/               # Icon constants
+    keys/                    # Keybinding registry
+    theme/                   # Dark/light theme tokens
+    context/                 # Shared TUI context
+    common/                  # Shared styles
   version/                   # Version info (ldflags injection)
 internal/generate/templates/ # Embedded Markdown templates
 ```
 
-Package dependencies flow in one direction: `cli` → business packages → `store`. The `github` package converts go-github types to local `store` types internally, so no third-party types leak across boundaries.
+Package dependencies flow in one direction: `cli`/`tui` → business packages → `store`. The `github` package converts go-github types to local `store` types internally, so no third-party types leak across boundaries.
 
 ## License
 

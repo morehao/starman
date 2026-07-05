@@ -69,10 +69,11 @@ type Model struct {
 	prompt       prompt.Model
 	mode         int
 
-	outputVP      viewport.Model
-	outputTitle   string
-	outputContent string
-	outputErr     error
+	outputVP            viewport.Model
+	outputTitle         string
+	outputContent       string
+	outputErr           error
+	outputNeedsHScroll  bool
 
 	errorMsg   string
 	errorTimer *time.Timer
@@ -294,27 +295,39 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	case modeSearch:
 		return m.handleSearchMode(typed)
 	case modeOutput:
-		key := typed.Key()
-		switch {
-		case key.Code == tea.KeyEsc || key.Code == tea.KeyEnter:
+		switch s := typed.String(); {
+		case s == "esc" || s == "enter":
 			m.mode = modeNormal
 			return nil
-		case key.Code == 'j' || key.Code == tea.KeyDown:
+		case s == "j" || s == "down":
 			m.outputVP.ScrollDown(1)
 			return nil
-		case key.Code == 'k' || key.Code == tea.KeyUp:
+		case s == "k" || s == "up":
 			m.outputVP.ScrollUp(1)
 			return nil
-		case key.Code == tea.KeyPgUp:
+		case s == "h" || s == "left":
+			m.outputVP.ScrollLeft(4)
+			return nil
+		case s == "l" || s == "right":
+			m.outputVP.ScrollRight(4)
+			return nil
+		case s == "H":
+			m.outputVP.ScrollLeft(20)
+			return nil
+		case s == "L":
+			m.outputVP.ScrollRight(20)
+			return nil
+		case s == "pgup":
 			m.outputVP.HalfPageUp()
 			return nil
-		case key.Code == tea.KeyPgDown:
+		case s == "pgdown":
 			m.outputVP.HalfPageDown()
 			return nil
-		case key.Code == tea.KeyHome:
+		case s == "home":
+			m.outputVP.SetXOffset(0)
 			m.outputVP.GotoTop()
 			return nil
-		case key.Code == tea.KeyEnd:
+		case s == "end":
 			m.outputVP.GotoBottom()
 			return nil
 		}
@@ -802,29 +815,48 @@ func (m Model) View() tea.View {
 
 	if m.mode == modeSearch {
 		m.searchInput.SetSize(m.ctx.ScreenWidth, m.ctx.ScreenHeight)
-		v := m.searchInput.View()
-		v.AltScreen = true
-		v.MouseMode = tea.MouseModeCellMotion
-		return v
 	}
-
 	if m.mode == modeCommand {
 		m.commandInput.SetSize(m.ctx.ScreenWidth, m.ctx.ScreenHeight)
-		v := m.commandInput.View()
-		v.AltScreen = true
-		v.MouseMode = tea.MouseModeCellMotion
-		return v
-	}
-
-	if m.mode == modeOutput {
-		v := m.renderOutputOverlay()
-		v.AltScreen = true
-		v.MouseMode = tea.MouseModeCellMotion
-		return v
 	}
 
 	m.footer.SetPager(m.sectionPager())
 
+	bg := m.renderFullBackground()
+
+	if m.mode != modeNormal {
+		bg = m.renderOverlayedView(bg)
+	}
+
+	v := tea.NewView(bg)
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
+}
+
+func (m Model) renderOverlayedView(bg string) string {
+	var dialog string
+	switch m.mode {
+	case modeSearch:
+		dialog = m.searchInput.BoxView()
+	case modeCommand:
+		dialog = m.commandInput.BoxView()
+	case modeOutput:
+		dialog = m.renderOutputDialog()
+	case modeActions:
+		dialog = m.actionsMenu.BoxView()
+	case modePrompt:
+		dialog = m.prompt.BoxView()
+	}
+
+	if dialog == "" {
+		return bg
+	}
+
+	return overlayOnBackground(bg, dialog, m.ctx.ScreenWidth, m.ctx.ScreenHeight, m.ctx.Theme.OverlayBg)
+}
+
+func (m Model) renderFullBackground() string {
 	theme := m.ctx.Theme
 	borderColor := theme.FaintBorder
 
@@ -835,11 +867,7 @@ func (m Model) View() tea.View {
 	sectionView := mainStyle.Render(m.sectionView())
 
 	var content string
-	if m.mode == modeActions {
-		content = m.actionsMenu.View().Content
-	} else if m.mode == modePrompt {
-		content = m.prompt.View().Content
-	} else if m.showSidebar && m.ctx.DynamicPreviewWidth > 0 && m.ctx.PreviewPosition == "right" {
+	if m.showSidebar && m.ctx.DynamicPreviewWidth > 0 && m.ctx.PreviewPosition == "right" {
 		sidebarStyle := lipgloss.NewStyle().
 			Width(m.ctx.DynamicPreviewWidth).
 			Height(m.ctx.MainContentHeight).
@@ -866,10 +894,7 @@ func (m Model) View() tea.View {
 	}
 
 	tabsView := m.tabs.View()
-
 	mainArea := lipgloss.JoinVertical(lipgloss.Left, tabsView, content)
-
-	footerView := m.footer.View()
 
 	extraLines := 1
 	if m.errorMsg != "" {
@@ -881,20 +906,17 @@ func (m Model) View() tea.View {
 	}
 	adjustedMainArea, _ := truncateLines(mainArea, fittingLines)
 
-	contentOutput := adjustedMainArea + m.renderErrorBar()
-
-	v := tea.NewView(contentOutput + "\n" + footerView)
-	v.AltScreen = true
-	v.MouseMode = tea.MouseModeCellMotion
-	return v
+	return adjustedMainArea + m.renderErrorBar() + "\n" + m.footer.View()
 }
 
-func (m Model) renderOutputOverlay() tea.View {
+func (m Model) renderOutputDialog() string {
 	w := m.ctx.ScreenWidth
-	h := m.ctx.ScreenHeight
 
-	dialogWidth := 60
-	if w > 0 && w < dialogWidth+4 {
+	dialogWidth := int(float64(w) * 0.8)
+	if dialogWidth < 60 {
+		dialogWidth = 60
+	}
+	if w > 0 && dialogWidth+4 > w {
 		dialogWidth = w - 4
 	}
 
@@ -939,23 +961,24 @@ func (m Model) renderOutputOverlay() tea.View {
 	}
 	b.WriteString(m.outputVP.View())
 	b.WriteByte('\n')
-	b.WriteString(hintStyle.Render("Esc to close"))
-
-	rendered := dialogStyle.Render(b.String())
-
-	if w > 0 && h > 0 {
-		rendered = lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, rendered)
+	if m.outputNeedsHScroll {
+		b.WriteString(hintStyle.Render("← → h l scroll · Esc to close"))
+	} else {
+		b.WriteString(hintStyle.Render("Esc to close"))
 	}
 
-	return tea.NewView(rendered)
+	return dialogStyle.Render(b.String())
 }
 
 func (m *Model) setupOutputViewport() {
 	w := m.ctx.ScreenWidth
 	h := m.ctx.ScreenHeight
 
-	dialogWidth := 60
-	if w > 0 && w < dialogWidth+4 {
+	dialogWidth := int(float64(w) * 0.8)
+	if dialogWidth < 60 {
+		dialogWidth = 60
+	}
+	if w > 0 && dialogWidth+4 > w {
 		dialogWidth = w - 4
 	}
 	contentWidth := dialogWidth - 6
@@ -987,7 +1010,16 @@ func (m *Model) setupOutputViewport() {
 	m.outputVP.SetWidth(contentWidth)
 	m.outputVP.SetHeight(vpHeight)
 	m.outputVP.SetContent(contentBuf.String())
+	m.outputVP.SetXOffset(0)
 	m.outputVP.GotoTop()
+
+	maxLineW := 0
+	for _, line := range strings.Split(contentBuf.String(), "\n") {
+		if w := lipgloss.Width(line); w > maxLineW {
+			maxLineW = w
+		}
+	}
+	m.outputNeedsHScroll = maxLineW > contentWidth
 }
 
 func (m Model) sectionView() string {
