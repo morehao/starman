@@ -54,20 +54,14 @@ func (m Model) View() string {
 		return ""
 	}
 
-	theme := m.ctx.Theme
-	borderStyle := lipgloss.NewStyle().
-		BorderLeft(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(theme.FaintBorder)
-
 	if m.content == "" {
-		return borderStyle.
+		return lipgloss.NewStyle().
 			Width(w).
 			Height(h).
 			Render("Nothing selected...")
 	}
 
-	return borderStyle.
+	return lipgloss.NewStyle().
 		Width(w).
 		Render(m.viewport.View())
 }
@@ -82,7 +76,7 @@ func (m Model) renderContent() string {
 		Background(theme.SelectedBackground).
 		Foreground(theme.SecondaryText).
 		PaddingLeft(1).
-		Width(m.width - 2)
+		Width(m.width - 1)
 
 	parts := strings.SplitN(m.content, "\n", 2)
 	header := parts[0]

@@ -62,7 +62,7 @@ func (m Model) renderOverview() string {
 
 	var b strings.Builder
 
-	repoName := lipgloss.NewStyle().Bold(true).Render(m.repo.FullName)
+	repoName := lipgloss.NewStyle().Hyperlink("https://github.com/"+m.repo.FullName).Render(m.repo.FullName)
 	meta := fmt.Sprintf("  ⭐%d  🍴%d", m.repo.StargazersCount, m.repo.ForksCount)
 	b.WriteString(repoName + meta)
 
@@ -134,8 +134,7 @@ func (m Model) renderOverview() string {
 	}
 
 	if m.repo.URL != "" {
-		link := lipgloss.NewStyle().Hyperlink(m.repo.URL).Render(wrapField("URL", m.repo.URL))
-		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("URL"), link))
+		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("URL"), wrapField("URL", m.repo.URL)))
 	}
 
 	if m.repo.StarredAt != "" {

@@ -69,10 +69,11 @@ type Model struct {
 	prompt       prompt.Model
 	mode         int
 
-	outputVP      viewport.Model
-	outputTitle   string
-	outputContent string
-	outputErr     error
+	outputVP            viewport.Model
+	outputTitle         string
+	outputContent       string
+	outputErr           error
+	outputNeedsHScroll  bool
 
 	errorMsg   string
 	errorTimer *time.Timer
@@ -960,7 +961,11 @@ func (m Model) renderOutputDialog() string {
 	}
 	b.WriteString(m.outputVP.View())
 	b.WriteByte('\n')
-	b.WriteString(hintStyle.Render("← → h l scroll · Esc to close"))
+	if m.outputNeedsHScroll {
+		b.WriteString(hintStyle.Render("← → h l scroll · Esc to close"))
+	} else {
+		b.WriteString(hintStyle.Render("Esc to close"))
+	}
 
 	return dialogStyle.Render(b.String())
 }
@@ -1007,6 +1012,14 @@ func (m *Model) setupOutputViewport() {
 	m.outputVP.SetContent(contentBuf.String())
 	m.outputVP.SetXOffset(0)
 	m.outputVP.GotoTop()
+
+	maxLineW := 0
+	for _, line := range strings.Split(contentBuf.String(), "\n") {
+		if w := lipgloss.Width(line); w > maxLineW {
+			maxLineW = w
+		}
+	}
+	m.outputNeedsHScroll = maxLineW > contentWidth
 }
 
 func (m Model) sectionView() string {

@@ -34,17 +34,12 @@ func (m *Model) SetTask(t *TaskInfo)     { m.task = t }
 func (m Model) View() string {
 	theme := m.ctx.Theme
 	bgStyle := lipgloss.NewStyle().
-		Background(theme.SelectedBackground).
-		Width(m.ctx.ScreenWidth)
-	successStyle := lipgloss.NewStyle().
-		Foreground(theme.SuccessText).
-		Background(theme.SelectedBackground)
-	errorStyle := lipgloss.NewStyle().
-		Foreground(theme.ErrorText).
+		Width(m.ctx.ScreenWidth).
+		Align(lipgloss.Right).
 		Background(theme.SelectedBackground)
 
-	helpText := "j/k move  g/G first/last  p sidebar  / search  : cmd  q quit"
-	helpLeft := lipgloss.NewStyle().
+	helpText := "j/k move │ g/G first/last │ p sidebar │ m action menu │ / search │ : cmd │ q quit"
+	help := lipgloss.NewStyle().
 		Foreground(theme.FaintText).
 		Background(theme.SelectedBackground).
 		Render(helpText)
@@ -57,13 +52,21 @@ func (m Model) View() string {
 			frame := spinnerFrames[m.task.SpinnerIdx%len(spinnerFrames)]
 			rightParts = append(rightParts, frame+" "+m.task.Message)
 		case 1:
-			rightParts = append(rightParts, successStyle.Render("✅ "+m.task.Message))
+			rightParts = append(rightParts,
+				lipgloss.NewStyle().
+					Foreground(theme.SuccessText).
+					Background(theme.SelectedBackground).
+					Render("✅ "+m.task.Message))
 		case 2:
 			msg := m.task.Message
 			if m.task.Err != nil {
 				msg = m.task.Message + ": " + m.task.Err.Error()
 			}
-			rightParts = append(rightParts, errorStyle.Render("❌ "+msg))
+			rightParts = append(rightParts,
+				lipgloss.NewStyle().
+					Foreground(theme.ErrorText).
+					Background(theme.SelectedBackground).
+					Render("❌ "+msg))
 		}
 	}
 
@@ -71,22 +74,13 @@ func (m Model) View() string {
 		rightParts = append(rightParts, m.pager)
 	}
 
-	rightStr := strings.Join(rightParts, "  ")
-
-	spacerWidth := m.ctx.ScreenWidth - lipgloss.Width(helpLeft) - lipgloss.Width(rightStr)
-	if spacerWidth < 1 {
-		spacerWidth = 1
+	var parts []string
+	parts = append(parts, help)
+	if len(rightParts) > 0 {
+		parts = append(parts, "│", strings.Join(rightParts, "  "))
 	}
 
-	return bgStyle.Render(lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		helpLeft,
-		lipgloss.NewStyle().
-			Background(theme.SelectedBackground).
-			Width(spacerWidth).
-			Render(""),
-		lipgloss.NewStyle().Background(theme.SelectedBackground).Render(rightStr),
-	))
+	return bgStyle.Render(strings.Join(parts, "  "))
 }
 
 
