@@ -66,6 +66,13 @@ func (m Model) HasSectionTabs() bool {
 	return len(m.sectionTabs) > 0
 }
 
+func (m Model) Height() int {
+	if len(m.sectionTabs) == 0 {
+		return 1
+	}
+	return 3
+}
+
 func (m Model) ViewTabAtX(x int) int {
 	offset := 0
 	for i, t := range m.titles {

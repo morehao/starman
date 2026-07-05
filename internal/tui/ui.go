@@ -763,7 +763,7 @@ func (m *Model) recalcLayout() {
 		return
 	}
 
-	mainHeight := h - constants.TabsHeight - constants.FooterHeight
+	mainHeight := h - m.tabs.Height() - constants.FooterHeight
 	m.ctx.MainContentHeight = mainHeight
 
 	if m.ctx.PreviewPosition == "auto" {
