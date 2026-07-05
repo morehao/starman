@@ -354,6 +354,12 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 		if m.mode == modeNormal {
 			m.mode = modeSearch
 			m.searchInput.SetFocused(true)
+			switch m.ctx.View {
+			case tuicontext.CategoriesView:
+				m.searchInput.SetViewType(searchinput.ViewTypeCategories)
+			case tuicontext.StarsView:
+				m.searchInput.SetViewType(searchinput.ViewTypeStars)
+			}
 		}
 		return nil
 
@@ -471,8 +477,11 @@ func (m *Model) handleSearchMode(typed tea.KeyMsg) tea.Cmd {
 	}
 	if !m.searchInput.IsFocused() {
 		m.mode = modeNormal
-		if m.ctx.View == tuicontext.CategoriesView {
+		switch m.ctx.View {
+		case tuicontext.CategoriesView:
 			m.categories.ResetFilters()
+		case tuicontext.StarsView:
+			m.stars.ResetFilters()
 		}
 	}
 	return nil
@@ -621,6 +630,8 @@ func (m *Model) executeSearch(query string) tea.Cmd {
 	if m.ctx.View != tuicontext.StarsView {
 		return nil
 	}
+
+	m.stars.SaveCurrentRows()
 
 	return func() tea.Msg {
 		stdout, _, err := m.runner.Run(context.Background(), "search "+query+" --json")
