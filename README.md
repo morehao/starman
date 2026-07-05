@@ -170,6 +170,8 @@ starman trending --star
 
 Running `starman` without any subcommands starts the terminal user interface built with [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
+![TUI Main](docs/screenshots/tui-main.png)
+
 ### Views
 
 | View | Description |

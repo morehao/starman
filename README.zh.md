@@ -170,6 +170,8 @@ starman trending --star
 
 不加任何子命令直接运行 `starman`，会启动基于 [Bubble Tea](https://github.com/charmbracelet/bubbletea) 构建的终端用户界面。
 
+![TUI Main](docs/screenshots/tui-main.png)
+
 ### 视图
 
 | 视图 | 说明 |
