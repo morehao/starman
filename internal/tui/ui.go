@@ -802,29 +802,48 @@ func (m Model) View() tea.View {
 
 	if m.mode == modeSearch {
 		m.searchInput.SetSize(m.ctx.ScreenWidth, m.ctx.ScreenHeight)
-		v := m.searchInput.View()
-		v.AltScreen = true
-		v.MouseMode = tea.MouseModeCellMotion
-		return v
 	}
-
 	if m.mode == modeCommand {
 		m.commandInput.SetSize(m.ctx.ScreenWidth, m.ctx.ScreenHeight)
-		v := m.commandInput.View()
-		v.AltScreen = true
-		v.MouseMode = tea.MouseModeCellMotion
-		return v
-	}
-
-	if m.mode == modeOutput {
-		v := m.renderOutputOverlay()
-		v.AltScreen = true
-		v.MouseMode = tea.MouseModeCellMotion
-		return v
 	}
 
 	m.footer.SetPager(m.sectionPager())
 
+	bg := m.renderFullBackground()
+
+	if m.mode != modeNormal {
+		bg = m.renderOverlayedView(bg)
+	}
+
+	v := tea.NewView(bg)
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
+}
+
+func (m Model) renderOverlayedView(bg string) string {
+	var dialog string
+	switch m.mode {
+	case modeSearch:
+		dialog = m.searchInput.BoxView()
+	case modeCommand:
+		dialog = m.commandInput.BoxView()
+	case modeOutput:
+		dialog = m.renderOutputDialog()
+	case modeActions:
+		dialog = m.actionsMenu.BoxView()
+	case modePrompt:
+		dialog = m.prompt.BoxView()
+	}
+
+	if dialog == "" {
+		return bg
+	}
+
+	return overlayOnBackground(bg, dialog, m.ctx.ScreenWidth, m.ctx.ScreenHeight, m.ctx.Theme.OverlayBg)
+}
+
+func (m Model) renderFullBackground() string {
 	theme := m.ctx.Theme
 	borderColor := theme.FaintBorder
 
@@ -835,11 +854,7 @@ func (m Model) View() tea.View {
 	sectionView := mainStyle.Render(m.sectionView())
 
 	var content string
-	if m.mode == modeActions {
-		content = m.actionsMenu.View().Content
-	} else if m.mode == modePrompt {
-		content = m.prompt.View().Content
-	} else if m.showSidebar && m.ctx.DynamicPreviewWidth > 0 && m.ctx.PreviewPosition == "right" {
+	if m.showSidebar && m.ctx.DynamicPreviewWidth > 0 && m.ctx.PreviewPosition == "right" {
 		sidebarStyle := lipgloss.NewStyle().
 			Width(m.ctx.DynamicPreviewWidth).
 			Height(m.ctx.MainContentHeight).
@@ -866,10 +881,7 @@ func (m Model) View() tea.View {
 	}
 
 	tabsView := m.tabs.View()
-
 	mainArea := lipgloss.JoinVertical(lipgloss.Left, tabsView, content)
-
-	footerView := m.footer.View()
 
 	extraLines := 1
 	if m.errorMsg != "" {
@@ -881,30 +893,11 @@ func (m Model) View() tea.View {
 	}
 	adjustedMainArea, _ := truncateLines(mainArea, fittingLines)
 
-	contentOutput := adjustedMainArea + m.renderErrorBar()
-
-	v := tea.NewView(contentOutput + "\n" + footerView)
-	v.AltScreen = true
-	v.MouseMode = tea.MouseModeCellMotion
-	return v
+	return adjustedMainArea + m.renderErrorBar() + "\n" + m.footer.View()
 }
 
-func (m Model) renderOutputOverlay() tea.View {
-	w := m.ctx.ScreenWidth
-	h := m.ctx.ScreenHeight
-
-	dialogWidth := 60
-	if w > 0 && w < dialogWidth+4 {
-		dialogWidth = w - 4
-	}
-
+func (m Model) renderOutputDialog() string {
 	th := m.ctx.Theme
-
-	dialogStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(th.FaintBorder).
-		Padding(1, 2).
-		Width(dialogWidth)
 
 	titleStyle := lipgloss.NewStyle().
 		Foreground(th.PrimaryText).
@@ -912,18 +905,6 @@ func (m Model) renderOutputOverlay() tea.View {
 
 	hintStyle := lipgloss.NewStyle().
 		Foreground(th.FaintText)
-
-	contentWidth := dialogWidth - 6
-	if contentWidth < 0 {
-		contentWidth = 0
-	}
-
-	separator := ""
-	if contentWidth > 0 {
-		separator = lipgloss.NewStyle().
-			Foreground(th.FaintBorder).
-			Render(strings.Repeat("─", contentWidth))
-	}
 
 	title := m.outputTitle
 	if title == "" {
@@ -933,21 +914,11 @@ func (m Model) renderOutputOverlay() tea.View {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("$ " + title))
 	b.WriteByte('\n')
-	if separator != "" {
-		b.WriteString(separator)
-		b.WriteByte('\n')
-	}
 	b.WriteString(m.outputVP.View())
 	b.WriteByte('\n')
 	b.WriteString(hintStyle.Render("Esc to close"))
 
-	rendered := dialogStyle.Render(b.String())
-
-	if w > 0 && h > 0 {
-		rendered = lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, rendered)
-	}
-
-	return tea.NewView(rendered)
+	return b.String()
 }
 
 func (m *Model) setupOutputViewport() {

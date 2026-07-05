@@ -89,6 +89,43 @@ func (m Model) View() tea.View {
 	return tea.NewView(m.renderOverlay())
 }
 
+func (m Model) BoxView() string {
+	if !m.focused {
+		return ""
+	}
+	return m.renderContentOnly()
+}
+
+func (m Model) renderContentOnly() string {
+	titleStyle := lipgloss.NewStyle().
+		Foreground(m.th.PrimaryText).
+		Bold(true)
+
+	inputLabelStyle := lipgloss.NewStyle().
+		Foreground(m.th.FaintText)
+
+	inputStyle := lipgloss.NewStyle().
+		Foreground(m.th.PrimaryText)
+
+	hintStyle := lipgloss.NewStyle().
+		Foreground(m.th.FaintText)
+
+	inputDisplay := m.input
+	if inputDisplay == "" {
+		inputDisplay = " "
+	}
+
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("Execute Command"))
+	b.WriteByte('\n')
+	b.WriteString(inputLabelStyle.Render("$ "))
+	b.WriteString(inputStyle.Render(inputDisplay + "█"))
+	b.WriteByte('\n')
+	b.WriteString(hintStyle.Render("Enter to execute  Esc to cancel"))
+
+	return b.String()
+}
+
 const overlayWidth = 42
 
 func (m Model) renderOverlay() string {
