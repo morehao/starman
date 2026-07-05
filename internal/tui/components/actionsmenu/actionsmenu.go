@@ -137,3 +137,10 @@ func (m Model) View() tea.View {
 	}
 	return tea.NewView(overlayStyle.Render(content))
 }
+
+func (m Model) BoxView() string {
+	if !m.active {
+		return ""
+	}
+	return m.View().Content
+}

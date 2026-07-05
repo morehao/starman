@@ -89,9 +89,32 @@ func (m Model) View() tea.View {
 	return tea.NewView(m.renderOverlay())
 }
 
+func (m Model) BoxView() string {
+	if !m.focused {
+		return ""
+	}
+	return m.renderDialogBox()
+}
+
 const overlayWidth = 42
 
 func (m Model) renderOverlay() string {
+	rendered := m.renderDialogBox()
+
+	if m.width == 0 || m.height == 0 {
+		return rendered
+	}
+
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		rendered,
+	)
+}
+
+func (m Model) renderDialogBox() string {
 	dialogWidth := overlayWidth
 	if m.width > 0 && m.width < dialogWidth+4 {
 		dialogWidth = m.width - 4
@@ -144,17 +167,5 @@ func (m Model) renderOverlay() string {
 	b.WriteByte('\n')
 	b.WriteString(hintStyle.Render("Enter to search  Esc to cancel"))
 
-	rendered := dialogStyle.Render(b.String())
-
-	if m.width == 0 || m.height == 0 {
-		return rendered
-	}
-
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		rendered,
-	)
+	return dialogStyle.Render(b.String())
 }
