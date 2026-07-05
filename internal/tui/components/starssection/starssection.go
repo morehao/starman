@@ -78,6 +78,11 @@ type ReposFetchedMsg struct {
 	Repos     []*store.Repository
 }
 
+type SearchResultsMsg struct {
+	SectionID int
+	Repos     []*store.Repository
+}
+
 type ReposFetchFailedMsg struct {
 	SectionID int
 	Err       error
@@ -202,6 +207,13 @@ func (m *Model) Update(msg tea.Msg) (section.Section, tea.Cmd) {
 		m.filtered = false
 		m.reposSaved = nil
 		m.rowsSaved = nil
+	case SearchResultsMsg:
+		if typed.SectionID != m.id {
+			return m, nil
+		}
+		m.repos = typed.Repos
+		listRows := m.buildRows(typed.Repos)
+		m.list.SetRows(listRows)
 	case ReposFetchFailedMsg:
 		if typed.SectionID != m.id {
 			return m, nil

@@ -636,14 +636,14 @@ func (m *Model) executeSearch(query string) tea.Cmd {
 	return func() tea.Msg {
 		stdout, _, err := m.runner.Run(context.Background(), "search "+query+" --json")
 		if err != nil {
-			return starssection.ReposFetchedMsg{SectionID: 1, Repos: nil}
+			return starssection.SearchResultsMsg{SectionID: 1, Repos: nil}
 		}
 		var hits []jsonHit
 		if err := json.Unmarshal([]byte(stdout), &hits); err != nil {
-			return starssection.ReposFetchedMsg{SectionID: 1, Repos: nil}
+			return starssection.SearchResultsMsg{SectionID: 1, Repos: nil}
 		}
 		repos := convertSearchHitsToRepos(hits)
-		return starssection.ReposFetchedMsg{SectionID: 1, Repos: repos}
+		return starssection.SearchResultsMsg{SectionID: 1, Repos: repos}
 	}
 }
 
