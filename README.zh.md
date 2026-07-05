@@ -4,17 +4,16 @@
 
 一个用 AI 管理 GitHub 星标仓库的 CLI 和 TUI 工具 —— 同步、分析、分类、搜索，并生成 Awesome List。
 
-starman 支持星标同步、AI 分析、Awesome List 生成、Release 追踪、数据备份、终端界面——全部在命令行或 TUI 中完成。
+starman 支持星标同步、AI 分析、Awesome List 生成、数据备份、终端界面——全部在命令行或 TUI 中完成。
 
 ## 功能
 
-- **TUI** — 终端用户界面，包含 Stars、Categories、Trending、Releases、Stats 五个视图。支持搜索覆盖层、命令模式（`:`）、侧边栏预览、可配置键位、暗色/亮色主题。
+- **TUI** — 终端用户界面，包含 Stars、Categories、Trending、Stats 四个视图。支持搜索覆盖层、命令模式（`:`）、侧边栏预览、可配置键位、暗色/亮色主题。
 - **同步** — 并发分页拉取 GitHub 星标仓库到本地 SQLite（再次同步时保留 AI 分析结果）。支持 `--watch` 模式定时自动同步。
 - **分析** — 批量 AI 分析（OpenAI 兼容）：生成摘要、标签、分类（双向关键词匹配），同时生成 embedding 向量用于语义搜索，以及 `search_text` 用于全文索引。
 - **搜索** — 三层混合搜索（向量语义匹配 > AI 查询理解 + 文本检索 > 基础文本检索），支持结构化过滤（`--lang`/`--category`/`--platform`/`--tag`）、`--sort` 排序和 `--json` 输出。
 - **生成** — Markdown Awesome List，三种模式：按语言、按 AI 分类、平铺列表（可自动提交到 GitHub 仓库）。
 - **分类管理** — 列出、添加、编辑、删除自定义分类。内置分类带有关键词匹配，用于 AI 自动归类。
-- **Release 追踪** — 订阅仓库并拉取新版本，支持增量水位。
 - **Star/Unstar** — 星标管理，同步到本地 DB。
 - **备份** — 通过 Git Data API 将 `starman.db` 作为 SQLite 二进制文件推送到任意 GitHub 仓库。
 - **配置** — 交互式配置，敏感字段支持环境变量。
@@ -151,7 +150,7 @@ starman search "机器学习" --json
 starman
 ```
 
-不加子命令直接运行 `starman` 即可启动终端用户界面，包含 Stars、Categories、Trending、Releases、Stats 五个视图。使用 `Tab` 切换视图，`:` 执行命令，`/` 搜索。
+不加子命令直接运行 `starman` 即可启动终端用户界面，包含 Stars、Categories、Trending、Stats 四个视图。使用 `Tab` 切换视图，`:` 执行命令，`/` 搜索。
 
 ### 7. 发现趋势仓库
 
@@ -179,7 +178,6 @@ starman trending --star
 | Stars | 浏览、过滤、管理星标仓库。分组：All / Language / Category / Tag。`m` 打开操作菜单（同步、分析、星标、编辑分类/标签、浏览器打开） |
 | Categories | 管理自定义分类定义 — 增删改查分类，支持关键词和排序。`m` 打开操作菜单 |
 | Trending | 浏览 GitHub 趋势仓库。时段：Daily / Weekly / Monthly。`m` 打开操作菜单（收藏、刷新、同步） |
-| Releases | 查看已订阅仓库的新版本，支持已读/未读过滤。`m` 打开操作菜单（标为已读、显示全部/未读、刷新、同步、浏览器打开） |
 | Stats | 整屏统计分布，按语言/分类/标签。`h`/`l` 切换统计维度 |
 
 ### 快捷键
@@ -319,23 +317,6 @@ starman config show   # 显示当前配置（敏感字段脱敏）
 **`config init`** 逐步询问 GitHub 用户名/token、AI BaseURL/API Key/Model，写入 `~/.starman/config.yaml`。
 
 **`config show`** 打印完整配置，token/key 仅显示首尾各 2 字符。
-
----
-
-### `starman release`
-
-Release 追踪，支持增量水位。
-
-```bash
-starman release list [--all]                        # 列出未读（或全部）release
-starman release pull                                 # 拉取订阅仓库的新 release
-starman release subscribe <owner/repo>               # 订阅 + 拉取初始 release
-starman release unsubscribe <owner/repo>             # 取消订阅
-```
-
-| Flag | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `--all` | bool | `false` | `list` 子命令：显示所有 release 包括已读 |
 
 ---
 
@@ -542,7 +523,7 @@ generate:
   sort: "language"    # language | category | flat
 
 tui:
-  default_view: stars  # stars | categories | trending | releases | stats
+  default_view: stars  # stars | categories | trending | stats
   confirm_quit: false
   theme: dark          # dark | light
   preview:
@@ -591,7 +572,6 @@ Embedding 同样兼容任何 OpenAI 兼容的 embedding API 端点（`/v1/embedd
 - **分类锁定** — 通过 `category_locked` 锁定仓库分类，防止 AI 覆盖手动设置的分类。
 - **三层混合搜索** — 搜索优先尝试向量语义匹配（sqlite-vec），降级到 AI 查询理解 + 全文文本检索，最后兜底基础文本搜索。无向量配置时透明降级，零成本运行。分析时 LLM 生成的 `ai_search_text` 字段丰富了搜索索引，提升召回率。
 - **分析失败隔离** — 某个仓库 AI 分析失败时，批量继续执行。失败的仓库标记 `analysis_failed` 以供重试。
-- **Release 水位** — 订阅的仓库记录最后拉取的 release 时间戳，`release pull` 只获取新版本。
 - **生成器读取本地 DB** — `generate` 不调用 GitHub API 获取数据，而是从 SQLite 读取。请先运行 `sync`，再运行 `analyze` 获取 AI 分类。
 - **统计无成本** — `stats`、`info` 和（不使用 AI 的）`search` 仅读取本地 SQLite 数据库，不调用 API，无需 token。
 - **Trending 双数据源** — `trending` 默认使用 RSS（通过 GitHubTrendingRSS）。`--source search` 切换到官方 GitHub Search API。
@@ -660,7 +640,6 @@ internal/
   ai/                        # OpenAI 兼容客户端 + 分析/分类/搜索
   discovery/                 # 趋势仓库发现（RSS + Search API 兜底）
   generate/                  # Markdown 模板渲染
-  release/                   # Release 追踪器（水位）
   backup/                    # Git Data API 备份（SQLite 二进制推送）
   tui/                       # Bubble Tea 终端界面
     cmdrunner/               # Headless cobra 命令执行
