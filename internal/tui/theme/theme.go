@@ -15,7 +15,6 @@ type Theme struct {
 	ErrorText          color.Color
 	WarningText        color.Color
 	FaintBorder        color.Color
-	OverlayBg          color.Color
 }
 
 func DefaultTheme() Theme {
@@ -28,7 +27,6 @@ func DefaultTheme() Theme {
 		ErrorText:          lipgloss.Color("#F38BA8"),
 		WarningText:        lipgloss.Color("#F9E2AF"),
 		FaintBorder:        lipgloss.Color("#313244"),
-		OverlayBg:          lipgloss.Color("#0f0f1a"),
 	}
 }
 
@@ -42,6 +40,5 @@ func LightTheme() Theme {
 		ErrorText:          lipgloss.Color("#DC2626"),
 		WarningText:        lipgloss.Color("#CA8A04"),
 		FaintBorder:        lipgloss.Color("#D4D4D8"),
-		OverlayBg:          lipgloss.Color("#000000"),
 	}
 }

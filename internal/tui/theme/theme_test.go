@@ -22,7 +22,6 @@ func TestDefaultTheme_AllTokensSet(t *testing.T) {
 		{"ErrorText", th.ErrorText},
 		{"WarningText", th.WarningText},
 		{"FaintBorder", th.FaintBorder},
-		{"OverlayBg", th.OverlayBg},
 	}
 	for _, tt := range tests {
 		if tt.value == noColor {
@@ -46,7 +45,6 @@ func TestLightTheme_AllTokensSet(t *testing.T) {
 		{"ErrorText", th.ErrorText},
 		{"WarningText", th.WarningText},
 		{"FaintBorder", th.FaintBorder},
-		{"OverlayBg", th.OverlayBg},
 	}
 	for _, tt := range tests {
 		if tt.value == noColor {
