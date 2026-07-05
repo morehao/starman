@@ -176,24 +176,26 @@ Running `starman` without any subcommands starts the terminal user interface bui
 
 | View | Description |
 |------|-------------|
-| Stars | Browse, filter, and manage your starred repos. `s` to sync, `a` to analyze, `x` to star/unstar, `c`/`t` to edit category/tags |
-| Categories | Browse repositories grouped by category |
-| Trending | Browse GitHub trending repositories, `x` to star |
-| Releases | Track new releases from subscribed repos |
-| Stats | Full-screen distribution charts by language, category, or tag |
+| Stars | Browse, filter, and manage your starred repos. Sections: All / Language / Category / Tag. `m` for Actions menu (sync, analyze, star/unstar, edit category/tags, open in browser) |
+| Categories | Manage custom category definitions — list, add, edit, delete categories with keywords and sort order. `m` for Actions menu |
+| Trending | Browse GitHub trending repositories. Sections: Daily / Weekly / Monthly. `m` for Actions menu (star, refresh, sync) |
+| Releases | Track new releases from subscribed repos with read/unread filtering. `m` for Actions menu (mark read, show all/unread, refresh, sync, open in browser) |
+| Stats | Full-screen distribution charts by language, category, or tag. `h`/`l` to switch dimensions |
 
 ### Key Bindings
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Switch view |
+| `Tab` / `Shift+Tab` | Switch view |
 | `j`/`k` | Move up/down |
 | `g`/`G` | First/last item |
-| `]]`/`[[` | Next/previous section tab |
-| `/` | Search overlay |
-| `:` | Command mode (headless cobra execution) |
+| `]`/`[` | Next/previous section tab |
+| `h`/`l` | Switch stats dimension |
+| `m` | Actions menu |
 | `p` | Toggle sidebar |
-| `?` | Help |
+| `/` | Search overlay |
+| `:` | Command mode |
+| `r` | Refresh |
 | `q` | Quit |
 
 ### Command Mode
