@@ -649,6 +649,9 @@ go vet ./...
 
 ```
 cmd/starman/main.go          # 入口
+docs/
+  adr-001-headless-cli-command-execution.md  # 架构决策记录
+  screenshots/               # TUI 截图
 internal/
   cli/                       # Cobra 命令定义
   config/                    # YAML 配置加载 + 环境变量解析

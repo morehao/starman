@@ -649,6 +649,9 @@ go vet ./...
 
 ```
 cmd/starman/main.go          # Entry point
+docs/
+  adr-001-headless-cli-command-execution.md  # Architecture Decision Record
+  screenshots/               # TUI screenshots
 internal/
   cli/                       # Cobra command definitions
   config/                    # YAML config loading + env var resolution
