@@ -632,6 +632,12 @@ func (m *Model) executeSearch(query string) tea.Cmd {
 			return starssection.ReposFetchedMsg{SectionID: 1, Repos: nil}
 		}
 		repos := convertSearchHitsToRepos(hits)
+		for _, repo := range repos {
+			full, err := m.ctx.Store.GetRepository(context.Background(), repo.FullName)
+			if err == nil {
+				*repo = *full
+			}
+		}
 		return starssection.ReposFetchedMsg{SectionID: 1, Repos: repos}
 	}
 }
