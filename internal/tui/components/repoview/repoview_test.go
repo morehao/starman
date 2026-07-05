@@ -3,6 +3,7 @@ package repoview
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/morehao/starman/internal/store"
 )
@@ -139,5 +140,97 @@ func TestReleasesSectionNotSubscribed(t *testing.T) {
 	out := m.View()
 	if !strings.Contains(out, "Not subscribed") {
 		t.Fatalf("missing not subscribed: %q", out)
+	}
+}
+
+func TestOverviewWithUpdatedAndAnalyzed(t *testing.T) {
+	now := time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)
+	m := NewModel()
+	m.SetRepo(&store.Repository{
+		FullName:        "owner/repo",
+		StargazersCount: 100,
+		ForksCount:      5,
+		RepoUpdatedAt:   "2026-01-15T12:00:00Z",
+		AnalyzedAt:      &now,
+	})
+	out := m.View()
+
+	if !strings.Contains(out, "Updated") {
+		t.Fatalf("missing Updated label: %q", out)
+	}
+	if !strings.Contains(out, "2026-01-15 12:00") {
+		t.Fatalf("missing formatted Updated time: %q", out)
+	}
+	if !strings.Contains(out, "Analyzed") {
+		t.Fatalf("missing Analyzed label: %q", out)
+	}
+}
+
+func TestOverviewWithLongDescriptionWrapped(t *testing.T) {
+	longDesc := "This is a very long repository description that should be wrapped when the sidebar width is limited to prevent text from overflowing beyond the terminal boundaries and becoming unreadable"
+	m := NewModel()
+	m.SetWidth(40)
+	m.SetRepo(&store.Repository{
+		FullName:        "owner/repo",
+		StargazersCount: 100,
+		ForksCount:      5,
+		Description:     longDesc,
+	})
+	out := m.View()
+
+	if !strings.Contains(out, "overflowing") {
+		t.Fatalf("missing description content: %q", out)
+	}
+	// Verify Description section header exists
+	if !strings.Contains(out, "Description") {
+		t.Fatalf("missing Description header: %q", out)
+	}
+}
+
+func TestWordWrap(t *testing.T) {
+	tests := []struct {
+		name   string
+		text   string
+		width  int
+		expect string
+	}{
+		{
+			name:   "empty text",
+			text:   "",
+			width:  40,
+			expect: "",
+		},
+		{
+			name:   "zero width",
+			text:   "some text",
+			width:  0,
+			expect: "some text",
+		},
+		{
+			name:   "text fits within width",
+			text:   "short text",
+			width:  40,
+			expect: "short text",
+		},
+		{
+			name:   "text needs wrapping",
+			text:   "hello world foo bar baz",
+			width:  10,
+			expect: "hello\nworld foo\nbar baz",
+		},
+		{
+			name:   "preserves existing newlines",
+			text:   "line one\n\nline two is longer text here",
+			width:  15,
+			expect: "line one\n\nline two is\nlonger text\nhere",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wordWrap(tt.text, tt.width)
+			if got != tt.expect {
+				t.Fatalf("wordWrap(%q, %d) = %q, want %q", tt.text, tt.width, got, tt.expect)
+			}
+		})
 	}
 }

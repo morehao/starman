@@ -294,27 +294,39 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	case modeSearch:
 		return m.handleSearchMode(typed)
 	case modeOutput:
-		key := typed.Key()
-		switch {
-		case key.Code == tea.KeyEsc || key.Code == tea.KeyEnter:
+		switch s := typed.String(); {
+		case s == "esc" || s == "enter":
 			m.mode = modeNormal
 			return nil
-		case key.Code == 'j' || key.Code == tea.KeyDown:
+		case s == "j" || s == "down":
 			m.outputVP.ScrollDown(1)
 			return nil
-		case key.Code == 'k' || key.Code == tea.KeyUp:
+		case s == "k" || s == "up":
 			m.outputVP.ScrollUp(1)
 			return nil
-		case key.Code == tea.KeyPgUp:
+		case s == "h" || s == "left":
+			m.outputVP.ScrollLeft(4)
+			return nil
+		case s == "l" || s == "right":
+			m.outputVP.ScrollRight(4)
+			return nil
+		case s == "H":
+			m.outputVP.ScrollLeft(20)
+			return nil
+		case s == "L":
+			m.outputVP.ScrollRight(20)
+			return nil
+		case s == "pgup":
 			m.outputVP.HalfPageUp()
 			return nil
-		case key.Code == tea.KeyPgDown:
+		case s == "pgdown":
 			m.outputVP.HalfPageDown()
 			return nil
-		case key.Code == tea.KeyHome:
+		case s == "home":
+			m.outputVP.SetXOffset(0)
 			m.outputVP.GotoTop()
 			return nil
-		case key.Code == tea.KeyEnd:
+		case s == "end":
 			m.outputVP.GotoBottom()
 			return nil
 		}
@@ -899,8 +911,11 @@ func (m Model) renderFullBackground() string {
 func (m Model) renderOutputDialog() string {
 	w := m.ctx.ScreenWidth
 
-	dialogWidth := 60
-	if w > 0 && w < dialogWidth+4 {
+	dialogWidth := int(float64(w) * 0.8)
+	if dialogWidth < 60 {
+		dialogWidth = 60
+	}
+	if w > 0 && dialogWidth+4 > w {
 		dialogWidth = w - 4
 	}
 
@@ -945,7 +960,7 @@ func (m Model) renderOutputDialog() string {
 	}
 	b.WriteString(m.outputVP.View())
 	b.WriteByte('\n')
-	b.WriteString(hintStyle.Render("Esc to close"))
+	b.WriteString(hintStyle.Render("← → h l scroll · Esc to close"))
 
 	return dialogStyle.Render(b.String())
 }
@@ -954,8 +969,11 @@ func (m *Model) setupOutputViewport() {
 	w := m.ctx.ScreenWidth
 	h := m.ctx.ScreenHeight
 
-	dialogWidth := 60
-	if w > 0 && w < dialogWidth+4 {
+	dialogWidth := int(float64(w) * 0.8)
+	if dialogWidth < 60 {
+		dialogWidth = 60
+	}
+	if w > 0 && dialogWidth+4 > w {
 		dialogWidth = w - 4
 	}
 	contentWidth := dialogWidth - 6
@@ -987,6 +1005,7 @@ func (m *Model) setupOutputViewport() {
 	m.outputVP.SetWidth(contentWidth)
 	m.outputVP.SetHeight(vpHeight)
 	m.outputVP.SetContent(contentBuf.String())
+	m.outputVP.SetXOffset(0)
 	m.outputVP.GotoTop()
 }
 

@@ -59,14 +59,18 @@ func TestSearchInput_EnterExecutesSearch(t *testing.T) {
 	}
 }
 
-func TestSearchInput_BackspaceDeletesChar(t *testing.T) {
+func TestSearchInput_BackspaceDeletesAtCursor(t *testing.T) {
 	m := NewModel()
 	m.focused = true
 	m.query = "go"
+	m.cursorPos = len(m.query)
 	updated, _ := m.Update(tea.KeyPressMsg{Code: backspaceKey})
 	sm := updated.(Model)
 	if sm.query != "g" {
 		t.Errorf("expected 'g' after backspace, got '%s'", sm.query)
+	}
+	if sm.cursorPos != 1 {
+		t.Errorf("expected cursorPos=1 after backspace, got %d", sm.cursorPos)
 	}
 }
 
@@ -125,19 +129,21 @@ func TestSearchInput_View_Focused(t *testing.T) {
 
 func TestSearchInput_View_Golden(t *testing.T) {
 	tests := []struct {
-		name    string
-		focused bool
-		query   string
+		name      string
+		focused   bool
+		query     string
+		cursorPos int
 	}{
-		{"focused_empty", true, ""},
-		{"focused_query", true, "go cli framework"},
-		{"unfocused", false, "go"},
+		{"focused_empty", true, "", 0},
+		{"focused_query", true, "go cli framework", len("go cli framework")},
+		{"unfocused", false, "go", 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewModel()
 			m.focused = tt.focused
 			m.query = tt.query
+			m.cursorPos = tt.cursorPos
 			got := stripANSI(m.View().Content)
 
 			path := goldenPath(t)
@@ -172,5 +178,94 @@ func TestSearchInput_IsFocused(t *testing.T) {
 	m.focused = true
 	if !m.IsFocused() {
 		t.Error("expected IsFocused=true after setting focused")
+	}
+}
+
+func TestSearchInput_LeftRightMovesCursor(t *testing.T) {
+	m := NewModel()
+	m.focused = true
+	m.query = "abc"
+	m.cursorPos = len(m.query)
+
+	m1, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if m1.(Model).cursorPos != 2 {
+		t.Errorf("expected cursorPos=2 after Left, got %d", m1.(Model).cursorPos)
+	}
+
+	m2, _ := m1.(Model).Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if m2.(Model).cursorPos != 1 {
+		t.Errorf("expected cursorPos=1 after Left, got %d", m2.(Model).cursorPos)
+	}
+
+	m3, _ := m2.(Model).Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if m3.(Model).cursorPos != 2 {
+		t.Errorf("expected cursorPos=2 after Right, got %d", m3.(Model).cursorPos)
+	}
+}
+
+func TestSearchInput_LeftRightClampsBounds(t *testing.T) {
+	m := NewModel()
+	m.focused = true
+	m.query = "a"
+	m.cursorPos = 0
+
+	m1, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if m1.(Model).cursorPos != 0 {
+		t.Errorf("expected cursorPos=0 at left bound, got %d", m1.(Model).cursorPos)
+	}
+
+	m.cursorPos = 1
+	m2, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if m2.(Model).cursorPos != 1 {
+		t.Errorf("expected cursorPos=1 at right bound, got %d", m2.(Model).cursorPos)
+	}
+}
+
+func TestSearchInput_HomeEndMovesCursor(t *testing.T) {
+	m := NewModel()
+	m.focused = true
+	m.query = "hello world"
+	m.cursorPos = 3
+
+	m1, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyHome})
+	if m1.(Model).cursorPos != 0 {
+		t.Errorf("expected cursorPos=0 after Home, got %d", m1.(Model).cursorPos)
+	}
+
+	m2, _ := m1.(Model).Update(tea.KeyPressMsg{Code: tea.KeyEnd})
+	if m2.(Model).cursorPos != 11 {
+		t.Errorf("expected cursorPos=11 after End, got %d", m2.(Model).cursorPos)
+	}
+}
+
+func TestSearchInput_InsertAtCursorPosition(t *testing.T) {
+	m := NewModel()
+	m.focused = true
+	m.query = "ab"
+	m.cursorPos = 1
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'X'})
+	sm := updated.(Model)
+	if sm.query != "aXb" {
+		t.Errorf("expected 'aXb' after insert at pos 1, got '%s'", sm.query)
+	}
+	if sm.cursorPos != 2 {
+		t.Errorf("expected cursorPos=2 after insert, got %d", sm.cursorPos)
+	}
+}
+
+func TestSearchInput_DeleteAtCursorPosition(t *testing.T) {
+	m := NewModel()
+	m.focused = true
+	m.query = "abcd"
+	m.cursorPos = 1
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDelete})
+	sm := updated.(Model)
+	if sm.query != "acd" {
+		t.Errorf("expected 'acd' after delete at pos 1, got '%s'", sm.query)
+	}
+	if sm.cursorPos != 1 {
+		t.Errorf("expected cursorPos=1 after delete, got %d", sm.cursorPos)
 	}
 }

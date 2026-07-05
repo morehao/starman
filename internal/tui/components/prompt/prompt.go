@@ -43,6 +43,7 @@ type Model struct {
 	formFields   []FormField
 	formFieldIdx int
 	formIsEdit   bool
+	cursorPos    int
 }
 
 func NewConfirmModel(title string) Model {
@@ -67,10 +68,14 @@ func NewCategorySelectModel(title string, categories []string, current string) M
 }
 
 func NewTagEditModel(title string, current string) Model {
-	return Model{ptype: PromptTagEdit, title: title, input: current, active: true}
+	return Model{ptype: PromptTagEdit, title: title, input: current, active: true, cursorPos: len(current)}
 }
 
 func NewCategoryFormModel(title string, fields []FormField, isEdit bool) Model {
+	cp := 0
+	if len(fields) > 0 {
+		cp = len(fields[0].Value)
+	}
 	return Model{
 		ptype:        PromptCategoryForm,
 		title:        title,
@@ -78,6 +83,7 @@ func NewCategoryFormModel(title string, fields []FormField, isEdit bool) Model {
 		formFieldIdx: 0,
 		active:       true,
 		formIsEdit:   isEdit,
+		cursorPos:    cp,
 	}
 }
 
@@ -163,12 +169,30 @@ func (m Model) handleTagKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return PromptResultMsg{Type: PromptTagEdit, Confirmed: true, Value: strings.TrimSpace(m.input)}
 		}
 	case 127:
-		if len(m.input) > 0 {
-			m.input = m.input[:len(m.input)-1]
+		if m.cursorPos > 0 {
+			m.input = m.input[:m.cursorPos-1] + m.input[m.cursorPos:]
+			m.cursorPos--
 		}
+	case tea.KeyDelete:
+		if m.cursorPos < len(m.input) {
+			m.input = m.input[:m.cursorPos] + m.input[m.cursorPos+1:]
+		}
+	case tea.KeyLeft:
+		if m.cursorPos > 0 {
+			m.cursorPos--
+		}
+	case tea.KeyRight:
+		if m.cursorPos < len(m.input) {
+			m.cursorPos++
+		}
+	case tea.KeyHome:
+		m.cursorPos = 0
+	case tea.KeyEnd:
+		m.cursorPos = len(m.input)
 	default:
 		if msg.Code >= 32 && msg.Code < 127 {
-			m.input += string(rune(msg.Code))
+			m.input = m.input[:m.cursorPos] + string(rune(msg.Code)) + m.input[m.cursorPos:]
+			m.cursorPos++
 		}
 	}
 	return m, nil
@@ -192,11 +216,13 @@ func (m Model) handleCategoryFormKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		if m.formFieldIdx >= len(m.formFields) {
 			m.formFieldIdx = 0
 		}
+		m.cursorPos = len(m.formFields[m.formFieldIdx].Value)
 	case tea.KeyUp:
 		m.formFieldIdx--
 		if m.formFieldIdx < 0 {
 			m.formFieldIdx = len(m.formFields) - 1
 		}
+		m.cursorPos = len(m.formFields[m.formFieldIdx].Value)
 	case ' ':
 		f := &m.formFields[m.formFieldIdx]
 		if f.IsBool {
@@ -208,13 +234,34 @@ func (m Model) handleCategoryFormKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		}
 	case 127:
 		f := &m.formFields[m.formFieldIdx]
-		if !f.IsBool && !f.Readonly && len(f.Value) > 0 {
-			f.Value = f.Value[:len(f.Value)-1]
+		if !f.IsBool && !f.Readonly && m.cursorPos > 0 {
+			f.Value = f.Value[:m.cursorPos-1] + f.Value[m.cursorPos:]
+			m.cursorPos--
 		}
+	case tea.KeyDelete:
+		f := &m.formFields[m.formFieldIdx]
+		if !f.IsBool && !f.Readonly && m.cursorPos < len(f.Value) {
+			f.Value = f.Value[:m.cursorPos] + f.Value[m.cursorPos+1:]
+		}
+	case tea.KeyLeft:
+		if m.cursorPos > 0 {
+			m.cursorPos--
+		}
+	case tea.KeyRight:
+		f := &m.formFields[m.formFieldIdx]
+		if m.cursorPos < len(f.Value) {
+			m.cursorPos++
+		}
+	case tea.KeyHome:
+		m.cursorPos = 0
+	case tea.KeyEnd:
+		f := &m.formFields[m.formFieldIdx]
+		m.cursorPos = len(f.Value)
 	default:
 		f := &m.formFields[m.formFieldIdx]
 		if !f.IsBool && !f.Readonly && msg.Code >= 32 && msg.Code < 127 {
-			f.Value += string(rune(msg.Code))
+			f.Value = f.Value[:m.cursorPos] + string(rune(msg.Code)) + f.Value[m.cursorPos:]
+			m.cursorPos++
 		}
 	}
 	return m, nil
@@ -256,8 +303,13 @@ func (m Model) View() tea.View {
 			content += "\n"
 		}
 	case PromptTagEdit:
+		val := m.input
+		pos := m.cursorPos
+		if pos > len(val) {
+			pos = len(val)
+		}
 		content = lipgloss.NewStyle().Foreground(m.th.PrimaryText).Render(m.title) + "\n" +
-			lipgloss.NewStyle().Foreground(m.th.PrimaryText).Render(m.input) + "_"
+			lipgloss.NewStyle().Foreground(m.th.PrimaryText).Render(val[:pos]+"_"+val[pos:])
 	case PromptCategoryForm:
 		content = lipgloss.NewStyle().Foreground(m.th.PrimaryText).Bold(true).Render(m.title)
 		for i, f := range m.formFields {
@@ -280,6 +332,11 @@ func (m Model) View() tea.View {
 				}
 			} else {
 				val := f.Value
+				cp := m.cursorPos
+				if cp > len(val) {
+					cp = len(val)
+				}
+				displayVal := val[:cp] + "_" + val[cp:]
 				if f.Readonly {
 					fieldLine := linePrefix + f.Label + ": " + val + " (只读)"
 					if i == m.formFieldIdx {
@@ -288,7 +345,7 @@ func (m Model) View() tea.View {
 						content += lipgloss.NewStyle().Foreground(m.th.FaintText).Render(fieldLine)
 					}
 				} else {
-					fieldLine := linePrefix + f.Label + ": " + val + "_"
+					fieldLine := linePrefix + f.Label + ": " + displayVal
 					if i == m.formFieldIdx {
 						content += lipgloss.NewStyle().Background(m.th.SelectedBackground).Foreground(m.th.PrimaryText).Render(fieldLine)
 					} else {

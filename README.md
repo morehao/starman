@@ -218,7 +218,7 @@ Available on every command:
 Sync starred repos from GitHub to local SQLite.
 
 ```bash
-starman sync [--full] [--watch] [--interval 30m]
+starman sync [--full] [--watch] [--interval 30m] [--touch]
 ```
 
 | Flag | Type | Default | Description |
@@ -226,6 +226,7 @@ starman sync [--full] [--watch] [--interval 30m]
 | `--full` | bool | `false` | Full sync: remove repos that are no longer starred on GitHub |
 | `--watch` | bool | `false` | Watch mode: periodic auto-sync |
 | `--interval` | duration | `30m` | Watch mode sync interval (minimum 5m) |
+| `--touch` | bool | `false` | Lightweight sync: only update repo timestamps (exclusive with `--full`/`--watch`) |
 
 AI analysis results and custom fields are preserved across syncs.
 

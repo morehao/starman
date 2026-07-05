@@ -218,7 +218,7 @@ starman trending --star
 从 GitHub 同步星标仓库到本地 SQLite。
 
 ```bash
-starman sync [--full] [--watch] [--interval 30m]
+starman sync [--full] [--watch] [--interval 30m] [--touch]
 ```
 
 | Flag | 类型 | 默认值 | 说明 |
@@ -226,6 +226,7 @@ starman sync [--full] [--watch] [--interval 30m]
 | `--full` | bool | `false` | 全量同步：删除 GitHub 上已取消星标的仓库 |
 | `--watch` | bool | `false` | 定时自动同步模式 |
 | `--interval` | duration | `30m` | 同步间隔（最小 5 分钟） |
+| `--touch` | bool | `false` | 轻量同步：仅更新时间戳（与 `--full`/`--watch` 互斥） |
 
 AI 分析结果和自定义字段在同步时保留。
 

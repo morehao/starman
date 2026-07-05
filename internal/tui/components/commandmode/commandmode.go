@@ -13,11 +13,12 @@ type CommandExecutedMsg struct {
 }
 
 type Model struct {
-	input   string
-	focused bool
-	th      theme.Theme
-	width   int
-	height  int
+	input     string
+	cursorPos int
+	focused   bool
+	th        theme.Theme
+	width     int
+	height    int
 }
 
 func NewModel() Model {
@@ -41,6 +42,9 @@ func (m *Model) SetFocused(focused bool) {
 	m.focused = focused
 	if !focused {
 		m.input = ""
+		m.cursorPos = 0
+	} else {
+		m.cursorPos = len(m.input)
 	}
 }
 
@@ -60,19 +64,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case escapeKey:
 			m.focused = false
 			m.input = ""
+			m.cursorPos = 0
 			return m, nil
 		case enterKey:
 			m.focused = false
 			in := m.input
 			m.input = ""
+			m.cursorPos = 0
 			return m, func() tea.Msg { return CommandExecutedMsg{Input: in} }
 		case backspaceKey:
-			if len(m.input) > 0 {
-				m.input = m.input[:len(m.input)-1]
+			if m.cursorPos > 0 {
+				m.input = m.input[:m.cursorPos-1] + m.input[m.cursorPos:]
+				m.cursorPos--
 			}
+		case tea.KeyDelete:
+			if m.cursorPos < len(m.input) {
+				m.input = m.input[:m.cursorPos] + m.input[m.cursorPos+1:]
+			}
+		case tea.KeyLeft:
+			if m.cursorPos > 0 {
+				m.cursorPos--
+			}
+		case tea.KeyRight:
+			if m.cursorPos < len(m.input) {
+				m.cursorPos++
+			}
+		case tea.KeyHome:
+			m.cursorPos = 0
+		case tea.KeyEnd:
+			m.cursorPos = len(m.input)
 		default:
 			if msg.Code >= 32 && msg.Code < 127 {
-				m.input += string(rune(msg.Code))
+				m.input = m.input[:m.cursorPos] + string(rune(msg.Code)) + m.input[m.cursorPos:]
+				m.cursorPos++
 			}
 		}
 	case tea.WindowSizeMsg:
@@ -151,8 +175,10 @@ func (m Model) renderDialogBox() string {
 	}
 
 	inputDisplay := m.input
-	if inputDisplay == "" {
-		inputDisplay = " "
+
+	pos := m.cursorPos
+	if pos > len(inputDisplay) {
+		pos = len(inputDisplay)
 	}
 
 	var b strings.Builder
@@ -163,7 +189,7 @@ func (m Model) renderDialogBox() string {
 		b.WriteByte('\n')
 	}
 	b.WriteString(inputLabelStyle.Render("$ "))
-	b.WriteString(inputStyle.Render(inputDisplay + "█"))
+	b.WriteString(inputStyle.Render(inputDisplay[:pos] + "█" + inputDisplay[pos:]))
 	b.WriteByte('\n')
 	b.WriteString(hintStyle.Render("Enter to execute  Esc to cancel"))
 
