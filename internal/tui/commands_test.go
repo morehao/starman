@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/morehao/starman/internal/tui/components/commandmode"
-	"github.com/morehao/starman/internal/tui/components/drawer"
 )
 
 type fakeRunner struct{ stdout, stderr string; err error }
@@ -120,7 +119,6 @@ func TestExecuteCommandWithRunner(t *testing.T) {
 	m := &Model{
 		tasks:  newTasksHolder(),
 		runner: run,
-		drawer: drawer.NewModel(),
 	}
 	cmd := m.executeCommand("test", "testing")
 	if cmd == nil {
@@ -147,7 +145,6 @@ func TestExecuteCommandWithRunner_Error(t *testing.T) {
 	m := &Model{
 		tasks:  newTasksHolder(),
 		runner: run,
-		drawer: drawer.NewModel(),
 	}
 	cmd := m.executeCommand("test", "testing")
 	msg := cmd()

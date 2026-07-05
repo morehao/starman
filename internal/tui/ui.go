@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 	tea "charm.land/bubbletea/v2"
 
@@ -18,7 +19,6 @@ import (
 	"github.com/morehao/starman/internal/tui/components/actionsmenu"
 	"github.com/morehao/starman/internal/tui/components/categoriessection"
 	"github.com/morehao/starman/internal/tui/components/commandmode"
-	"github.com/morehao/starman/internal/tui/components/drawer"
 	"github.com/morehao/starman/internal/tui/components/footer"
 	"github.com/morehao/starman/internal/tui/components/prompt"
 	"github.com/morehao/starman/internal/tui/components/releasessection"
@@ -61,7 +61,6 @@ type Model struct {
 	repo        *repoview.Model
 	tasks       *tasksHolder
 	runner      CommandRunner
-	drawer      drawer.Model
 	showSidebar bool
 	ready       bool
 
@@ -70,6 +69,7 @@ type Model struct {
 	prompt       prompt.Model
 	mode         int
 
+	outputVP      viewport.Model
 	outputTitle   string
 	outputContent string
 	outputErr     error
@@ -107,13 +107,12 @@ func NewModel(ctx *tuicontext.ProgramContext) Model {
 		currSection: starsModel,
 		repo:        repoview.NewModel(),
 		tasks:       newTasksHolder(),
-		drawer:      drawer.NewModel(),
 		showSidebar: ctx.SidebarOpen,
 		searchInput:  searchinput.NewModel(),
 		commandInput: commandmode.NewModel(),
+		outputVP:     viewport.New(),
 		mode:         modeNormal,
 	}
-	m.drawer.SetTheme(ctx.Theme)
 	m.searchInput.SetTheme(ctx.Theme)
 	m.commandInput.SetTheme(ctx.Theme)
 
@@ -150,11 +149,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	updatedDrawer, drawerCmd := m.drawer.Update(msg)
-	m.drawer = updatedDrawer.(drawer.Model)
-
-	model, cmd := m.updateInner(msg)
-	return model, maybeBatch(drawerCmd, cmd)
+	return m.updateInner(msg)
 }
 
 func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -175,15 +170,16 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case TaskFinishedMsg:
-		m.tasks.finish(typed.TaskID, typed.Message, typed.Err)
-		m.footer.SetTask(m.buildTaskInfo())
 		if strings.HasPrefix(typed.TaskID, "cmd-") {
 			m.outputTitle = typed.Name
 			m.outputContent = typed.Message
 			m.outputErr = typed.Err
+			m.setupOutputViewport()
 			m.mode = modeOutput
 			return m, nil
 		}
+		m.tasks.finish(typed.TaskID, typed.Message, typed.Err)
+		m.footer.SetTask(m.buildTaskInfo())
 		if typed.Err != nil {
 			m.setError(typed.Message + ": " + typed.Err.Error())
 		} else {
@@ -298,7 +294,30 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	case modeSearch:
 		return m.handleSearchMode(typed)
 	case modeOutput:
-		m.mode = modeNormal
+		key := typed.Key()
+		switch {
+		case key.Code == tea.KeyEsc || key.Code == tea.KeyEnter:
+			m.mode = modeNormal
+			return nil
+		case key.Code == 'j' || key.Code == tea.KeyDown:
+			m.outputVP.ScrollDown(1)
+			return nil
+		case key.Code == 'k' || key.Code == tea.KeyUp:
+			m.outputVP.ScrollUp(1)
+			return nil
+		case key.Code == tea.KeyPgUp:
+			m.outputVP.HalfPageUp()
+			return nil
+		case key.Code == tea.KeyPgDown:
+			m.outputVP.HalfPageDown()
+			return nil
+		case key.Code == tea.KeyHome:
+			m.outputVP.GotoTop()
+			return nil
+		case key.Code == tea.KeyEnd:
+			m.outputVP.GotoBottom()
+			return nil
+		}
 		return nil
 	case modeCommand:
 		updated, cmd := m.commandInput.Update(typed)
@@ -561,21 +580,18 @@ func (m *Model) handlePromptResult(result prompt.PromptResultMsg) tea.Cmd {
 }
 
 func (m *Model) executeCommand(cmdStr, statusText string) tea.Cmd {
-	taskID := "cmd-" + time.Now().Format("150405")
-	m.tasks.start(taskID, statusText)
 	return func() tea.Msg {
 		stdout, stderr, err := m.runner.Run(context.Background(), cmdStr)
 		if errors.Is(err, ErrInteractiveRequired) {
-			return TaskFinishedMsg{TaskID: taskID, Message: statusText, Err: fmt.Errorf("interactive commands must be run from CLI")}
+			return TaskFinishedMsg{TaskID: "cmd-" + time.Now().Format("150405"), Name: statusText, Message: statusText, Err: fmt.Errorf("interactive commands must be run from CLI")}
 		}
 		if errors.Is(err, ErrBlockingRequired) {
-			return TaskFinishedMsg{TaskID: taskID, Message: statusText, Err: fmt.Errorf("blocking commands must be run from CLI")}
+			return TaskFinishedMsg{TaskID: "cmd-" + time.Now().Format("150405"), Name: statusText, Message: statusText, Err: fmt.Errorf("blocking commands must be run from CLI")}
 		}
-		m.drawer.AddEntry(":"+cmdStr, stdout, stderr)
 		if err != nil {
-			return TaskFinishedMsg{TaskID: taskID, Name: statusText, Message: stderr, Err: fmt.Errorf("%s: %s", err.Error(), stderr)}
+			return TaskFinishedMsg{TaskID: "cmd-" + time.Now().Format("150405"), Name: statusText, Message: stderr, Err: fmt.Errorf("%s: %s", err.Error(), stderr)}
 		}
-		return TaskFinishedMsg{TaskID: taskID, Name: statusText, Message: strings.TrimSpace(stdout)}
+		return TaskFinishedMsg{TaskID: "cmd-" + time.Now().Format("150405"), Name: statusText, Message: strings.TrimSpace(stdout)}
 	}
 }
 
@@ -722,6 +738,9 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
 	m.ready = true
 	m.recalcLayout()
 	m.commandInput.SetTheme(m.ctx.Theme)
+	if m.mode == modeOutput {
+		m.setupOutputViewport()
+	}
 }
 
 func (m *Model) recalcLayout() {
@@ -733,13 +752,6 @@ func (m *Model) recalcLayout() {
 
 	mainHeight := h - constants.TabsHeight - constants.FooterHeight
 	m.ctx.MainContentHeight = mainHeight
-
-	if m.drawer.IsOpen() {
-		drawerHeight := int(float64(h) * 0.35)
-		mainHeight -= drawerHeight
-		m.ctx.MainContentHeight = mainHeight
-		m.drawer.SetSize(w, drawerHeight)
-	}
 
 	if m.ctx.PreviewPosition == "auto" {
 		if w < 50 {
@@ -869,12 +881,7 @@ func (m Model) View() tea.View {
 	}
 	adjustedMainArea, _ := truncateLines(mainArea, fittingLines)
 
-	var drawerView string
-	if m.drawer.IsOpen() {
-		drawerView = "\n" + m.drawer.View().Content
-	}
-
-	contentOutput := adjustedMainArea + drawerView + m.renderErrorBar()
+	contentOutput := adjustedMainArea + m.renderErrorBar()
 
 	v := tea.NewView(contentOutput + "\n" + footerView)
 	v.AltScreen = true
@@ -903,12 +910,6 @@ func (m Model) renderOutputOverlay() tea.View {
 		Foreground(th.PrimaryText).
 		Bold(true)
 
-	contentStyle := lipgloss.NewStyle().
-		Foreground(th.SecondaryText)
-
-	errorStyle := lipgloss.NewStyle().
-		Foreground(th.ErrorText)
-
 	hintStyle := lipgloss.NewStyle().
 		Foreground(th.FaintText)
 
@@ -936,14 +937,7 @@ func (m Model) renderOutputOverlay() tea.View {
 		b.WriteString(separator)
 		b.WriteByte('\n')
 	}
-	if m.outputErr != nil {
-		b.WriteString(errorStyle.Render(m.outputErr.Error()))
-		b.WriteByte('\n')
-	}
-	if m.outputContent != "" {
-		b.WriteString(contentStyle.Render(m.outputContent))
-		b.WriteByte('\n')
-	}
+	b.WriteString(m.outputVP.View())
 	b.WriteByte('\n')
 	b.WriteString(hintStyle.Render("Esc to close"))
 
@@ -954,6 +948,46 @@ func (m Model) renderOutputOverlay() tea.View {
 	}
 
 	return tea.NewView(rendered)
+}
+
+func (m *Model) setupOutputViewport() {
+	w := m.ctx.ScreenWidth
+	h := m.ctx.ScreenHeight
+
+	dialogWidth := 60
+	if w > 0 && w < dialogWidth+4 {
+		dialogWidth = w - 4
+	}
+	contentWidth := dialogWidth - 6
+	if contentWidth < 0 {
+		contentWidth = 0
+	}
+
+	maxDialogHeight := int(float64(h) * 0.6)
+	if maxDialogHeight < 10 {
+		maxDialogHeight = 10
+	}
+	vpHeight := maxDialogHeight - 7
+	if vpHeight < 3 {
+		vpHeight = 3
+	}
+
+	th := m.ctx.Theme
+	errorStyle := lipgloss.NewStyle().Foreground(th.ErrorText)
+	contentStyle := lipgloss.NewStyle().Foreground(th.SecondaryText)
+
+	var contentBuf strings.Builder
+	if m.outputErr != nil {
+		contentBuf.WriteString(errorStyle.Render(m.outputErr.Error()))
+		contentBuf.WriteByte('\n')
+	}
+	if m.outputContent != "" {
+		contentBuf.WriteString(contentStyle.Render(m.outputContent))
+	}
+	m.outputVP.SetWidth(contentWidth)
+	m.outputVP.SetHeight(vpHeight)
+	m.outputVP.SetContent(contentBuf.String())
+	m.outputVP.GotoTop()
 }
 
 func (m Model) sectionView() string {
@@ -1099,22 +1133,6 @@ func (m Model) renderErrorBar() string {
 		Foreground(theme.ErrorText).
 		Bold(true).
 		Render("✖ "+m.errorMsg)
-}
-
-func maybeBatch(cmds ...tea.Cmd) tea.Cmd {
-	var nonNil []tea.Cmd
-	for _, c := range cmds {
-		if c != nil {
-			nonNil = append(nonNil, c)
-		}
-	}
-	if len(nonNil) == 0 {
-		return nil
-	}
-	if len(nonNil) == 1 {
-		return nonNil[0]
-	}
-	return tea.Batch(nonNil...)
 }
 
 func truncateLines(s string, maxLines int) (string, bool) {
