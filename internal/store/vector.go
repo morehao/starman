@@ -71,7 +71,7 @@ func (s *sqliteStore) SearchVectors(ctx context.Context, queryVec []float64, top
 	if err != nil {
 		return nil, fmt.Errorf("vector search: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var results []VectorMatch
 	for rows.Next() {
 		var match VectorMatch
@@ -123,7 +123,7 @@ func (s *sqliteStore) ListVectorUnindexed(ctx context.Context, limit int) ([]*Re
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var repos []*Repository
 	for rows.Next() {
 		r, err := scanRepository(rows)

@@ -11,7 +11,7 @@ func testStore(t *testing.T) Store {
 	if err != nil {
 		t.Fatalf("open test store: %v", err)
 	}
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
@@ -33,12 +33,12 @@ func TestOpenIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s1.Close()
+	_ = s1.Close()
 	s2, err := Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s2.Close()
+	defer func() { _ = s2.Close() }()
 	cats, err := s2.ListCategories(context.Background(), false)
 	if err != nil {
 		t.Fatal(err)

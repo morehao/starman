@@ -28,7 +28,7 @@ func newStatsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			repos, err := s.ListRepositories(context.Background())
 			if err != nil {
 				return err
@@ -107,9 +107,9 @@ func aggregateStats(repos []*store.Repository, by string) []StatItem {
 
 func outputStatsTable(cmd *cobra.Command, items []StatItem, by string) {
 	header := strings.ToUpper(by)
-	fmt.Fprintf(cmd.OutOrStdout(), "%-30s %s\n", header, "COUNT")
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-30s %s\n", header, "COUNT")
 	for _, item := range items {
-		fmt.Fprintf(cmd.OutOrStdout(), "%-30s %d\n", item.Name, item.Count)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-30s %d\n", item.Name, item.Count)
 	}
 }
 
@@ -118,6 +118,6 @@ func outputStatsJSON(cmd *cobra.Command, items []StatItem) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), string(data))
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), string(data))
 	return nil
 }

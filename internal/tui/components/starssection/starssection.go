@@ -3,7 +3,6 @@ package starssection
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -293,9 +292,3 @@ func (m *Model) ResetRows() {
 	m.groupData = nil
 }
 
-func formatStarCount(n int) string {
-	if n >= 1000 {
-		return fmt.Sprintf("%.1fk", float64(n)/1000)
-	}
-	return strconv.Itoa(n)
-}

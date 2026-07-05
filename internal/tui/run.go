@@ -41,7 +41,7 @@ func runProgram(cfg *config.Config, ver string) error {
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := tuicontext.NewContext(cfg, db, ver)
 	model := NewModel(ctx)

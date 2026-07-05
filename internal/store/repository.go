@@ -18,7 +18,7 @@ func (s *sqliteStore) UpsertRepositories(ctx context.Context, rs []*Repository) 
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for _, r := range rs {
 		if err := upsertRepoTx(ctx, tx, r); err != nil {
 			return err
@@ -32,7 +32,7 @@ func (s *sqliteStore) UpsertReposTouchOnly(ctx context.Context, repos []*Reposit
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	for _, r := range repos {
 		_, err := tx.ExecContext(ctx,
@@ -118,16 +118,16 @@ func scanRepository(row interface{ Scan(dest ...any) error }) (*Repository, erro
 		return nil, err
 	}
 	if topicsJSON.Valid {
-		json.Unmarshal([]byte(topicsJSON.String), &r.Topics)
+		_ = json.Unmarshal([]byte(topicsJSON.String), &r.Topics)
 	}
 	if tagsJSON.Valid {
-		json.Unmarshal([]byte(tagsJSON.String), &r.AITags)
+		_ = json.Unmarshal([]byte(tagsJSON.String), &r.AITags)
 	}
 	if platJSON.Valid {
-		json.Unmarshal([]byte(platJSON.String), &r.AIPlatforms)
+		_ = json.Unmarshal([]byte(platJSON.String), &r.AIPlatforms)
 	}
 	if customTagsJSON.Valid {
-		json.Unmarshal([]byte(customTagsJSON.String), &r.CustomTags)
+		_ = json.Unmarshal([]byte(customTagsJSON.String), &r.CustomTags)
 	}
 	if customDesc.Valid {
 		r.CustomDescription = customDesc.String
@@ -178,7 +178,7 @@ func (s *sqliteStore) ListRepositories(ctx context.Context) ([]*Repository, erro
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var repos []*Repository
 	for rows.Next() {
 		r, err := scanRepository(rows)
@@ -202,7 +202,7 @@ func (s *sqliteStore) ListUnanalyzed(ctx context.Context, limit int) ([]*Reposit
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var repos []*Repository
 	for rows.Next() {
 		r, err := scanRepository(rows)
@@ -219,7 +219,7 @@ func (s *sqliteStore) ListByCategory(ctx context.Context, category string) ([]*R
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var repos []*Repository
 	for rows.Next() {
 		r, err := scanRepository(rows)
@@ -272,7 +272,7 @@ func (s *sqliteStore) UpsertReposOnSync(ctx context.Context, rs []*Repository, f
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	existing, err := s.listReposByFullName(ctx, tx)
 	if err != nil {
@@ -304,14 +304,14 @@ func (s *sqliteStore) UpsertReposOnSync(ctx context.Context, rs []*Repository, f
 		for rows.Next() {
 			var ref repoRef
 			if err := rows.Scan(&ref.id, &ref.name); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return err
 			}
 			if !incomingNames[ref.name] {
 				toDelete = append(toDelete, ref)
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 		for _, ref := range toDelete {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM repo_vectors WHERE rowid = ?`, ref.id); err != nil {
 				return fmt.Errorf("delete vector for %s: %w", ref.name, err)
@@ -334,7 +334,7 @@ func (s *sqliteStore) listReposByFullName(ctx context.Context, tx *sql.Tx) (map[
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	result := make(map[string]*Repository)
 	for rows.Next() {
@@ -413,7 +413,7 @@ func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *Sear
 	if err != nil {
 		return nil, fmt.Errorf("search fts: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var results []*FTSResult
 	for rows.Next() {
 		r := &Repository{}
@@ -435,16 +435,16 @@ func (s *sqliteStore) SearchFTS(ctx context.Context, query string, filters *Sear
 			return nil, fmt.Errorf("scan fts result: %w", err)
 		}
 		if topicsJSON.Valid {
-			json.Unmarshal([]byte(topicsJSON.String), &r.Topics)
+			_ = json.Unmarshal([]byte(topicsJSON.String), &r.Topics)
 		}
 		if tagsJSON.Valid {
-			json.Unmarshal([]byte(tagsJSON.String), &r.AITags)
+			_ = json.Unmarshal([]byte(tagsJSON.String), &r.AITags)
 		}
 		if platJSON.Valid {
-			json.Unmarshal([]byte(platJSON.String), &r.AIPlatforms)
+			_ = json.Unmarshal([]byte(platJSON.String), &r.AIPlatforms)
 		}
 		if customTagsJSON.Valid {
-			json.Unmarshal([]byte(customTagsJSON.String), &r.CustomTags)
+			_ = json.Unmarshal([]byte(customTagsJSON.String), &r.CustomTags)
 		}
 		if customDesc.Valid {
 			r.CustomDescription = customDesc.String

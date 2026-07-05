@@ -22,7 +22,7 @@ func newCategorizeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			ctx := context.Background()
 			if lock && unlock {
 				return fmt.Errorf("cannot use --lock and --unlock together")
@@ -66,7 +66,7 @@ func singleCategorize(ctx context.Context, s store.Store, fullName, cat string, 
 	}); err != nil {
 		return err
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Set category '%s' for %s (locked=%v)\n", cat, fullName, locked)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Set category '%s' for %s (locked=%v)\n", cat, fullName, locked)
 	return nil
 }
 
@@ -102,11 +102,11 @@ func batchCategorize(ctx context.Context, s store.Store, cat, lang, catFilter st
 			Category:       cat,
 			CategoryLocked: locked,
 		}); err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to update %s: %v\n", r.FullName, err)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Failed to update %s: %v\n", r.FullName, err)
 			continue
 		}
 		count++
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Set category '%s' for %d repositories\n", cat, count)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Set category '%s' for %d repositories\n", cat, count)
 	return nil
 }

@@ -44,7 +44,7 @@ func newSearchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			ctx := context.Background()
 
 			aiKey := config.ResolveAIKey(cfg, "")
@@ -93,7 +93,7 @@ func newSearchCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Search mode: %s (%d results)\n", result.Mode, len(result.Hits))
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Search mode: %s (%d results)\n", result.Mode, len(result.Hits))
 
 			cliOpts := searchOpts{Lang: lang, Category: category, Sort: sortBy, Limit: limit}
 			hits := filterByCLIOpts(result.Hits, cliOpts)
@@ -159,13 +159,13 @@ func filterByCLIOpts(hits []*ai.SearchHit, opts searchOpts) []*ai.SearchHit {
 }
 
 func outputSearchTable(cmd *cobra.Command, hits []*ai.SearchHit) {
-	fmt.Fprintf(cmd.OutOrStdout(), "%-6s %-40s %s\n", "SCORE", "REPO", "DESCRIPTION")
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-6s %-40s %s\n", "SCORE", "REPO", "DESCRIPTION")
 	for _, h := range hits {
 		desc := h.Repo.Description
 		if len(desc) > 50 {
 			desc = desc[:50] + "..."
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%-6.1f %-40s %s\n", h.Score, h.Repo.FullName, desc)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-6.1f %-40s %s\n", h.Score, h.Repo.FullName, desc)
 	}
 }
 
@@ -200,6 +200,6 @@ func outputSearchJSON(cmd *cobra.Command, hits []*ai.SearchHit) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), string(data))
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), string(data))
 	return nil
 }

@@ -150,7 +150,7 @@ func (s *Service) trendingViaRSS(ctx context.Context, opts TrendingOpts) ([]*Tre
 	if err != nil {
 		return nil, fmt.Errorf("fetch RSS: %w (try --source search as fallback)", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("RSS fetch failed: %d (try --source search as fallback)", resp.StatusCode)
 	}

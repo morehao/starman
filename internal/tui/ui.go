@@ -275,39 +275,39 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	case modeSearch:
 		return m.handleSearchMode(typed)
 	case modeOutput:
-		switch s := typed.String(); {
-		case s == "esc" || s == "enter":
+		switch typed.String() {
+		case "esc", "enter":
 			m.mode = modeNormal
 			return nil
-		case s == "j" || s == "down":
+		case "j", "down":
 			m.outputVP.ScrollDown(1)
 			return nil
-		case s == "k" || s == "up":
+		case "k", "up":
 			m.outputVP.ScrollUp(1)
 			return nil
-		case s == "h" || s == "left":
+		case "h", "left":
 			m.outputVP.ScrollLeft(4)
 			return nil
-		case s == "l" || s == "right":
+		case "l", "right":
 			m.outputVP.ScrollRight(4)
 			return nil
-		case s == "H":
+		case "H":
 			m.outputVP.ScrollLeft(20)
 			return nil
-		case s == "L":
+		case "L":
 			m.outputVP.ScrollRight(20)
 			return nil
-		case s == "pgup":
+		case "pgup":
 			m.outputVP.HalfPageUp()
 			return nil
-		case s == "pgdown":
+		case "pgdown":
 			m.outputVP.HalfPageDown()
 			return nil
-		case s == "home":
+		case "home":
 			m.outputVP.SetXOffset(0)
 			m.outputVP.GotoTop()
 			return nil
-		case s == "end":
+		case "end":
 			m.outputVP.GotoBottom()
 			return nil
 		}

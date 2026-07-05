@@ -22,7 +22,7 @@ func newInfoCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			ctx := context.Background()
 			repo, err := s.GetRepository(ctx, args[0])
 			if err != nil {
@@ -42,17 +42,17 @@ func newInfoCmd() *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("fetch %s: %w", readmeVariant, err)
 					}
-					fmt.Fprintf(cmd.OutOrStdout(), "\n--- README (%s) ---\n%s\n", readmeVariant, content)
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\n--- README (%s) ---\n%s\n", readmeVariant, content)
 				} else {
 					content, err := gh.GetReadme(ctx, parts[0], parts[1])
 					if err != nil {
 						return fmt.Errorf("fetch README: %w", err)
 					}
-					fmt.Fprintf(cmd.OutOrStdout(), "\n--- README ---\n%s\n", content)
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\n--- README ---\n%s\n", content)
 					variants, _ := gh.ListReadmeVariants(ctx, parts[0], parts[1])
 					if len(variants) > 1 {
-						fmt.Fprintf(cmd.OutOrStdout(), "\nAvailable README variants: %s\n", strings.Join(variants, ", "))
-						fmt.Fprintf(cmd.OutOrStdout(), "Use --readme-variant <filename> to view a specific variant.\n")
+						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nAvailable README variants: %s\n", strings.Join(variants, ", "))
+						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Use --readme-variant <filename> to view a specific variant.\n")
 					}
 				}
 			}
@@ -65,37 +65,38 @@ func newInfoCmd() *cobra.Command {
 }
 
 func printRepoInfo(cmd *cobra.Command, r *store.Repository) {
-	fmt.Fprintf(cmd.OutOrStdout(), "Repository:  %s\n", r.FullName)
-	fmt.Fprintf(cmd.OutOrStdout(), "URL:         %s\n", r.URL)
-	fmt.Fprintf(cmd.OutOrStdout(), "Language:    %s\n", r.Language)
-	fmt.Fprintf(cmd.OutOrStdout(), "Stars:       %d    Forks: %d\n", r.StargazersCount, r.ForksCount)
+	out := cmd.OutOrStdout()
+	_, _ = fmt.Fprintf(out, "Repository:  %s\n", r.FullName)
+	_, _ = fmt.Fprintf(out, "URL:         %s\n", r.URL)
+	_, _ = fmt.Fprintf(out, "Language:    %s\n", r.Language)
+	_, _ = fmt.Fprintf(out, "Stars:       %d    Forks: %d\n", r.StargazersCount, r.ForksCount)
 	if len(r.Topics) > 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "Topics:      %s\n", strings.Join(r.Topics, ", "))
+		_, _ = fmt.Fprintf(out, "Topics:      %s\n", strings.Join(r.Topics, ", "))
 	}
 	if r.StarredAt != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "Starred At:  %s\n", r.StarredAt[:10])
+		_, _ = fmt.Fprintf(out, "Starred At:  %s\n", r.StarredAt[:10])
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "\n")
+	_, _ = fmt.Fprintf(out, "\n")
 	if r.AISummary != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "AI Summary:  %s\n", r.AISummary)
-		fmt.Fprintf(cmd.OutOrStdout(), "AI Tags:     %s\n", strings.Join(r.AITags, ", "))
-		fmt.Fprintf(cmd.OutOrStdout(), "AI Category: %s\n", r.AICategory)
+		_, _ = fmt.Fprintf(out, "AI Summary:  %s\n", r.AISummary)
+		_, _ = fmt.Fprintf(out, "AI Tags:     %s\n", strings.Join(r.AITags, ", "))
+		_, _ = fmt.Fprintf(out, "AI Category: %s\n", r.AICategory)
 		if r.AnalyzedAt != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Analyzed At: %s\n", r.AnalyzedAt.Format("2006-01-02"))
+			_, _ = fmt.Fprintf(out, "Analyzed At: %s\n", r.AnalyzedAt.Format("2006-01-02"))
 		}
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "AI Summary:  (not analyzed, run 'starman analyze --repo %s')\n", r.FullName)
+		_, _ = fmt.Fprintf(out, "AI Summary:  (not analyzed, run 'starman analyze --repo %s')\n", r.FullName)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "\n")
+	_, _ = fmt.Fprintf(out, "\n")
 	if r.CustomCategory != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "Custom Category: %s\n", r.CustomCategory)
+		_, _ = fmt.Fprintf(out, "Custom Category: %s\n", r.CustomCategory)
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "Custom Category: (none)\n")
+		_, _ = fmt.Fprintf(out, "Custom Category: (none)\n")
 	}
 	if len(r.CustomTags) > 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "Custom Tags:     %s\n", strings.Join(r.CustomTags, ", "))
+		_, _ = fmt.Fprintf(out, "Custom Tags:     %s\n", strings.Join(r.CustomTags, ", "))
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "Custom Tags:     (none)\n")
+		_, _ = fmt.Fprintf(out, "Custom Tags:     (none)\n")
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Category Locked: %v\n", r.CategoryLocked)
+	_, _ = fmt.Fprintf(out, "Category Locked: %v\n", r.CategoryLocked)
 }

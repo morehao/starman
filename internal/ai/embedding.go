@@ -67,10 +67,10 @@ func (ec *EmbeddingClient) Embed(ctx context.Context, texts []string) ([][]float
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		var errBody bytes.Buffer
-		errBody.ReadFrom(resp.Body)
+		_, _ = errBody.ReadFrom(resp.Body)
 		return nil, fmt.Errorf("embedding API error %d: %s", resp.StatusCode, errBody.String())
 	}
 	var result embeddingResponse

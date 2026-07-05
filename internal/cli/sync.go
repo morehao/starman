@@ -60,7 +60,7 @@ func runSync(cmd *cobra.Command, fullSync bool, touch bool) error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	ctx := context.Background()
 	gh := github.New(token)
@@ -73,11 +73,11 @@ func runSync(cmd *cobra.Command, fullSync bool, touch bool) error {
 		if err := s.UpsertReposTouchOnly(ctx, repos); err != nil {
 			return fmt.Errorf("touch update: %w", err)
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "  %d repo timestamps touched\n", len(repos))
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  %d repo timestamps touched\n", len(repos))
 		return nil
 	}
 
-	fmt.Fprintf(cmd.ErrOrStderr(), "Fetching starred repos...\n")
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Fetching starred repos...\n")
 	start := time.Now()
 
 	repos, err := gh.ListStarred(ctx, cfg.GitHub.Username)
@@ -110,8 +110,8 @@ func runSync(cmd *cobra.Command, fullSync bool, touch bool) error {
 	_ = s.SaveSyncStats(ctx, stats)
 
 	_ = s.SetSyncState(ctx, "last_sync", time.Now().UTC().Format(time.RFC3339))
-	fmt.Fprintf(cmd.ErrOrStderr(), "  %d repos fetched (%d new) in %v\n", len(repos), newCount, duration)
-	fmt.Fprintf(cmd.ErrOrStderr(), "  Sync complete.\n")
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  %d repos fetched (%d new) in %v\n", len(repos), newCount, duration)
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Sync complete.\n")
 	return nil
 }
 
@@ -119,18 +119,18 @@ func runWatch(cmd *cobra.Command, fullSync bool, interval time.Duration) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	fmt.Fprintf(cmd.ErrOrStderr(), "Watching with interval %v (Ctrl+C to stop)\n", interval)
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Watching with interval %v (Ctrl+C to stop)\n", interval)
 
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Fprintf(cmd.ErrOrStderr(), "Stopping watch...\n")
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Stopping watch...\n")
 			return nil
 		case <-time.After(interval):
 			now := time.Now().UTC().Format(time.RFC3339)
-			fmt.Fprintf(cmd.ErrOrStderr(), "[%s] ", now)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "[%s] ", now)
 			if err := runSync(cmd, fullSync, false); err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Sync failed: %v\n", err)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Sync failed: %v\n", err)
 			}
 		}
 	}
