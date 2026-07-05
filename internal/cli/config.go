@@ -91,12 +91,7 @@ func newConfigShowCmd() *cobra.Command {
 			fmt.Printf("  model: %s\n", cfg.Embedding.Model)
 			fmt.Printf("generate:\n")
 			fmt.Printf("  sort: %s\n", cfg.Generate.Sort)
-			fmt.Printf("webdav:\n")
-			fmt.Printf("  url: %s\n", cfg.WebDAV.URL)
-			fmt.Printf("  username: %s\n", cfg.WebDAV.Username)
-			fmt.Printf("  password: %s\n", mask(cfg.WebDAV.Password))
-			fmt.Printf("  path: %s\n", cfg.WebDAV.Path)
-			return nil
+	return nil
 		},
 	}
 	return cmd

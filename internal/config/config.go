@@ -12,7 +12,6 @@ type Config struct {
 	GitHub    GitHubConfig    `yaml:"github"`
 	AI        AIConfig        `yaml:"ai"`
 	Embedding EmbeddingConfig `yaml:"embedding"`
-	WebDAV    WebDAVConfig    `yaml:"webdav"`
 	Generate  GenerateConfig  `yaml:"generate"`
 	TUI       TUIConfig       `yaml:"tui"`
 }
@@ -67,13 +66,6 @@ type AIConfig struct {
 	CustomPrompt string `yaml:"custom_prompt"`
 }
 
-type WebDAVConfig struct {
-	URL      string `yaml:"url"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-	Path     string `yaml:"path"`
-}
-
 type EmbeddingConfig struct {
 	BaseURL string `yaml:"base_url"`
 	APIKey  string `yaml:"api_key"`
@@ -96,7 +88,6 @@ func Default() *Config {
 			Model:   "text-embedding-3-small",
 		},
 		Generate: GenerateConfig{Sort: "language"},
-		WebDAV:   WebDAVConfig{Path: "/starman"},
 		TUI: TUIConfig{
 			Preview: PreviewConfig{
 				Open:     true,
@@ -160,13 +151,6 @@ func ResolveAIKey(cfg *Config, flagKey string) string {
 		return v
 	}
 	return cfg.AI.APIKey
-}
-
-func ResolveWebDAVPassword(cfg *Config) string {
-	if v := os.Getenv("STARMAN_WEBDAV_PASSWORD"); v != "" {
-		return v
-	}
-	return cfg.WebDAV.Password
 }
 
 func ResolveEmbeddingKey(cfg *Config, flagKey string) string {

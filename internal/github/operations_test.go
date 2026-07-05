@@ -135,74 +135,109 @@ func TestGetContentFile(t *testing.T) {
 }
 
 func TestCommitFile_Create(t *testing.T) {
-	var method, reqPath string
-	var reqBody map[string]any
+	var blobCreated, treeCreated, commitCreated, refUpdated bool
+	baseSha := "abc123"
+	treeSha := "tree456"
+	blobSha := "blob789"
+	commitSha := "commit000"
+
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo" {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo":
 			json.NewEncoder(w).Encode(map[string]any{"id": 1, "full_name": "owner/repo"})
-			return
+		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/blobs":
+			blobCreated = true
+			json.NewEncoder(w).Encode(&gh.Blob{SHA: gh.Ptr(blobSha)})
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/git/ref/heads/main":
+			json.NewEncoder(w).Encode(&gh.Reference{
+				Ref:    gh.Ptr("refs/heads/main"),
+				Object: &gh.GitObject{Type: gh.Ptr("commit"), SHA: gh.Ptr(baseSha)},
+			})
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/git/commits/"+baseSha:
+			json.NewEncoder(w).Encode(&gh.Commit{
+				SHA:     gh.Ptr(baseSha),
+				Tree:    &gh.Tree{SHA: gh.Ptr(treeSha)},
+				Parents: []*gh.Commit{{SHA: gh.Ptr("parent")}},
+			})
+		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/trees":
+			treeCreated = true
+			json.NewEncoder(w).Encode(&gh.Tree{SHA: gh.Ptr(treeSha)})
+		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/commits":
+			commitCreated = true
+			json.NewEncoder(w).Encode(&gh.Commit{SHA: gh.Ptr(commitSha)})
+		case r.Method == "PATCH" && r.URL.Path == "/repos/owner/repo/git/refs/heads/main":
+			refUpdated = true
+			w.WriteHeader(200)
+			json.NewEncoder(w).Encode(&gh.Reference{})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
-			w.WriteHeader(404)
-			return
-		}
-		method = r.Method
-		reqPath = r.URL.Path
-		json.NewDecoder(r.Body).Decode(&reqBody)
-		w.WriteHeader(201)
-		json.NewEncoder(w).Encode(map[string]any{"content": map[string]any{}})
 	})
 	defer server.Close()
 
-	content := []byte(`{"version":1,"repositories":[]}`)
-	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/2025-07-03.json", content, "backup starman data 2025-07-03")
+	content := []byte("backup data")
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/starman.db", content, "backup starman data")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if method != "PUT" {
-		t.Fatalf("expected PUT, got %s", method)
+	if !blobCreated {
+		t.Fatal("blob was not created")
 	}
-	if reqPath != "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
-		t.Fatalf("unexpected path: %s", reqPath)
+	if !treeCreated {
+		t.Fatal("tree was not created")
 	}
-	if reqBody["message"] != "backup starman data 2025-07-03" {
-		t.Fatalf("unexpected message: %v", reqBody["message"])
+	if !commitCreated {
+		t.Fatal("commit was not created")
+	}
+	if !refUpdated {
+		t.Fatal("ref was not updated")
 	}
 }
 
-func TestCommitFile_Update(t *testing.T) {
-	var method string
-	var reqBody map[string]any
+func TestCommitFile_MasterBranch(t *testing.T) {
+	baseSha := "abc123"
+	treeSha := "tree456"
+	blobSha := "blob789"
+	commitSha := "commit000"
+
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo" {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo":
 			json.NewEncoder(w).Encode(map[string]any{"id": 1, "full_name": "owner/repo"})
-			return
-		}
-		if r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/starman-backup/2025-07-03.json" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{
-				"content":  base64.StdEncoding.EncodeToString([]byte("old")),
-				"encoding": "base64",
-				"sha":      "abc123",
+		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/blobs":
+			json.NewEncoder(w).Encode(&gh.Blob{SHA: gh.Ptr(blobSha)})
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/git/ref/heads/main":
+			w.WriteHeader(404)
+			json.NewEncoder(w).Encode(map[string]any{"message": "Not Found"})
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/git/ref/heads/master":
+			json.NewEncoder(w).Encode(&gh.Reference{
+				Ref:    gh.Ptr("refs/heads/master"),
+				Object: &gh.GitObject{Type: gh.Ptr("commit"), SHA: gh.Ptr(baseSha)},
 			})
-			return
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/git/commits/"+baseSha:
+			json.NewEncoder(w).Encode(&gh.Commit{
+				SHA:     gh.Ptr(baseSha),
+				Tree:    &gh.Tree{SHA: gh.Ptr(treeSha)},
+				Parents: []*gh.Commit{{SHA: gh.Ptr("parent")}},
+			})
+		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/trees":
+			json.NewEncoder(w).Encode(&gh.Tree{SHA: gh.Ptr(treeSha)})
+		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/commits":
+			json.NewEncoder(w).Encode(&gh.Commit{SHA: gh.Ptr(commitSha)})
+		case r.Method == "PATCH" && r.URL.Path == "/repos/owner/repo/git/refs/heads/master":
+			w.WriteHeader(200)
+			json.NewEncoder(w).Encode(&gh.Reference{})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		method = r.Method
-		json.NewDecoder(r.Body).Decode(&reqBody)
-		w.WriteHeader(200)
-		json.NewEncoder(w).Encode(map[string]any{"content": map[string]any{}})
 	})
 	defer server.Close()
 
-	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/2025-07-03.json", []byte(`{"new":true}`), "backup starman data 2025-07-03")
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/starman.db", []byte("backup"), "backup")
 	if err != nil {
 		t.Fatal(err)
-	}
-	if method != "PUT" {
-		t.Fatalf("expected PUT, got %s", method)
-	}
-	if reqBody["sha"] != "abc123" {
-		t.Fatalf("expected sha abc123, got %v", reqBody["sha"])
 	}
 }
 
@@ -217,26 +252,9 @@ func TestCommitFile_RepoNotFound(t *testing.T) {
 	})
 	defer server.Close()
 
-	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/test.json", []byte(`{}`), "test")
+	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/starman.db", []byte(`{}`), "test")
 	if err == nil {
 		t.Fatal("expected error for non-existent repo")
-	}
-}
-
-func TestCommitFile_TooLarge(t *testing.T) {
-	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("should not make any API call for oversized content: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	// 1MB + 1 byte
-	content := make([]byte, 1*1024*1024+1)
-	err := c.CommitFile(context.Background(), "owner", "repo", "starman-backup/test.json", content, "test")
-	if err == nil {
-		t.Fatal("expected error for file exceeding 1MB limit")
-	}
-	if !strings.Contains(err.Error(), "1MB") {
-		t.Fatalf("expected error mentioning 1MB limit, got: %v", err)
 	}
 }
 
