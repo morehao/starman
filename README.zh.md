@@ -170,28 +170,32 @@ starman trending --star
 
 不加任何子命令直接运行 `starman`，会启动基于 [Bubble Tea](https://github.com/charmbracelet/bubbletea) 构建的终端用户界面。
 
+![TUI Main](docs/screenshots/tui-main.png)
+
 ### 视图
 
 | 视图 | 说明 |
 |------|------|
-| Stars | 浏览、过滤、管理星标仓库。`s` 同步，`a` 分析，`x` 星标/取消星标，`c`/`t` 编辑分类/标签 |
-| Categories | 按分类分组浏览仓库 |
-| Trending | 浏览 GitHub 趋势仓库，`x` 收藏 |
-| Releases | 查看已订阅仓库的新版本 |
-| Stats | 整屏统计分布，按语言/分类/标签 |
+| Stars | 浏览、过滤、管理星标仓库。分组：All / Language / Category / Tag。`m` 打开操作菜单（同步、分析、星标、编辑分类/标签、浏览器打开） |
+| Categories | 管理自定义分类定义 — 增删改查分类，支持关键词和排序。`m` 打开操作菜单 |
+| Trending | 浏览 GitHub 趋势仓库。时段：Daily / Weekly / Monthly。`m` 打开操作菜单（收藏、刷新、同步） |
+| Releases | 查看已订阅仓库的新版本，支持已读/未读过滤。`m` 打开操作菜单（标为已读、显示全部/未读、刷新、同步、浏览器打开） |
+| Stats | 整屏统计分布，按语言/分类/标签。`h`/`l` 切换统计维度 |
 
 ### 快捷键
 
 | 按键 | 作用 |
 |------|------|
-| `Tab` | 切换视图 |
+| `Tab` / `Shift+Tab` | 切换视图 |
 | `j`/`k` | 上/下移动 |
 | `g`/`G` | 跳转到首/末行 |
-| `]]`/`[[` | 上/下一个 section 标签 |
-| `/` | 搜索覆盖层 |
-| `:` | 命令模式（headless cobra 执行） |
+| `]`/`[` | 上/下一个 section 标签 |
+| `h`/`l` | 切换统计维度 |
+| `m` | 操作菜单 |
 | `p` | 切换侧边栏 |
-| `?` | 帮助 |
+| `/` | 搜索覆盖层 |
+| `:` | 命令模式 |
+| `r` | 刷新 |
 | `q` | 退出 |
 
 ### 命令模式
@@ -645,6 +649,9 @@ go vet ./...
 
 ```
 cmd/starman/main.go          # 入口
+docs/
+  adr-001-headless-cli-command-execution.md  # 架构决策记录
+  screenshots/               # TUI 截图
 internal/
   cli/                       # Cobra 命令定义
   config/                    # YAML 配置加载 + 环境变量解析
