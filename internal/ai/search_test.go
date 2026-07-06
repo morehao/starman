@@ -17,13 +17,13 @@ func TestSearch(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		callCount++
 		if callCount == 1 {
-			json.NewEncoder(w).Encode(completionResponse{
+			_ = json.NewEncoder(w).Encode(completionResponse{
 				Choices: []struct {
 					Message Message `json:"message"`
 				}{{Message: Message{Content: `{"fts_query":"终端 工具 terminal cli","keywords":["终端","工具","terminal","cli"],"language":"","category":"","platform":"cli","min_stars":0,"max_stars":0}`}}},
 			})
 		} else {
-			json.NewEncoder(w).Encode(completionResponse{
+			_ = json.NewEncoder(w).Encode(completionResponse{
 				Choices: []struct {
 					Message Message `json:"message"`
 				}{{Message: Message{Content: `{"rankings":[{"index":0,"score":9.5}]}`}}},
@@ -117,7 +117,7 @@ func (m *mockStore) SetSyncState(ctx context.Context, key, value string) error {
 func (m *mockStore) SaveSyncStats(ctx context.Context, stats *store.SyncStats) error { return nil }
 func (m *mockStore) GetSyncStats(ctx context.Context) (*store.SyncStats, error) { return &store.SyncStats{}, nil }
 func (m *mockStore) IncrementSyncCount(ctx context.Context) error { return nil }
-func (m *mockStore) SearchFTS(ctx context.Context, query string, filters *store.SearchFilters) ([]*store.FTSResult, error) {
+func (m *mockStore) SearchFTS(ctx context.Context, query string, filters *store.SearchFilters) ([]*store.FTSResult, error) { //nolint:staticcheck
 	return nil, nil
 }
 func (m *mockStore) RebuildFTSIndex(ctx context.Context) error { return nil }

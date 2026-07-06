@@ -24,7 +24,7 @@ func Open(dbPath string) (Store, error) {
 	}
 	s := &sqliteStore{db: db}
 	if err := s.migrate(context.Background()); err != nil {
-		db.Close()
+		defer func() { _ = db.Close() }()
 		return nil, err
 	}
 	return s, nil

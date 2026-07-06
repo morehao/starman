@@ -19,7 +19,13 @@ type Model struct {
 	th        theme.Theme
 	width     int
 	height    int
+	viewType  string
 }
+
+const (
+	ViewTypeStars      = "Stars"
+	ViewTypeCategories = "Categories"
+)
 
 func NewModel() Model {
 	return Model{th: theme.DefaultTheme()}
@@ -27,6 +33,10 @@ func NewModel() Model {
 
 func (m *Model) SetTheme(th theme.Theme) {
 	m.th = th
+}
+
+func (m *Model) SetViewType(vt string) {
+	m.viewType = vt
 }
 
 func (m *Model) SetSize(width, height int) {
@@ -182,7 +192,11 @@ func (m Model) renderDialogBox() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Search Stars"))
+	title := "Search " + m.viewType
+	if m.viewType == "" {
+		title = "Search"
+	}
+	b.WriteString(titleStyle.Render(title))
 	b.WriteByte('\n')
 	if separator != "" {
 		b.WriteString(separator)

@@ -106,7 +106,7 @@ func (m Model) renderOverview() string {
 	}
 
 	if m.repo.Language != "" {
-		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Language"), m.repo.Language))
+		fmt.Fprintf(&b, "\n%s  %s", fieldLabel("Language"), m.repo.Language)
 	}
 
 	if m.repo.AICategory != "" || m.repo.CustomCategory != "" {
@@ -118,19 +118,19 @@ func (m Model) renderOverview() string {
 		if m.repo.CategoryLocked {
 			lock = " 🔒"
 		}
-		b.WriteString(fmt.Sprintf("\n%s  %s%s", fieldLabel("Category"), cat, lock))
+		fmt.Fprintf(&b, "\n%s  %s%s", fieldLabel("Category"), cat, lock)
 	}
 
 	if len(m.repo.AIPlatforms) > 0 {
-		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Platform"), strings.Join(m.repo.AIPlatforms, ", ")))
+		fmt.Fprintf(&b, "\n%s  %s", fieldLabel("Platform"), strings.Join(m.repo.AIPlatforms, ", "))
 	}
 
 	if m.repo.URL != "" {
-		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("URL"), wrapField("URL", m.repo.URL)))
+		fmt.Fprintf(&b, "\n%s  %s", fieldLabel("URL"), wrapField("URL", m.repo.URL))
 	}
 
 	if m.repo.StarredAt != "" {
-		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Starred"), m.repo.StarredAt))
+		fmt.Fprintf(&b, "\n%s  %s", fieldLabel("Starred"), m.repo.StarredAt)
 	}
 
 	if m.repo.RepoUpdatedAt != "" {
@@ -138,23 +138,23 @@ func (m Model) renderOverview() string {
 		if t, err := time.Parse(time.RFC3339, updated); err == nil {
 			updated = t.Format("2006-01-02 15:04")
 		}
-		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Updated"), updated))
+		fmt.Fprintf(&b, "\n%s  %s", fieldLabel("Updated"), updated)
 	}
 
 	if m.repo.AnalyzedAt != nil {
-		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Analyzed"), m.repo.AnalyzedAt.Format("2006-01-02 15:04")))
+		fmt.Fprintf(&b, "\n%s  %s", fieldLabel("Analyzed"), m.repo.AnalyzedAt.Format("2006-01-02 15:04"))
 	}
 
 	if len(m.repo.Topics) > 0 {
 		topics := strings.Join(m.repo.Topics, ", ")
-		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Topics"), wrapField("Topics", topics)))
+		fmt.Fprintf(&b, "\n%s  %s", fieldLabel("Topics"), wrapField("Topics", topics))
 	}
 
 	allTags := append([]string{}, m.repo.AITags...)
 	allTags = append(allTags, m.repo.CustomTags...)
 	if len(allTags) > 0 {
 		tags := strings.Join(allTags, ", ")
-		b.WriteString(fmt.Sprintf("\n%s  %s", fieldLabel("Tags"), wrapField("Tags", tags)))
+		fmt.Fprintf(&b, "\n%s  %s", fieldLabel("Tags"), wrapField("Tags", tags))
 	}
 
 	if m.repo.AISummary != "" {
@@ -171,7 +171,7 @@ func (m Model) renderOverview() string {
 	if m.repo.Homepage != "" {
 		homepage := wrapField("Homepage", m.repo.Homepage)
 		homepage = lipgloss.NewStyle().Hyperlink(m.repo.Homepage).Render(homepage)
-		b.WriteString(fmt.Sprintf("\n\n%s  %s", fieldLabel("Homepage"), homepage))
+		fmt.Fprintf(&b, "\n\n%s  %s", fieldLabel("Homepage"), homepage)
 	}
 
 	return b.String()

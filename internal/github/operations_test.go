@@ -30,7 +30,7 @@ func TestGetReadme(t *testing.T) {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"content": encoded, "encoding": "base64"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"content": encoded, "encoding": "base64"})
 	})
 	defer server.Close()
 	got, err := c.GetReadme(context.Background(), "owner", "repo")
@@ -72,7 +72,7 @@ func TestListReadmeVariants(t *testing.T) {
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/repos/owner/repo/contents") {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]*gh.RepositoryContent{
+			_ = json.NewEncoder(w).Encode([]*gh.RepositoryContent{
 				{Name: gh.Ptr("README.md"), Type: gh.Ptr("file")},
 				{Name: gh.Ptr("README_zh.md"), Type: gh.Ptr("file")},
 				{Name: gh.Ptr("main.go"), Type: gh.Ptr("file")},
@@ -96,7 +96,7 @@ func TestGetContentFile(t *testing.T) {
 	content := base64.StdEncoding.EncodeToString([]byte("# Hello World"))
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(&gh.RepositoryContent{
+		_ = json.NewEncoder(w).Encode(&gh.RepositoryContent{
 			Content:  gh.Ptr(content),
 			Encoding: gh.Ptr("base64"),
 		})
@@ -122,31 +122,31 @@ func TestCommitFile_Create(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo":
-			json.NewEncoder(w).Encode(map[string]any{"id": 1, "full_name": "owner/repo"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 1, "full_name": "owner/repo"})
 		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/blobs":
 			blobCreated = true
-			json.NewEncoder(w).Encode(&gh.Blob{SHA: gh.Ptr(blobSha)})
+			_ = json.NewEncoder(w).Encode(&gh.Blob{SHA: gh.Ptr(blobSha)})
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/git/ref/heads/main":
-			json.NewEncoder(w).Encode(&gh.Reference{
+			_ = json.NewEncoder(w).Encode(&gh.Reference{
 				Ref:    gh.Ptr("refs/heads/main"),
 				Object: &gh.GitObject{Type: gh.Ptr("commit"), SHA: gh.Ptr(baseSha)},
 			})
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/git/commits/"+baseSha:
-			json.NewEncoder(w).Encode(&gh.Commit{
+			_ = json.NewEncoder(w).Encode(&gh.Commit{
 				SHA:     gh.Ptr(baseSha),
 				Tree:    &gh.Tree{SHA: gh.Ptr(treeSha)},
 				Parents: []*gh.Commit{{SHA: gh.Ptr("parent")}},
 			})
 		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/trees":
 			treeCreated = true
-			json.NewEncoder(w).Encode(&gh.Tree{SHA: gh.Ptr(treeSha)})
+			_ = json.NewEncoder(w).Encode(&gh.Tree{SHA: gh.Ptr(treeSha)})
 		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/commits":
 			commitCreated = true
-			json.NewEncoder(w).Encode(&gh.Commit{SHA: gh.Ptr(commitSha)})
+			_ = json.NewEncoder(w).Encode(&gh.Commit{SHA: gh.Ptr(commitSha)})
 		case r.Method == "PATCH" && r.URL.Path == "/repos/owner/repo/git/refs/heads/main":
 			refUpdated = true
 			w.WriteHeader(200)
-			json.NewEncoder(w).Encode(&gh.Reference{})
+			_ = json.NewEncoder(w).Encode(&gh.Reference{})
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
@@ -182,30 +182,30 @@ func TestCommitFile_MasterBranch(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo":
-			json.NewEncoder(w).Encode(map[string]any{"id": 1, "full_name": "owner/repo"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 1, "full_name": "owner/repo"})
 		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/blobs":
-			json.NewEncoder(w).Encode(&gh.Blob{SHA: gh.Ptr(blobSha)})
+			_ = json.NewEncoder(w).Encode(&gh.Blob{SHA: gh.Ptr(blobSha)})
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/git/ref/heads/main":
 			w.WriteHeader(404)
-			json.NewEncoder(w).Encode(map[string]any{"message": "Not Found"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"message": "Not Found"})
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/git/ref/heads/master":
-			json.NewEncoder(w).Encode(&gh.Reference{
+			_ = json.NewEncoder(w).Encode(&gh.Reference{
 				Ref:    gh.Ptr("refs/heads/master"),
 				Object: &gh.GitObject{Type: gh.Ptr("commit"), SHA: gh.Ptr(baseSha)},
 			})
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/git/commits/"+baseSha:
-			json.NewEncoder(w).Encode(&gh.Commit{
+			_ = json.NewEncoder(w).Encode(&gh.Commit{
 				SHA:     gh.Ptr(baseSha),
 				Tree:    &gh.Tree{SHA: gh.Ptr(treeSha)},
 				Parents: []*gh.Commit{{SHA: gh.Ptr("parent")}},
 			})
 		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/trees":
-			json.NewEncoder(w).Encode(&gh.Tree{SHA: gh.Ptr(treeSha)})
+			_ = json.NewEncoder(w).Encode(&gh.Tree{SHA: gh.Ptr(treeSha)})
 		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/commits":
-			json.NewEncoder(w).Encode(&gh.Commit{SHA: gh.Ptr(commitSha)})
+			_ = json.NewEncoder(w).Encode(&gh.Commit{SHA: gh.Ptr(commitSha)})
 		case r.Method == "PATCH" && r.URL.Path == "/repos/owner/repo/git/refs/heads/master":
 			w.WriteHeader(200)
-			json.NewEncoder(w).Encode(&gh.Reference{})
+			_ = json.NewEncoder(w).Encode(&gh.Reference{})
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
@@ -222,7 +222,7 @@ func TestCommitFile_RepoNotFound(t *testing.T) {
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/repos/owner/repo" {
 			w.WriteHeader(404)
-			json.NewEncoder(w).Encode(map[string]any{"message": "Not Found"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"message": "Not Found"})
 			return
 		}
 		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -239,7 +239,7 @@ func TestSearchRepositories(t *testing.T) {
 	server, c := mockOpsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/search/repositories") {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(&gh.RepositoriesSearchResult{
+			_ = json.NewEncoder(w).Encode(&gh.RepositoriesSearchResult{
 				Repositories: []*gh.Repository{
 					{ID: gh.Ptr(int64(1)), FullName: gh.Ptr("owner/repo1"), Name: gh.Ptr("repo1"), StargazersCount: gh.Ptr(100)},
 					{ID: gh.Ptr(int64(2)), FullName: gh.Ptr("owner/repo2"), Name: gh.Ptr("repo2"), StargazersCount: gh.Ptr(50)},

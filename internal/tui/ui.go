@@ -275,39 +275,39 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 	case modeSearch:
 		return m.handleSearchMode(typed)
 	case modeOutput:
-		switch s := typed.String(); {
-		case s == "esc" || s == "enter":
+		switch typed.String() {
+		case "esc", "enter":
 			m.mode = modeNormal
 			return nil
-		case s == "j" || s == "down":
+		case "j", "down":
 			m.outputVP.ScrollDown(1)
 			return nil
-		case s == "k" || s == "up":
+		case "k", "up":
 			m.outputVP.ScrollUp(1)
 			return nil
-		case s == "h" || s == "left":
+		case "h", "left":
 			m.outputVP.ScrollLeft(4)
 			return nil
-		case s == "l" || s == "right":
+		case "l", "right":
 			m.outputVP.ScrollRight(4)
 			return nil
-		case s == "H":
+		case "H":
 			m.outputVP.ScrollLeft(20)
 			return nil
-		case s == "L":
+		case "L":
 			m.outputVP.ScrollRight(20)
 			return nil
-		case s == "pgup":
+		case "pgup":
 			m.outputVP.HalfPageUp()
 			return nil
-		case s == "pgdown":
+		case "pgdown":
 			m.outputVP.HalfPageDown()
 			return nil
-		case s == "home":
+		case "home":
 			m.outputVP.SetXOffset(0)
 			m.outputVP.GotoTop()
 			return nil
-		case s == "end":
+		case "end":
 			m.outputVP.GotoBottom()
 			return nil
 		}
@@ -338,6 +338,7 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 
 	switch {
 	case key.Matches(typed, m.ctx.Keys.Escape):
+		m.currSection.ResetFilters()
 		return nil
 
 	case key.Matches(typed, m.ctx.Keys.Quit):
@@ -354,6 +355,12 @@ func (m *Model) handleKey(typed tea.KeyMsg) tea.Cmd {
 		if m.mode == modeNormal {
 			m.mode = modeSearch
 			m.searchInput.SetFocused(true)
+			switch m.ctx.View {
+			case tuicontext.CategoriesView:
+				m.searchInput.SetViewType(searchinput.ViewTypeCategories)
+			case tuicontext.StarsView:
+				m.searchInput.SetViewType(searchinput.ViewTypeStars)
+			}
 		}
 		return nil
 
@@ -471,8 +478,11 @@ func (m *Model) handleSearchMode(typed tea.KeyMsg) tea.Cmd {
 	}
 	if !m.searchInput.IsFocused() {
 		m.mode = modeNormal
-		if m.ctx.View == tuicontext.CategoriesView {
+		switch m.ctx.View {
+		case tuicontext.CategoriesView:
 			m.categories.ResetFilters()
+		case tuicontext.StarsView:
+			m.stars.ResetFilters()
 		}
 	}
 	return nil
@@ -612,6 +622,12 @@ func sectionIndexToTrendingPeriod(idx int) string {
 func (m *Model) executeSearch(query string) tea.Cmd {
 	query = strings.TrimSpace(query)
 	if query == "" {
+		switch m.ctx.View {
+		case tuicontext.CategoriesView:
+			m.categories.ResetFilters()
+		case tuicontext.StarsView:
+			m.stars.ResetFilters()
+		}
 		return nil
 	}
 	if m.ctx.View == tuicontext.CategoriesView {
@@ -622,14 +638,16 @@ func (m *Model) executeSearch(query string) tea.Cmd {
 		return nil
 	}
 
+	m.stars.SaveCurrentRows()
+
 	return func() tea.Msg {
 		stdout, _, err := m.runner.Run(context.Background(), "search "+query+" --json")
 		if err != nil {
-			return starssection.ReposFetchedMsg{SectionID: 1, Repos: nil}
+			return starssection.SearchResultsMsg{SectionID: 1, Repos: nil}
 		}
 		var hits []jsonHit
 		if err := json.Unmarshal([]byte(stdout), &hits); err != nil {
-			return starssection.ReposFetchedMsg{SectionID: 1, Repos: nil}
+			return starssection.SearchResultsMsg{SectionID: 1, Repos: nil}
 		}
 		repos := convertSearchHitsToRepos(hits)
 		for _, repo := range repos {

@@ -197,11 +197,22 @@ func (m *Model) FilterRows(query string) {
 	filtered := make([]section.RowData, 0)
 	for _, c := range m.categories {
 		if containsFold(c.ID, query) || containsFold(c.Name, query) {
-			filtered = append(filtered, CategoryRow{Category: c})
+			filtered = append(filtered, CategoryRow{Category: c, RepoCount: m.repoCountForCategory(c.ID)})
 		}
 	}
 	m.rows = filtered
 	m.list.SetRows(m.rows)
+}
+
+func (m *Model) repoCountForCategory(catID string) int {
+	count := 0
+	for _, r := range m.rows {
+		cr, ok := r.(CategoryRow)
+		if ok && cr.Category.ID == catID {
+			return cr.RepoCount
+		}
+	}
+	return count
 }
 
 func joinKeywords(kws []string) string {

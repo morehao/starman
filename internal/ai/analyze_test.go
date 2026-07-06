@@ -14,7 +14,7 @@ func TestAnalyzeRepository(t *testing.T) {
 	aiResp := AnalysisResult{Summary: "一个好用的工具", Tags: []string{"cli", "go"}, Platforms: []string{"cli"}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(completionResponse{
+		_ = json.NewEncoder(w).Encode(completionResponse{
 			Choices: []struct {
 				Message Message `json:"message"`
 			}{{Message: Message{Content: mustJSON(aiResp)}}},

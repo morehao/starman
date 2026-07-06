@@ -14,7 +14,7 @@ func testStore(t *testing.T) store.Store {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
@@ -178,7 +178,7 @@ func TestFetchNextPageSectionRows_ReturnsNonBlockingCmd(t *testing.T) {
 	m := NewModel(1, ctx, section.SectionConfig{})
 
 	cmds := m.FetchNextPageSectionRows()
-	if cmds == nil || len(cmds) == 0 {
+	if len(cmds) == 0 {
 		t.Fatal("FetchNextPageSectionRows must return non-nil cmds")
 	}
 

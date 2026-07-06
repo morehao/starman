@@ -197,9 +197,4 @@ func sortHits(hits []*SearchHit, sortBy string) {
 	}
 }
 
-func coalesce(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
-}
+

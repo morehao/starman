@@ -43,7 +43,7 @@ func newTrendingCmd() *cobra.Command {
 				return err
 			}
 			if len(repos) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No trending repositories found.")
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No trending repositories found.")
 				return nil
 			}
 			printTrendingTable(cmd, repos)
@@ -62,7 +62,7 @@ func newTrendingCmd() *cobra.Command {
 }
 
 func printTrendingTable(cmd *cobra.Command, repos []*discovery.TrendingRepo) {
-	fmt.Fprintf(cmd.OutOrStdout(), "%-5s %-40s %-8s %-12s %s\n", "RANK", "REPO", "STARS", "LANGUAGE", "DESCRIPTION")
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-5s %-40s %-8s %-12s %s\n", "RANK", "REPO", "STARS", "LANGUAGE", "DESCRIPTION")
 	for _, r := range repos {
 		desc := r.Description
 		if len(desc) > 40 {
@@ -72,12 +72,12 @@ func printTrendingTable(cmd *cobra.Command, repos []*discovery.TrendingRepo) {
 		if lang == "" {
 			lang = "N/A"
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%-5d %-40s %-8d %-12s %s\n", r.Rank, r.FullName, r.Stars, lang, desc)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-5d %-40s %-8d %-12s %s\n", r.Rank, r.FullName, r.Stars, lang, desc)
 	}
 }
 
 func interactiveStar(cmd *cobra.Command, gh *github.Client, repos []*discovery.TrendingRepo) error {
-	fmt.Fprintln(cmd.OutOrStdout(), "\nEnter rank numbers to star (comma-separated, e.g. 1,3,5):")
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "\nEnter rank numbers to star (comma-separated, e.g. 1,3,5):")
 	scanner := bufio.NewScanner(os.Stdin)
 	if !scanner.Scan() {
 		return nil
@@ -92,7 +92,7 @@ func interactiveStar(cmd *cobra.Command, gh *github.Client, repos []*discovery.T
 		p = strings.TrimSpace(p)
 		rank, err := strconv.Atoi(p)
 		if err != nil || rank < 1 || rank > len(repos) {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Invalid rank: %s\n", p)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Invalid rank: %s\n", p)
 			continue
 		}
 		repo := repos[rank-1]
@@ -101,18 +101,18 @@ func interactiveStar(cmd *cobra.Command, gh *github.Client, repos []*discovery.T
 			continue
 		}
 		if err := gh.Star(context.Background(), parts[0], parts[1]); err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to star %s: %v\n", repo.FullName, err)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Failed to star %s: %v\n", repo.FullName, err)
 			continue
 		}
 		if r, err := gh.GetRepository(context.Background(), parts[0], parts[1]); err == nil {
 			if s, sErr := openStore(); sErr == nil {
 				_ = s.UpsertRepository(context.Background(), r)
-				s.Close()
+				_ = s.Close()
 			}
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Starred %s\n", repo.FullName)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Starred %s\n", repo.FullName)
 		starred++
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Starred %d repositories\n", starred)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Starred %d repositories\n", starred)
 	return nil
 }

@@ -360,8 +360,7 @@ func TestCategoryForm_JKeyTypesCharacter(t *testing.T) {
 func TestCategoryForm_TypingSkills(t *testing.T) {
 	m := testCategoryFormModel()
 
-	keys := []rune("skills")
-	for _, r := range keys {
+	for _, r := range "skills" {
 		updated, _ := m.Update(tea.KeyPressMsg{Code: r})
 		m = updated.(Model)
 	}
