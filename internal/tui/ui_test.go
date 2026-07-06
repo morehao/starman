@@ -58,7 +58,8 @@ func TestUIKeyBindingsFirstLastToggleSidebarAndHelp(t *testing.T) {
 	updated, _ = m.Update(keyPress("p"))
 	m = updated.(Model)
 	out = m.View().Content
-	if strings.Contains(out, "owner/repo1") {
+	if !strings.Contains(out, "owner/repo1") {
+		t.Fatalf("p should toggle preview showing owner/repo1, got: %q", out)
 	}
 
 	updated, _ = m.Update(keyPress("g"))

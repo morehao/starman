@@ -50,7 +50,7 @@ func newBackupCmd() *cobra.Command {
 			if err := gh.CommitFile(cmd.Context(), cfg.GitHub.Username, repoName, filePath, data, msg); err != nil {
 				return fmt.Errorf("push backup to %s/%s: %w", cfg.GitHub.Username, repoName, err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Pushed backup to %s/%s/%s\n", cfg.GitHub.Username, repoName, filePath)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Pushed backup to %s/%s/%s\n", cfg.GitHub.Username, repoName, filePath)
 			return nil
 		},
 	}

@@ -17,7 +17,7 @@ func TestCompleteSuccess(t *testing.T) {
 			t.Fatalf("unexpected auth header: %s", r.Header.Get("Authorization"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(completionResponse{
+		_ = json.NewEncoder(w).Encode(completionResponse{
 			Choices: []struct {
 				Message Message `json:"message"`
 			}{{Message: Message{Role: "assistant", Content: `{"summary":"test"}`}}},
@@ -43,7 +43,7 @@ func TestCompleteRetriesOn500(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(completionResponse{
+		_ = json.NewEncoder(w).Encode(completionResponse{
 			Choices: []struct {
 				Message Message `json:"message"`
 			}{{Message: Message{Content: "ok"}}},

@@ -25,7 +25,7 @@ func mockGitHubServer(t *testing.T, pages [][]*gh.StarredRepository) *httptest.S
 			if page < len(pages)-1 {
 				w.Header().Set("Link", `<https://example.com/users/testuser/starred?page=2>; rel="next"`)
 			}
-			json.NewEncoder(w).Encode(pages[page])
+			_ = json.NewEncoder(w).Encode(pages[page])
 		}
 		pageCount++
 	})

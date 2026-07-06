@@ -3,7 +3,6 @@ package starssection
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -79,6 +78,11 @@ type ReposFetchedMsg struct {
 	Repos     []*store.Repository
 }
 
+type SearchResultsMsg struct {
+	SectionID int
+	Repos     []*store.Repository
+}
+
 type ReposFetchFailedMsg struct {
 	SectionID int
 	Err       error
@@ -94,16 +98,19 @@ func (r GroupHeaderRow) GetUrl() string     { return "" }
 func (r GroupHeaderRow) GetColumns() []string { return []string{} }
 
 type Model struct {
-	id        int
-	ctx       *tuicontext.ProgramContext
-	cfg       section.SectionConfig
-	groupBy   string
-	list      listviewport.Model
-	rows      []section.RowData
-	loaded    bool
-	isLoading bool
-	groupData *GroupedRepos
-	repos     []*store.Repository
+	id         int
+	ctx        *tuicontext.ProgramContext
+	cfg        section.SectionConfig
+	groupBy    string
+	list       listviewport.Model
+	rows       []section.RowData
+	loaded     bool
+	isLoading  bool
+	groupData  *GroupedRepos
+	repos      []*store.Repository
+	reposSaved []*store.Repository
+	rowsSaved  []section.RowData
+	filtered   bool
 }
 
 func NewModel(id int, ctx *tuicontext.ProgramContext, cfg section.SectionConfig, groupBy string) *Model {
@@ -120,7 +127,29 @@ func (m *Model) View() string                                        { return m.
 func (m *Model) GetIsLoading() bool                                  { return m.isLoading }
 func (m *Model) GetTotalCount() int                                  { return len(m.rows) }
 func (m *Model) IsSearchFocused() bool                               { return false }
-func (m *Model) ResetFilters()                                       {}
+func (m *Model) ResetFilters() {
+	if !m.filtered || !m.loaded {
+		return
+	}
+	m.filtered = false
+	m.repos = m.reposSaved
+	m.rows = m.rowsSaved
+	m.list.SetRows(m.rows)
+	m.groupData = nil
+	m.reposSaved = nil
+	m.rowsSaved = nil
+}
+
+func (m *Model) SaveCurrentRows() {
+	if !m.loaded {
+		return
+	}
+	m.filtered = true
+	m.reposSaved = make([]*store.Repository, len(m.repos))
+	copy(m.reposSaved, m.repos)
+	m.rowsSaved = make([]section.RowData, len(m.rows))
+	copy(m.rowsSaved, m.rows)
+}
 func (m *Model) SetIsLoading(v bool)                                 { m.isLoading = v }
 func (m *Model) UpdateProgramContext(ctx *tuicontext.ProgramContext) { m.ctx = ctx }
 
@@ -175,6 +204,16 @@ func (m *Model) Update(msg tea.Msg) (section.Section, tea.Cmd) {
 		m.list.SetRows(listRows)
 		m.loaded = true
 		m.isLoading = false
+		m.filtered = false
+		m.reposSaved = nil
+		m.rowsSaved = nil
+	case SearchResultsMsg:
+		if typed.SectionID != m.id {
+			return m, nil
+		}
+		m.repos = typed.Repos
+		listRows := m.buildRows(typed.Repos)
+		m.list.SetRows(listRows)
 	case ReposFetchFailedMsg:
 		if typed.SectionID != m.id {
 			return m, nil
@@ -265,9 +304,3 @@ func (m *Model) ResetRows() {
 	m.groupData = nil
 }
 
-func formatStarCount(n int) string {
-	if n >= 1000 {
-		return fmt.Sprintf("%.1fk", float64(n)/1000)
-	}
-	return strconv.Itoa(n)
-}

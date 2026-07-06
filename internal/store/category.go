@@ -14,7 +14,7 @@ func (s *sqliteStore) ListCategories(ctx context.Context, visibleOnly bool) ([]*
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var cats []*Category
 	for rows.Next() {
 		c := &Category{}
@@ -63,7 +63,7 @@ func (s *sqliteStore) DeleteCategory(ctx context.Context, id string) (int, error
 	if err != nil {
 		return 0, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	var isCustom int
 	err = tx.QueryRowContext(ctx, `SELECT is_custom FROM categories WHERE id = ?`, id).Scan(&isCustom)
@@ -97,26 +97,6 @@ func (s *sqliteStore) DeleteCategory(ctx context.Context, id string) (int, error
 		return 0, fmt.Errorf("commit: %w", err)
 	}
 	return affected, nil
-}
-
-func (s *sqliteStore) getCategory(ctx context.Context, id string) (*Category, error) {
-	var c Category
-	var kwJSON sql.NullString
-	var isCustom, isHidden int
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, name, keywords, sort_order, is_custom, is_hidden FROM categories WHERE id = ?`, id).
-		Scan(&c.ID, &c.Name, &kwJSON, &c.SortOrder, &isCustom, &isHidden)
-	if err != nil {
-		return nil, err
-	}
-	if kwJSON.Valid {
-		if err := json.Unmarshal([]byte(kwJSON.String), &c.Keywords); err != nil {
-			return nil, fmt.Errorf("unmarshal category keywords: %w", err)
-		}
-	}
-	c.IsCustom = isCustom != 0
-	c.IsHidden = isHidden != 0
-	return &c, nil
 }
 
 func Slugify(s string) string {

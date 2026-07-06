@@ -22,7 +22,7 @@ func newTagCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			ctx := context.Background()
 			if lang != "" || catFilter != "" {
 				return batchTag(ctx, s, lang, catFilter, addTags, removeTags, cmd)
@@ -64,7 +64,7 @@ func singleTag(ctx context.Context, s store.Store, args []string, addFlag, remov
 	}); err != nil {
 		return err
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Updated tags for %s: %s\n", repo.FullName, strings.Join(newTags, ", "))
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Updated tags for %s: %s\n", repo.FullName, strings.Join(newTags, ", "))
 	return nil
 }
 
@@ -96,11 +96,11 @@ func batchTag(ctx context.Context, s store.Store, lang, catFilter, addStr, remov
 			Category:       r.CustomCategory,
 			CategoryLocked: r.CategoryLocked,
 		}); err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to update %s: %v\n", r.FullName, err)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Failed to update %s: %v\n", r.FullName, err)
 			continue
 		}
 		count++
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Updated tags for %d repositories\n", count)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Updated tags for %d repositories\n", count)
 	return nil
 }

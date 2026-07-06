@@ -88,7 +88,7 @@ func (c *Client) doRequest(ctx context.Context, body []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode == 429 {
 		return "", fmt.Errorf("rate limited")

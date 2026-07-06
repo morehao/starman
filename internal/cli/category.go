@@ -30,14 +30,14 @@ func newCategoryListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			ctx := context.Background()
 			cats, err := s.ListCategories(ctx, false)
 			if err != nil {
 				return err
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tNAME\tKEYWORDS\tORDER\tTYPE")
+			_, _ = fmt.Fprintln(w, "ID\tNAME\tKEYWORDS\tORDER\tTYPE")
 			for _, c := range cats {
 				typeStr := "自定义"
 				if !c.IsCustom {
@@ -47,9 +47,9 @@ func newCategoryListCmd() *cobra.Command {
 				if len(c.Keywords) > 0 {
 					kw = fmt.Sprintf("%v", c.Keywords)
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", c.ID, c.Name, kw, c.SortOrder, typeStr)
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", c.ID, c.Name, kw, c.SortOrder, typeStr)
 			}
-			w.Flush()
+			_ = w.Flush()
 			return nil
 		},
 	}
@@ -83,7 +83,7 @@ func newCategoryAddCmd() *cobra.Command {
 					return err
 				}
 				cats, err := s.ListCategories(context.Background(), false)
-				s.Close()
+				_ = s.Close()
 				if err != nil {
 					return err
 				}
@@ -99,7 +99,7 @@ func newCategoryAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			if err := s.UpsertCategory(context.Background(), &store.Category{
 				ID:        id,
 				Name:      displayName,
@@ -110,7 +110,7 @@ func newCategoryAddCmd() *cobra.Command {
 			}); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Added category '%s' (%s)\n", displayName, id)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Added category '%s' (%s)\n", displayName, id)
 			return nil
 		},
 	}
@@ -135,7 +135,7 @@ func newCategoryEditCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			ctx := context.Background()
 			cats, err := s.ListCategories(ctx, false)
 			if err != nil {
@@ -166,7 +166,7 @@ func newCategoryEditCmd() *cobra.Command {
 			if err := s.UpsertCategory(ctx, target); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Updated category '%s'\n", target.ID)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Updated category '%s'\n", target.ID)
 			return nil
 		},
 	}
@@ -188,7 +188,7 @@ func newCategoryDeleteCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			ctx := context.Background()
 			cats, err := s.ListCategories(ctx, false)
 			if err != nil {
@@ -208,14 +208,14 @@ func newCategoryDeleteCmd() *cobra.Command {
 				return fmt.Errorf("cannot delete built-in category %s", args[0])
 			}
 			if !force {
-				fmt.Fprintf(cmd.ErrOrStderr(), "This will delete category '%s' (%s) and clear category from all associated repos.\nUse --force to confirm.\n", target.Name, target.ID)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "This will delete category '%s' (%s) and clear category from all associated repos.\nUse --force to confirm.\n", target.Name, target.ID)
 				return nil
 			}
 			affected, err := s.DeleteCategory(ctx, args[0])
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted category '%s', cleared category from %d repos\n", args[0], affected)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Deleted category '%s', cleared category from %d repos\n", args[0], affected)
 			return nil
 		},
 	}

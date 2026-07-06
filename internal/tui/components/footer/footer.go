@@ -20,7 +20,6 @@ var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 type Model struct {
 	ctx        *context.ProgramContext
 	pager      string
-	taskStatus string
 	task       *TaskInfo
 }
 
